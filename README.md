@@ -1,75 +1,41 @@
-# Neptune Dashboard
+# Project Neptune — California beach board
 
-A [Next.js](https://nextjs.org) (App Router) dashboard that displays ocean water-quality
-nowcasts and 3-day forecasts for **many beach locations** from a single deployment.
+Water-quality estimates for California beaches: enterococcus against the 104 MPN/100 mL limit, a same-day nowcast, and an experimental look at the next three days.
 
-Forecast data is produced by the separate [`project-neptune`](https://github.com/eymoney13/project-neptune)
-model repo and pushed into this repo as CSVs by GitHub Actions.
-
-## Architecture
-
-- **One repo, one `main`** serves every location.
-- **Location is a URL route segment**: `/hermosa`, `/manhattan`, `/<slug>`.
-- A **`LOCATIONS` registry** in [`lib/data.ts`](lib/data.ts) holds every per-location
-  value (display name, station codes, beach names, map fallback center).
-- **Per-location data folders** live under `public/data/<slug>/` and each contain:
-  `nowcast_latest.csv`, `forecast_3day.csv`, `history_3day.csv`, `thresholds.csv`.
-- **Per-location nowcast archives** live under `data/nowcast-archive/<slug>/` — one
-  `nowcast_<date>.csv` per published day, written by
-  [`scripts/archive-nowcast.py`](scripts/archive-nowcast.py) in the same commit as the
-  nowcast it copies. `scripts/build-history.py` reads these in preference to
-  project-neptune's shared archive so the 7-day window's past cells replay exactly what
-  the board published that day. Deliberately outside `public/` — it is a build-time
-  input, not something to serve.
-- Components are generic — they receive location values as props and hardcode nothing.
-- `/` redirects to the default location (`/hermosa`); unknown slugs return a 404.
-
-## Adding a location
-
-1. Add one entry to the `LOCATIONS` registry in `lib/data.ts`:
-
-   ```ts
-   newslug: {
-     slug: "newslug",
-     displayName: "New Beach, CA",
-     stations: ["DHS999"],
-     beachNames: { DHS999: "New Beach - Main" },
-     mapFallbackCenter: [33.0, -118.0], // [lat, lng]
-   },
-   ```
-
-2. Create `public/data/newslug/` and populate it with that location's CSVs (this is what
-   the `project-neptune` daily-refresh workflow writes into).
-
-No per-location code changes are required.
-
-## Getting Started
+## Run it
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000); it redirects to the default location.
-Visit `/hermosa` or `/manhattan` directly to view a specific location.
+Open [http://localhost:3000](http://localhost:3000). That redirects to `/california`.
 
-## Build
+`npm run build` compiles the production app. `node scripts/check-neptune-contract.ts` (Node 22, with type stripping) checks the parsers.
+
+No deployment, and no production database. Auth, billing, and email alerts stay off unless you add your own local keys. The board still renders without them.
+
+## Where the data comes from
+
+All file reads go through `lib/neptuneAdapter.ts`. Column names are parsed in `lib/neptuneContract.ts`. The full shape is in [DATA_CONTRACT.md](DATA_CONTRACT.md).
+
+1. If `NEPTUNE_V2_DIR` is set, that directory is treated as a `project-neptune-v2` checkout (`data/roster.json`, `outputs/forecast_archive/forecasts.csv`, `config/staleness_thresholds.json`, and the wide CSVs).
+2. Otherwise the app uses `data/neptune-v2/`.
+3. A wide CSV that is not in the v2 tree falls back to `public/data/southbay/`.
+
+`data/neptune-v2/` is a local sample. It is the published South Bay files rewritten into the v2 layout, not a dump of the live statewide roster. Rebuild it with:
 
 ```bash
-npm run build
+node scripts/build-v2-sample.mjs
 ```
 
-## Deploy
+`/california` uses the roster file instead of the hardcoded station list. Stations with no model row show as “No estimate today.” Blank fields stay blank.
 
-Deploys on the [Vercel Platform](https://vercel.com). See the
-[Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying)
-for details.
+## What the board shows
 
-### Beach requests
-
-The on-site form lives at `/california/request-beach` (preview: `/sandbox/request-beach`).
-Apply its additive database schema with `node scripts/apply-beach-requests-schema.mjs` before deployment.
-Submissions store email, message, source, and creation time in `beach_requests`; sandbox requests are tagged separately.
-To export live requests privately: `node scripts/export-beach-requests.mjs /absolute/path/beach-requests.csv`.
-The export excludes sandbox records and refuses to overwrite an existing file. Requests are not marketing subscriptions.
-Run `node scripts/test-beach-requests.mjs` for storage and endpoint validation.
+- Under / Near / Over the limit, from the same cutoffs as the legend.
+- Day 1–3 forecasts in an Experimental panel (`FORECAST_HORIZON_MODE` and `FORECAST_HIDDEN_STATIONS` in `lib/forecastDisplay.ts`).
+- Search, plus county, region, status, and roster filters. Region appears when the regions file names any.
+- A clustered map, and a beach page at `/california/beach/<station>` with today’s status, the last test, lab results against the limit, and the experimental forecast.
+- “Last tested N days ago,” a calm limited-lab line, “Last updated,” and a banner when the forecast date is not today.
+- “Past lab agreement,” not a confidence score.

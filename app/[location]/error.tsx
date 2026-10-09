@@ -4,10 +4,10 @@ import { useEffect } from "react";
 
 export default function LocationError({
   error,
-  retry,
+  reset,
 }: {
   error: Error & { digest?: string };
-  retry: () => void;
+  reset: () => void;
 }) {
   useEffect(() => {
     console.error(error);
@@ -23,7 +23,7 @@ export default function LocationError({
       </p>
       <button
         type="button"
-        onClick={() => retry()}
+        onClick={() => reset()}
         className="w-fit rounded-md bg-[#246f72] px-4 py-3 text-sm font-semibold text-white"
       >
         Try again

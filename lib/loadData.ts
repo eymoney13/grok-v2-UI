@@ -1,8 +1,5 @@
 import { isCoveredStation } from "./californiaCoverage";
 import "server-only";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import Papa from "papaparse";
 import {
   computeAccuracy,
   dataSlugFor,
@@ -13,6 +10,7 @@ import {
   refineSafeVerdict,
   verdictFromPrediction,
   type BeachData,
+  type BeachListItem,
   type Conditions,
   type DashboardData,
   type Driver,
@@ -20,9 +18,17 @@ import {
   type ForecastDay,
   type LocationConfig,
   type RawAccuracySample,
+  type RosterTier,
   type Status,
   type Verdict,
 } from "./data";
+import { loadV2Bundle, readPublishedCsv, readPublishedJson, type V2Bundle } from "./neptuneAdapter";
+import {
+  optionalModelFields,
+  regionForCounty,
+  staleLimitDays,
+  type StationArchive,
+} from "./neptuneContract";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
 
@@ -94,41 +100,12 @@ function stationKey(raw: unknown): string | null {
   return key === "" ? null : key;
 }
 
-async function readCsv<T>(slug: string, relPath: string): Promise<T[]> {
-  const filePath = path.join(process.cwd(), "public", "data", slug, relPath);
-  const text = await readFile(filePath, "utf8");
-  const parsed = Papa.parse<T>(text, {
-    header: true,
-    dynamicTyping: true,
-    skipEmptyLines: true,
-  });
-  return parsed.data.filter(
-    (row): row is T => row !== null && typeof row === "object"
-  );
-}
-
-// Like readCsv but resolves to [] if the file is missing — used for optional inputs.
 async function readCsvOptional<T>(slug: string, relPath: string): Promise<T[]> {
-  try {
-    return await readCsv<T>(slug, relPath);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return [];
-    throw err;
-  }
+  return (await readPublishedCsv(slug, relPath)) as T[];
 }
 
-// Like readCsvOptional but for JSON — resolves to null if the file is missing.
-async function readJsonOptional<T>(
-  slug: string,
-  relPath: string
-): Promise<T | null> {
-  const filePath = path.join(process.cwd(), "public", "data", slug, relPath);
-  try {
-    return JSON.parse(await readFile(filePath, "utf8")) as T;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return null;
-    throw err;
-  }
+async function readJsonOptional<T>(slug: string, relPath: string): Promise<T | null> {
+  return readPublishedJson<T>(slug, relPath);
 }
 
 // One beach in a backend-published roster (see LocationConfig.rosterFile). Only
@@ -168,13 +145,41 @@ interface RosterEntry {
   longitude?: number;
   excRatePct?: number;
   nSamples?: number;
+  county: string | null;
+  region: string | null;
+  tier: RosterTier | null;
+  samplingFrequency: string | null;
+  lastSampleDate: string | null;
 }
 
 // Resolve which beaches to render. Locations with a rosterFile take their list
 // from whatever the backend last published; everything else uses the static
 // stations/beachNames in LOCATIONS. A configured-but-missing roster file yields
 // an empty list, which the page renders as a "no data yet" state.
-async function resolveRoster(config: LocationConfig): Promise<RosterEntry[]> {
+const blankRosterFields = {
+  county: null,
+  region: null,
+  tier: null,
+  samplingFrequency: null,
+  lastSampleDate: null,
+} as const;
+
+async function resolveRoster(config: LocationConfig, bundle: V2Bundle | null): Promise<RosterEntry[]> {
+  if (config.useStatewideRoster && bundle?.available) {
+    const regions = bundle.regions?.regions ?? [];
+    return bundle.roster.map((station) => ({
+      code: station.stationCode,
+      name: station.name,
+      proseName: station.name,
+      latitude: station.lat ?? undefined,
+      longitude: station.lon ?? undefined,
+      county: station.county,
+      region: regionForCounty(station.county, regions),
+      tier: station.tier,
+      samplingFrequency: station.samplingFrequency,
+      lastSampleDate: station.lastSampleDate,
+    }));
+  }
   if (config.rosterFile) {
     const roster = await readJsonOptional<RosterFile>(
       dataSlugFor(config),
@@ -194,6 +199,7 @@ async function resolveRoster(config: LocationConfig): Promise<RosterEntry[]> {
         longitude: Number(b.lon),
         excRatePct: numOrUndefined(b.exc_rate_pct),
         nSamples: numOrUndefined(b.n_samples),
+        ...blankRosterFields,
       }));
   }
   // A configured roster has no appended disambiguator to drop. Its names carry
@@ -202,7 +208,7 @@ async function resolveRoster(config: LocationConfig): Promise<RosterEntry[]> {
   // every word of them.
   return config.stations.map((code) => {
     const name = config.beachNames[code] ?? code;
-    return { code, name, proseName: name };
+    return { code, name, proseName: name, ...blankRosterFields };
   });
 }
 
@@ -386,16 +392,20 @@ function parseLastResult(raw: unknown): number | string | null {
 }
 
 export async function loadDashboardData(
-  config: LocationConfig
+  config: LocationConfig,
+  options?: { includeLabHistory?: boolean }
 ): Promise<DashboardData> {
   // Which directory under public/data these reads come from. Normally the
   // board's own slug; a board mirroring another's data reads from that one
   // instead (see LocationConfig.dataSlug).
   const data = dataSlugFor(config);
+  const bundle = config.useStatewideRoster ? await loadV2Bundle() : null;
+  const usingV2 = !!(bundle?.available);
 
-  // Every input is optional. A location whose backend hasn't published yet (or
-  // that never ships a given file — not every model produces a 3-day forecast)
-  // loads as an empty dashboard rather than throwing ENOENT and 500-ing the page.
+  // Every input is optional. A v2 file wins when this board asked for the
+  // statewide roster and that file is present. A missing v2 file falls back
+  // to the published CSV for the same input. A present-but-empty v2 file does
+  // not fall back: empty is what the pipeline published.
   const [
     roster,
     nowcastRows,
@@ -404,12 +414,22 @@ export async function loadDashboardData(
     accuracyRows,
     thresholdMap,
   ] = await Promise.all([
-    resolveRoster(config),
-    readCsvOptional<NowcastRow>(data, "nowcast_latest.csv"),
-    readCsvOptional<ForecastRow>(data, "forecast_3day.csv"),
-    readCsvOptional<ForecastRow>(data, "history_3day.csv"),
-    readCsvOptional<AccuracyRow>(data, "accuracy.csv"),
-    loadThresholds(data),
+    resolveRoster(config, bundle),
+    usingV2 && bundle?.nowcast != null
+      ? Promise.resolve(bundle.nowcast as NowcastRow[])
+      : readCsvOptional<NowcastRow>(data, "nowcast_latest.csv"),
+    usingV2 && bundle?.forecast != null
+      ? Promise.resolve(bundle.forecast as ForecastRow[])
+      : readCsvOptional<ForecastRow>(data, "forecast_3day.csv"),
+    usingV2 && bundle?.history != null
+      ? Promise.resolve(bundle.history as ForecastRow[])
+      : readCsvOptional<ForecastRow>(data, "history_3day.csv"),
+    usingV2 && bundle?.accuracy != null
+      ? Promise.resolve(bundle.accuracy as unknown as AccuracyRow[])
+      : readCsvOptional<AccuracyRow>(data, "accuracy.csv"),
+    usingV2 && bundle?.thresholds != null
+      ? Promise.resolve(bundle.thresholds)
+      : loadThresholds(data),
   ]);
 
   // Group the lab samples by station, chronological (oldest → newest), so each
@@ -446,18 +466,41 @@ export async function loadDashboardData(
   }
 
   const beaches: BeachData[] = [];
+  const unmodeled: BeachListItem[] = [];
   for (const entry of roster) {
     const code = entry.code;
-    const now = nowcastByCode.get(code);
-    if (!now) continue;
+    const archive = usingV2 ? bundle?.archive.get(code) ?? null : null;
+    const archivedNow = archive?.nowcast ?? null;
+    let now = nowcastByCode.get(code);
+    if ((!now || !now.prediction_date) && archivedNow?.probability != null) {
+      now = {
+        StationCode: code,
+        Latitude: entry.latitude,
+        Longitude: entry.longitude,
+        prediction_date: archivedNow.targetDate ?? archivedNow.forecastDate ?? "",
+        exc_probability: archivedNow.probability,
+        prediction: archivedNow.call ?? undefined,
+        days_since_sample: archivedNow.lastSampleAgeDays,
+        threshold: archivedNow.threshold ?? undefined,
+        generated_at: archivedNow.generatedAt ?? archivedNow.publishTimestampUtc ?? undefined,
+      };
+    }
+    if (!now || !now.prediction_date) {
+      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle));
+      continue;
+    }
 
     // Prefer the threshold the backend classified this row against; fall back to
-    // thresholds.csv (a DEFAULT row plus per-beach overrides).
+    // thresholds.csv (a DEFAULT row plus per-beach overrides). The archive's
+    // threshold wins when that row carries one.
     const rowThreshold = Number(now.threshold);
-    const threshold =
+    let threshold =
       now.threshold != null && !Number.isNaN(rowThreshold)
         ? rowThreshold
         : thresholdFor(code, thresholdMap);
+    if (archivedNow?.threshold != null && Number.isFinite(archivedNow.threshold)) {
+      threshold = archivedNow.threshold;
+    }
 
     // Locations that opt in classify against their own threshold, so the banner
     // agrees with the backend's own Safe/Unsafe call. Everything else keeps the
@@ -472,7 +515,7 @@ export async function loadDashboardData(
         ? statusFromThreshold(p, cutoff)
         : statusFromProb(p, code, thresholdMap);
 
-    const prob = Number(now.exc_probability);
+    const prob = archivedNow?.probability ?? Number(now.exc_probability);
     const status = classify(prob);
     if (!status) continue;
 
@@ -480,8 +523,9 @@ export async function loadDashboardData(
     const factors = buildFactors(rawFactors);
     const drivers = buildDrivers(rawFactors, nowcastDirections(now));
     const conditions = buildConditions(now);
+    const wideOptional = optionalModelFields(now as unknown as Record<string, unknown>);
 
-    const days = parseDaysSince(now.days_since_sample);
+    const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
 
     const fcRow = forecastByCode.get(code);
     const forecast: ForecastDay[] = [];
@@ -509,6 +553,30 @@ export async function loadDashboardData(
           conditions: buildConditions(fcRow, `day${i}_`),
         });
       }
+    }
+    if (archive) {
+      for (const row of archive.forecast) {
+        if (row.probability == null || !row.targetDate) continue;
+        const existing = forecast.find((day) => day.date === row.targetDate);
+        const cutoff = row.threshold ?? threshold;
+        const dayStatus = classify(row.probability, cutoff);
+        if (!dayStatus) continue;
+        if (existing) {
+          existing.probability = row.probability;
+          existing.status = dayStatus;
+          existing.threshold = cutoff;
+          existing.verdict = resolveVerdict(row.call, row.probability, cutoff);
+        } else if (!forecast.some((day) => day.date === row.targetDate)) {
+          forecast.push({
+            date: row.targetDate,
+            probability: row.probability,
+            status: dayStatus,
+            threshold: cutoff,
+            verdict: resolveVerdict(row.call, row.probability, cutoff),
+          });
+        }
+      }
+      forecast.sort((a, b) => a.date.localeCompare(b.date));
     }
 
     // history_3day.csv shape mirrors forecast_3day.csv, where day1 = most recent past day.
@@ -567,13 +635,19 @@ export async function loadDashboardData(
       insight: normalizeInsight(String(now.insight ?? ""), status),
       status,
       threshold,
-      verdict: resolveVerdict(now.prediction, prob, threshold),
+      verdict: resolveVerdict(archivedNow?.call ?? now.prediction, prob, threshold),
       noRecentSample: parseBool(now.no_recent_sample),
+      ...rosterFacts(entry, archive, bundle),
+      calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
+      confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
       excRatePct: entry.excRatePct ?? null,
       nSamples: entry.nSamples ?? null,
       pastDays,
       forecast,
       accuracy: computeAccuracy(accuracyByCode.get(code) ?? [], threshold),
+      labHistory: options?.includeLabHistory
+        ? (accuracyByCode.get(code) ?? []).map((sample) => ({ date: sample.date, labMpn: sample.labMpn }))
+        : undefined,
     });
   }
 
@@ -590,12 +664,89 @@ export async function loadDashboardData(
   const generatedAtRaw = nowcastRows
     .map((r) => r.generated_at)
     .find((v) => v != null && v !== "");
-  const generatedAt =
+  const generatedFromColumn =
     generatedAtRaw instanceof Date
       ? generatedAtRaw.toISOString()
       : String(generatedAtRaw ?? "").trim() || null;
+  const generatedAt = bundle?.manifest?.generatedAt || generatedFromColumn || null;
 
-  return { beaches: beaches.filter(beach => isCoveredStation(config.slug, beach.code)), predictionDate, generatedAt };
+  const visible = usingV2
+    ? beaches
+    : beaches.filter((beach) => isCoveredStation(config.slug, beach.code));
+
+  return {
+    beaches: visible,
+    unmodeled: usingV2 ? unmodeled : [],
+    predictionDate,
+    generatedAt,
+    dataSource: usingV2 ? "v2" : "published-csv",
+    staleCounties: bundle?.manifest?.staleCounties ?? [],
+    checksPassed: bundle?.manifest?.checksPassed ?? null,
+    modelVersion: bundle?.manifest?.modelVersion ?? null,
+  };
+}
+
+function rosterFacts(
+  entry: RosterEntry,
+  archive: StationArchive | null,
+  bundle: V2Bundle | null
+): Pick<
+  BeachData,
+  | "county"
+  | "region"
+  | "tier"
+  | "samplingFrequency"
+  | "lastSampleDate"
+  | "hasEstimate"
+  | "fallbackUsed"
+  | "modelVersion"
+  | "publishTimestamp"
+  | "calibratedProbability"
+  | "confidenceFlag"
+  | "staleAfterDays"
+> {
+  const wide = archive;
+  return {
+    county: entry.county,
+    region: entry.region,
+    tier: entry.tier,
+    samplingFrequency: entry.samplingFrequency,
+    lastSampleDate: wide?.lastSampleDate ?? entry.lastSampleDate,
+    hasEstimate: true,
+    fallbackUsed: wide?.fallbackUsed ?? null,
+    modelVersion: wide?.modelVersion ?? bundle?.manifest?.modelVersion ?? null,
+    publishTimestamp: wide?.publishTimestampUtc ?? null,
+    calibratedProbability: wide?.calibratedProbability ?? null,
+    confidenceFlag: wide?.confidenceFlag ?? null,
+    staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
+  };
+}
+
+function unmodeledItem(
+  entry: RosterEntry,
+  archive: StationArchive | null,
+  bundle: V2Bundle | null
+): BeachListItem {
+  return {
+    code: entry.code,
+    name: entry.name,
+    proseName: entry.proseName,
+    latitude: entry.latitude ?? Number.NaN,
+    longitude: entry.longitude ?? Number.NaN,
+    county: entry.county,
+    region: entry.region,
+    tier: entry.tier,
+    samplingFrequency: entry.samplingFrequency,
+    lastSampleDate: archive?.lastSampleDate ?? entry.lastSampleDate,
+    daysSinceSample: archive?.lastSampleAgeDays ?? null,
+    noRecentSample: false,
+    staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
+    hasEstimate: false,
+    status: null,
+    probability: null,
+    predictionDate: null,
+    fallbackUsed: archive?.fallbackUsed ?? null,
+  };
 }
 
 // The station codes a location currently renders — the same roster
@@ -605,5 +756,6 @@ export async function loadDashboardData(
 export async function loadStationCodes(
   config: LocationConfig
 ): Promise<string[]> {
-  return (await resolveRoster(config)).map((b) => b.code).filter(code => isCoveredStation(config.slug, code));
+  const board = await loadDashboardData(config);
+  return [...board.beaches, ...board.unmodeled].map((beach) => beach.code);
 }

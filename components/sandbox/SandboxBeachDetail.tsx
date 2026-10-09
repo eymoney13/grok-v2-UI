@@ -14,12 +14,14 @@ import {
 } from "@/lib/forecastDisplay";
 import {
   PROBABILITY_CAPTION,
+  TIER_LIMITED_NOTE,
   hasLimitedLabData,
   lastTestedLabel,
-  LIMITED_LAB_NOTE,
+  limitedLabNote,
   statusReading,
   tierReading,
 } from "@/lib/waterStatus";
+import LabHistory, { type LabPoint } from "../LabHistory";
 import WhyPrediction from "../WhyPrediction";
 import ForecastAccuracy from "../ForecastAccuracy";
 import s from "./SandboxDashboard.module.css";
@@ -51,17 +53,18 @@ function Figures({ probability }: { probability: number }) {
   </section>;
 }
 
-function distanceScore(a: BeachData, b: BeachData) {
+function distanceScore(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
   const rad = Math.PI / 180;
   return Math.sin((b.latitude - a.latitude) * rad / 2) ** 2
     + Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad)
     * Math.sin((b.longitude - a.longitude) * rad / 2) ** 2;
 }
 
-export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup }: {
+export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: BeachData[];
+  beaches: Array<{ code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean }>;
   onSelect: (code: string) => void;
+  labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
   onProMoment?: () => void;
   advisory: { label: string; href: string };
@@ -76,7 +79,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     ? forecasts.find((day) => day.date === pickedDate && !day.locked) ?? null
     : null;
   const tested = lastTestedLabel(beach.daysSinceSample);
-  const limited = hasLimitedLabData(beach.daysSinceSample, beach.noRecentSample);
+  const limited = hasLimitedLabData(beach.daysSinceSample, beach.noRecentSample, beach.staleAfterDays);
   // Before onProMoment: the reader asked for this specific thing, which the
   // Pro card events alone cannot say. days_ahead 1 is "tomorrow".
   const lockedClicked = (feature: LockedFeature, date: string) => {
@@ -113,12 +116,22 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
       </div>
     </section>
 
-    {(tested || limited) && (
+    {(tested || limited || beach.tier === "limited_data" || beach.lastSampleDate || beach.samplingFrequency) && (
       <div className={s.sampleFacts}>
-        {tested && <p>{tested}</p>}
-        {limited && <p className={s.limitedNote}>{LIMITED_LAB_NOTE}</p>}
+        {tested && <p>{tested}{beach.lastSampleDate ? ` (${beach.lastSampleDate})` : ""}</p>}
+        {beach.samplingFrequency && <p>Sampling: {beach.samplingFrequency}</p>}
+        {beach.tier === "model_pool" && <p>In the model pool.</p>}
+        {beach.tier === "limited_data" && <p className={s.limitedNote}>{TIER_LIMITED_NOTE}</p>}
+        {limited && <p className={s.limitedNote}>{limitedLabNote(beach.staleAfterDays, beach.county)}</p>}
+        {beach.fallbackUsed === true && <p className={s.limitedNote}>This estimate used a fallback method.</p>}
+        {beach.calibratedProbability != null && (
+          <p className={s.limitedNote}>Calibrated estimate: {Math.round(beach.calibratedProbability * 100)}%. Another model figure, not a lab result.</p>
+        )}
+        {beach.confidenceFlag && <p className={s.limitedNote}>Pipeline note: {beach.confidenceFlag}. Not a guarantee about today.</p>}
+        {beach.modelVersion && <p className={s.sampleMeta}>Model {beach.modelVersion}</p>}
       </div>
     )}
+    <LabHistory samples={labHistory} />
 
     <Figures probability={today.probability} />
     <WhyPrediction
@@ -174,6 +187,6 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}
-    {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.code}><button type="button" onClick={() => onSelect(neighbor.code)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span><span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span><ArrowRight size={16} aria-hidden="true" /></button></li>)}</ul></section>}
+    {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.code}><button type="button" onClick={() => onSelect(neighbor.code)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{neighbor.hasEstimate !== false && neighbor.status ? <span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span> : <span className={s.noEstimate}>No estimate</span>}<ArrowRight size={16} aria-hidden="true" /></button></li>)}</ul></section>}
   </div>;
 }

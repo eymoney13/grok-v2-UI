@@ -1,0 +1,6 @@
+{
+  "id": "california",
+  "name": "California",
+  "roster": "data/roster.json",
+  "regions": []
+}

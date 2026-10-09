@@ -1,0 +1,284 @@
+{
+  "stations": [
+    {
+      "station_code": "0",
+      "name": "Huntington State Beach",
+      "lat": "33.6293",
+      "lon": "-117.96",
+      "county": "Orange",
+      "last_sample_date": "2026-08-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "13000",
+      "name": "Surfers Point at Seaside, Ventura",
+      "lat": "34.273",
+      "lon": "-119.305",
+      "county": "Ventura",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "BNB05",
+      "name": "Newport Bay",
+      "lat": "33.613",
+      "lon": "-117.908",
+      "county": "Orange",
+      "last_sample_date": "2026-07-27",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "CSD_S8",
+      "name": "San Diego - Station S8",
+      "lat": "32.6368",
+      "lon": "-117.144",
+      "county": "San Diego",
+      "last_sample_date": "2025-12-29",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS103",
+      "name": "Will Rogers State Beach",
+      "lat": "34.0348",
+      "lon": "-118.536",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS104",
+      "name": "Santa Monica State Beach",
+      "lat": "34.02",
+      "lon": "-118.51",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS110",
+      "name": "Dockweiler State Beach (North)",
+      "lat": "33.9406",
+      "lon": "-118.442",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS111",
+      "name": "Dockweiler State Beach (Central)",
+      "lat": "33.9233",
+      "lon": "-118.433",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS112",
+      "name": "Dockweiler State Beach (South)",
+      "lat": "33.9159",
+      "lon": "-118.429",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS112B",
+      "name": "Dockweiler State Beach (South Jetty)",
+      "lat": "33.9153",
+      "lon": "-118.43",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS113",
+      "name": "Manhattan Beach - 28th st",
+      "lat": "33.8945",
+      "lon": "-118.418",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS114",
+      "name": "Hermosa Beach - 26th St",
+      "lat": "33.8715",
+      "lon": "-118.407",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS115",
+      "name": "Hermosa Beach - Herondo St",
+      "lat": "33.8522",
+      "lon": "-118.399",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DHS116",
+      "name": "Redondo Beach - Topaz",
+      "lat": "33.8321",
+      "lon": "-118.391",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DPH 002B",
+      "name": "Malibu - Surfrider Beach",
+      "lat": "34.0368898",
+      "lon": "-118.676899",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-22",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DPH 122",
+      "name": "Playa del Rey",
+      "lat": "33.9611547",
+      "lon": "-118.4562179",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "DSB4Z",
+      "name": "Doheny State Beach (Drain 4)",
+      "lat": "33.4601855299999",
+      "lon": "-117.677785099999",
+      "county": "Orange",
+      "last_sample_date": "2026-07-28",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "Francis State Beach",
+      "name": "Half Moon Bay - Francis State Beach",
+      "lat": "37.4672",
+      "lon": "-122.447",
+      "county": "San Mateo",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "O490",
+      "name": "Cowell Beach, Santa Cruz",
+      "lat": "36.9618",
+      "lon": "-122.023",
+      "county": "Santa Cruz",
+      "last_sample_date": "2026-10-06",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "OSB04",
+      "name": "Seal Beach - Surfside",
+      "lat": "33.7372",
+      "lon": "-118.102",
+      "county": "Orange",
+      "last_sample_date": "2026-07-28",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "PB5",
+      "name": "Pismo State Beach",
+      "lat": "35.141",
+      "lon": "-120.646",
+      "county": "San Luis Obispo",
+      "last_sample_date": "2026-09-08",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-2-10",
+      "name": "Dockweiler State Beach (Culver Blvd.)",
+      "lat": "33.95702",
+      "lon": "-118.45196",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-29",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-2-11",
+      "name": "Dockweiler State Beach (Westchester Storm Drain)",
+      "lat": "33.9444",
+      "lon": "-118.4442",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-29",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-2-13",
+      "name": "Dockweiler State Beach (Imperial HWY Storm Drain)",
+      "lat": "33.93071",
+      "lon": "-118.43711",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-29",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-3-5",
+      "name": "Venice Beach (Brooks Ave.)",
+      "lat": "33.99662",
+      "lon": "-118.48488",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-10-03",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-3-6",
+      "name": "Venice Beach (Windward Ave.)",
+      "lat": "33.9935842",
+      "lon": "-118.4824055",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-30",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "SMB-7-9",
+      "name": "Outer Cabrillo Beach",
+      "lat": "33.70936",
+      "lon": "-118.28302",
+      "county": "Los Angeles",
+      "last_sample_date": "2026-09-29",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    },
+    {
+      "station_code": "WP0000037",
+      "name": "Goleta Beach",
+      "lat": "34.4248",
+      "lon": "-119.829",
+      "county": "Santa Barbara",
+      "last_sample_date": "2026-10-05",
+      "sampling_frequency": "",
+      "tier": "model_pool"
+    }
+  ]
+}

@@ -4,7 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { LocateFixed, LoaderCircle } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import { STATUS_BAND, VERDICT_AS_STATUS, type BeachData, type Status } from "@/lib/data";
+import { STATUS_BAND, VERDICT_AS_STATUS, type Status, type Verdict } from "@/lib/data";
+
+/** Fields the overview map actually reads. List rows and full beach records both fit. */
+export type MapBeach = {
+  code: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  status: Status | null;
+  verdict?: Verdict | null;
+  hasEstimate?: boolean;
+};
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
@@ -12,14 +23,14 @@ import {
   BASEMAP_URL,
 } from "@/lib/basemap";
 
-function colorFor(status: BeachData["status"]) {
+function colorFor(status: Status) {
   if (status === "Not recommended") return "#cc3333";
   if (status === "Slightly elevated") return "#D5C82E";
   return "#2d8a4e";
 }
 
 // Dark yellow text needs a dark number for contrast; the green/red dots take white.
-function textColorFor(status: BeachData["status"]) {
+function textColorFor(status: Status) {
   return status === "Slightly elevated" ? "#3f3a05" : "#ffffff";
 }
 
@@ -35,7 +46,7 @@ function textColorFor(status: BeachData["status"]) {
 const BAND_DOT: [number, number] = [64, 22];
 const PLAIN_DOT: [number, number] = [20, 20];
 
-function dotIcon(beach: BeachData, binaryVerdict: boolean): L.DivIcon {
+function dotIcon(beach: { status: Status; verdict?: Verdict | null }, binaryVerdict: boolean): L.DivIcon {
   const verdict = binaryVerdict ? beach.verdict : null;
   const status = verdict ? VERDICT_AS_STATUS[verdict] : beach.status;
   const bg = colorFor(status);
@@ -205,7 +216,7 @@ export interface LabelPlacement {
  */
 function placeLabels(
   map: L.Map,
-  beaches: BeachData[],
+  beaches: MapBeach[],
   // Half the marker's width and height. A scalar radius until the pins started
   // carrying words: a band pill is three times as wide as it is tall, and
   // treating it as a circle of one or the other either let labels sit on top of
@@ -376,7 +387,7 @@ function BeachLabels({
   labelMinZoom,
   onSelect,
 }: {
-  beaches: BeachData[];
+  beaches: MapBeach[];
   dotHalf: { x: number; y: number };
   labelMinZoom: number;
   onSelect: (code: string) => void;
@@ -479,7 +490,7 @@ function escapeHtml(text: string): string {
 }
 
 // Frame all beaches with a little breathing room so every spot is visible at once.
-function FitAll({ beaches }: { beaches: BeachData[] }) {
+function FitAll({ beaches }: { beaches: MapBeach[] }) {
   const map = useMap();
   useEffect(() => {
     if (beaches.length === 0) return;
@@ -491,7 +502,7 @@ function FitAll({ beaches }: { beaches: BeachData[] }) {
   return null;
 }
 
-function NearbyLocation({ beaches }: { beaches: BeachData[] }) {
+function NearbyLocation({ beaches }: { beaches: MapBeach[] }) {
   const map = useMap();
   const interacted = useRef(false);
   const [message, setMessage] = useState("");
@@ -539,6 +550,73 @@ function NearbyLocation({ beaches }: { beaches: BeachData[] }) {
   </div>;
 }
 
+function limitedPin(): L.DivIcon {
+  return L.divIcon({
+    className: "nb-overview-icon",
+    html: `<div class="nb-overview-dot nb-overview-dot--plain" style="background:#8aa0a2;color:#173a3c;font-size:14px;line-height:20px;text-align:center">–</div>`,
+    iconSize: PLAIN_DOT,
+    iconAnchor: [PLAIN_DOT[0] / 2, PLAIN_DOT[1] / 2],
+  });
+}
+
+function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): string {
+  if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
+  const phrase = statusPhrase?.(beach.status);
+  return phrase ? `${beach.name}, ${phrase}` : beach.name;
+}
+
+// Leaflet.markercluster extends the global L. The map chunk is client-only.
+function ClusteredPins({
+  beaches,
+  binaryVerdict,
+  statusPhrase,
+  onSelect,
+}: {
+  beaches: MapBeach[];
+  binaryVerdict: boolean;
+  statusPhrase?: (status: Status) => string;
+  onSelect: (code: string) => void;
+}) {
+  const map = useMap();
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  useEffect(() => {
+    let group: L.MarkerClusterGroup | null = null;
+    let cancelled = false;
+    (window as unknown as { L?: typeof L }).L = L;
+    void import("leaflet.markercluster").then(() => {
+      if (cancelled) return;
+      group = L.markerClusterGroup({
+        chunkedLoading: true,
+        maxClusterRadius: 56,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        removeOutsideVisibleBounds: true,
+      });
+      for (const beach of beaches) {
+        if (!Number.isFinite(beach.latitude) || !Number.isFinite(beach.longitude)) continue;
+        const name = pinName(beach, statusPhrase);
+        const marker = L.marker([beach.latitude, beach.longitude], {
+          icon: beach.hasEstimate && beach.status ? dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict) : limitedPin(),
+          title: name,
+          alt: name,
+          keyboard: true,
+        });
+        marker.on("click", () => onSelectRef.current(beach.code));
+        group.addLayer(marker);
+      }
+      map.addLayer(group);
+    });
+    return () => {
+      cancelled = true;
+      if (group) map.removeLayer(group);
+    };
+  }, [map, beaches, binaryVerdict, statusPhrase]);
+
+  return null;
+}
+
 export default function OverviewMap({
   beaches,
   fallbackCenter,
@@ -546,14 +624,17 @@ export default function OverviewMap({
   labelMinZoom = 0,
   locateNearby = false,
   statusPhrase,
+  cluster = false,
   onSelect,
 }: {
-  beaches: BeachData[];
+  beaches: MapBeach[];
   fallbackCenter: [number, number];
   binaryVerdict: boolean;
   labelMinZoom?: number;
   locateNearby?: boolean;
   statusPhrase?: (status: Status) => string;
+  /** Group nearby pins. Used by the statewide board. */
+  cluster?: boolean;
   onSelect: (code: string) => void;
 }) {
   const center = useMemo<[number, number]>(() => {
@@ -578,21 +659,31 @@ export default function OverviewMap({
       />
       <FitAll beaches={beaches} />
       {locateNearby && <NearbyLocation beaches={beaches} />}
-      {beaches.map((b) => {
-        const phrase = statusPhrase?.(b.status);
-        const accessibleName = phrase ? `${b.name}, ${phrase}` : b.name;
-        return (
-        <Marker
-          key={b.code}
-          position={[b.latitude, b.longitude]}
-          icon={dotIcon(b, binaryVerdict)}
-          eventHandlers={{ click: () => onSelect(b.code) }}
-          keyboard
-          title={accessibleName}
-          alt={accessibleName}
+      {cluster ? (
+        <ClusteredPins
+          beaches={beaches}
+          binaryVerdict={binaryVerdict}
+          statusPhrase={statusPhrase}
+          onSelect={onSelect}
         />
-        );
-      })}
+      ) : (
+        beaches.map((b) => {
+          if (!b.status) return null;
+          const phrase = statusPhrase?.(b.status);
+          const accessibleName = phrase ? `${b.name}, ${phrase}` : b.name;
+          return (
+            <Marker
+              key={b.code}
+              position={[b.latitude, b.longitude]}
+              icon={dotIcon({ status: b.status, verdict: b.verdict }, binaryVerdict)}
+              eventHandlers={{ click: () => onSelect(b.code) }}
+              keyboard
+              title={accessibleName}
+              alt={accessibleName}
+            />
+          );
+        })
+      )}
       {/* Labels are a separate layer so they can be positioned around the dots
           rather than all hanging off the same side. Rendered after the dots so
           they stack above them. */}

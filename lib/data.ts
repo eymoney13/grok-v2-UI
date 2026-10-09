@@ -39,6 +39,10 @@ export interface LocationConfig {
   // current the moment the original's daily refresh lands. Defaults to `slug`,
   // so every board that does not set it is unaffected.
   dataSlug?: string;
+  // When true, the beach list comes from the project-neptune-v2 roster
+  // (data/roster.json) instead of `stations` below. `stations` remains the
+  // fallback for a checkout that does not have that file yet.
+  useStatewideRoster?: boolean;
   // Optional: ask search engines not to index this board. For the boards that
   // are not the real thing — an experiment showing another board's data under
   // a different name is exactly what should not turn up in a search for it.
@@ -381,11 +385,15 @@ export const LOCATIONS: Record<string, LocationConfig> = {
 };
 
 // Public geography is independent of the existing backend data directory.
+// The statewide board prefers the v2 roster. The station list copied from
+// South Bay is only the fallback when that roster file is not on disk.
 LOCATIONS.california = {
   ...LOCATIONS.southbay,
   slug: "california",
   displayName: "California",
   dataSlug: "southbay",
+  mapFallbackCenter: [36.78, -119.42],
+  useStatewideRoster: true,
 };
 
 export function getLocation(slug: string): LocationConfig | undefined {
@@ -696,6 +704,22 @@ export interface BeachData {
   // The model had no recent lab sample to anchor this beach's prediction, so it
   // leans entirely on environmental signal. Surfaced as a caveat in the summary.
   noRecentSample: boolean;
+  // Roster fields. Null on a board that is still reading the published CSV
+  // station list rather than the statewide inventory.
+  county: string | null;
+  region: string | null;
+  tier: RosterTier | null;
+  samplingFrequency: string | null;
+  lastSampleDate: string | null;
+  hasEstimate: boolean;
+  fallbackUsed: boolean | null;
+  modelVersion: string | null;
+  publishTimestamp: string | null;
+  calibratedProbability: number | null;
+  /** Non-numeric pipeline note. Never a confidence percent. */
+  confidenceFlag: string | null;
+  /** County staleness limit, in days, when the config file names one. */
+  staleAfterDays: number | null;
   // Long-run descriptive stats from the backend's roster file: what share of
   // every lab sample ever taken here exceeded the EPA limit, and how many
   // samples that is. null for locations without a roster file.
@@ -703,6 +727,8 @@ export interface BeachData {
   nSamples: number | null;
   pastDays: ForecastDay[];
   forecast: ForecastDay[];
+  /** Full published lab series. Only filled for a beach detail request. */
+  labHistory?: { date: string; labMpn: number }[];
   accuracy: Accuracy;
   /**
    * The paid half of this beach was withheld before the page was serialised.
@@ -738,9 +764,64 @@ export function orderForList<T extends { code: string }>(
   return [...pinned, ...beaches.filter((b) => !pinnedCodes.has(b.code))];
 }
 
+export type DataSourceName = "v2" | "published-csv";
+
+export type RosterTier = "model_pool" | "limited_data";
+
+/** What the list and the map need. The detail page loads the rest. */
+export interface BeachListItem {
+  code: string;
+  name: string;
+  proseName: string;
+  latitude: number;
+  longitude: number;
+  county: string | null;
+  region: string | null;
+  tier: RosterTier | null;
+  samplingFrequency: string | null;
+  lastSampleDate: string | null;
+  daysSinceSample: number | null;
+  noRecentSample: boolean;
+  staleAfterDays: number | null;
+  hasEstimate: boolean;
+  status: Status | null;
+  probability: number | null;
+  predictionDate: string | null;
+  fallbackUsed: boolean | null;
+}
+
+export function toBeachListItem(beach: BeachData): BeachListItem {
+  return {
+    code: beach.code,
+    name: beach.name,
+    proseName: beach.proseName,
+    latitude: beach.latitude,
+    longitude: beach.longitude,
+    county: beach.county,
+    region: beach.region,
+    tier: beach.tier,
+    samplingFrequency: beach.samplingFrequency,
+    lastSampleDate: beach.lastSampleDate,
+    daysSinceSample: beach.daysSinceSample,
+    noRecentSample: beach.noRecentSample,
+    staleAfterDays: beach.staleAfterDays,
+    hasEstimate: beach.hasEstimate,
+    status: beach.status,
+    probability: beach.probability,
+    predictionDate: beach.predictionDate,
+    fallbackUsed: beach.fallbackUsed,
+  };
+}
+
 export interface DashboardData {
   beaches: BeachData[];
+  /** Roster stations with no model estimate. Empty when the v2 roster is absent. */
+  unmodeled: BeachListItem[];
   predictionDate: string;
+  dataSource: DataSourceName;
+  staleCounties: string[];
+  checksPassed: boolean | null;
+  modelVersion: string | null;
   /**
    * When the model run behind these figures finished, as published by the
    * backend (ISO-8601, UTC). Null on a board whose pipeline does not publish it

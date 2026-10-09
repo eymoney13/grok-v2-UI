@@ -67,22 +67,45 @@ export function lastTestedLabel(days: number | null): string | null {
   return `Last tested ${n} days ago`;
 }
 
+/** Days after which a lab result is treated as limited. County config wins. */
+export function freshnessLimit(staleAfterDays?: number | null): number {
+  return staleAfterDays != null && Number.isFinite(staleAfterDays)
+    ? staleAfterDays
+    : LIMITED_DATA_AFTER_DAYS;
+}
+
 export function hasLimitedLabData(
   days: number | null,
-  noRecentSample: boolean
+  noRecentSample: boolean,
+  staleAfterDays?: number | null
 ): boolean {
   if (noRecentSample) return true;
   if (days == null || !Number.isFinite(days)) return false;
-  return days > LIMITED_DATA_AFTER_DAYS;
+  return days > freshnessLimit(staleAfterDays);
 }
+
+export function limitedLabNote(staleAfterDays: number | null, county: string | null): string {
+  const limit = freshnessLimit(staleAfterDays);
+  if (staleAfterDays != null && county) {
+    return `Limited lab data. ${county} treats a water test as limited after ${limit} days, so this estimate leans on weather and tides until the next test.`;
+  }
+  if (staleAfterDays != null) {
+    return `Limited lab data. A water test older than ${limit} days is limited, so this estimate leans on weather and tides until the next test.`;
+  }
+  return LIMITED_LAB_NOTE;
+}
+
+export const TIER_LIMITED_NOTE =
+  "This beach is on the roster as limited data. It is outside the model pool, so there may be no estimate today.";
 
 /** Compact list-row line. Null when the pipeline did not publish an age. */
 export function labFreshnessLine(
   days: number | null,
-  noRecentSample: boolean
+  noRecentSample: boolean,
+  staleAfterDays?: number | null
 ): string | null {
   const tested = lastTestedLabel(days);
-  const limited = hasLimitedLabData(days, noRecentSample);
+  const limited = hasLimitedLabData(days, noRecentSample, staleAfterDays);
   if (limited) {
     return tested ? `${tested} · Limited lab data` : "Limited lab data";
   }

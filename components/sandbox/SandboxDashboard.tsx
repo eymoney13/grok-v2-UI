@@ -1,37 +1,60 @@
 "use client";
 import SandboxSupportLinks from "@/components/sandbox/SandboxSupportLinks";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import posthog from "posthog-js";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { ArrowLeft, ArrowRight, ChevronRight, List, Map, Waves } from "lucide-react";
-import { formatMonthDayYear, orderForList, type BeachData, type Status } from "@/lib/data";
+import { ArrowRight, ChevronRight, List, Map as MapIcon, Waves } from "lucide-react";
+import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Status } from "@/lib/data";
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { NewsItem } from "@/lib/news";
-import { beachProperties, type CtaLocation } from "@/lib/analytics";
+import type { CtaLocation } from "@/lib/analytics";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
 import OverviewMapClient from "../OverviewMapClient";
 import NewsTab from "../NewsTab";
-import BeachNeighborNav from "@/components/BeachNeighborNav";
-import SandboxBeachDetail, { bandClass } from "./SandboxBeachDetail";
+import { bandClass } from "./SandboxBeachDetail";
 import SandboxProOffer from "./SandboxProOffer";
 import SandboxMenu from "./SandboxMenu";
 import CaliforniaAlertSignup, { type CaliforniaAlertSignupHandle } from "@/components/CaliforniaAlertSignup";
 import SandboxYourNeptune from "./SandboxYourNeptune";
 import s from "./SandboxDashboard.module.css";
 
-const ORANGE_COUNTY_STATIONS = ["OSB04", "0", "BNB05", "DSB4Z"];
-const ORANGE_COUNTY_ADVISORY = { label: "OC Beach Info", href: "https://ocbeachinfo.com/" };
+const COUNTY_PAGE = 40;
 
-export default function SandboxDashboard({ beaches, predictionDate, updated, readingsCurrent, fallbackCenter, listTopStations, entitled, alertsEnabled, checkoutReady, openForecast = false, account, faq, news, newsEnabled, advisory }: {
-  beaches: BeachData[];
+export interface BoardRun {
+  source: DataSourceName;
+  staleCounties: string[];
+  checksPassed: boolean | null;
+  modelVersion: string | null;
+}
+
+export default function SandboxDashboard({
+  beaches,
+  predictionDate,
+  updated,
+  readingsCurrent,
+  fallbackCenter,
+  entitled,
+  alertsEnabled,
+  checkoutReady,
+  openForecast = false,
+  account,
+  faq,
+  news,
+  newsEnabled,
+  advisory,
+  run,
+  initialView = "map",
+  initialRegion = "",
+}: {
+  beaches: BeachListItem[];
   predictionDate: string | null;
   updated: LastUpdatedDisplay;
   readingsCurrent: boolean;
   fallbackCenter: [number, number];
-  listTopStations?: string[];
   entitled: boolean;
   alertsEnabled: boolean;
   checkoutReady: boolean;
@@ -41,79 +64,114 @@ export default function SandboxDashboard({ beaches, predictionDate, updated, rea
   news: NewsItem[];
   newsEnabled: boolean;
   advisory: { label: string; href: string };
+  run: BoardRun;
+  initialView?: "list" | "map" | "news";
+  initialRegion?: string;
 }) {
-  const [alertsRevision, setAlertsRevision] = useState(0);
+  const router = useRouter();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"list" | "map" | "news">("map");
-  const [selected, setSelected] = useState<string | null>(() => openForecast && entitled ? orderForList(beaches, listTopStations)[0]?.code ?? null : null);
-  useEffect(() => {
-    posthog.capture("water_quality_dashboard_viewed", {board_location:"California", region:"southbay", access: entitled ? "pro" : "free"});
-    if (openForecast && entitled) posthog.capture("pro_activation_dashboard_opened", {board_location:"California"});
-  }, [entitled, openForecast]);
-  // The last link that sent the reader to the Pro card. Cleared whenever the
-  // page changes under them, so a stale click is never credited later.
-  const [proMoment, setProMoment] = useState<CtaLocation | null>(null);
+  const [countyFilter, setCountyFilter] = useState("");
+  const [regionFilter, setRegionFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [tierFilter, setTierFilter] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [view, setView] = useState<"list" | "map" | "news">(initialView === "news" && newsEnabled ? "news" : initialView === "list" ? "list" : "map");
   const heading = useRef<HTMLHeadingElement>(null);
-  const beachNavigation = useRef<HTMLDivElement>(null);
-  const active = beaches.find((beach) => beach.code === selected);
-  const activeAdvisory = active && ORANGE_COUNTY_STATIONS.includes(active.code) ? ORANGE_COUNTY_ADVISORY : advisory;
-  const ordered = [...beaches].sort((a, b) => b.latitude - a.latitude || a.name.localeCompare(b.name));
-  const countyStations: [string, string[]][] = [
-    ["Los Angeles County", ["DPH 002B", "DHS103", "DHS104", "SMB-3-5", "SMB-3-6", "DPH 122", "SMB-2-10", "SMB-2-11", "SMB-2-13", "DHS112B", "DHS113", "DHS114", "DHS115", "DHS116", "SMB-7-9"]],
-    ["Orange County", ORANGE_COUNTY_STATIONS],
-    ["San Mateo County", ["Francis State Beach"]],
-    ["Santa Cruz County", ["O490"]],
-    ["San Luis Obispo County", ["PB5"]],
-    ["Santa Barbara County", ["WP0000037"]],
-    ["Ventura County", ["13000"]],
-    ["San Diego County", ["CSD_S8"]],
-  ];
-  const knownCodes = new Set(countyStations.flatMap(([, codes]) => codes));
-  const countyGroups = countyStations.map(([county, codes]) => ({ county, beaches: ordered.filter((beach) => codes.includes(beach.code)) })).filter((group) => group.beaches.length > 0);
-  const unassigned = ordered.filter((beach) => !knownCodes.has(beach.code));
-  if (unassigned.length) countyGroups.push({ county: "Other beaches", beaches: unassigned });
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredGroups = countyGroups
-    .map((group) => ({
-      ...group,
-      beaches: group.beaches.filter((beach) => !normalizedQuery || `${beach.name} ${group.county}`.toLowerCase().includes(normalizedQuery)),
-    }))
-    .filter((group) => group.beaches.length > 0);
-  const matchedBeaches = filteredGroups.flatMap((group) => group.beaches);
-  const offerLine = lookAheadOfferLine(alertsEnabled);
-  const focusHeading = () => requestAnimationFrame(() => {
-    heading.current?.focus({ preventScroll: true });
-    (beachNavigation.current ?? heading.current)?.scrollIntoView({ block: "start" });
-  });
-  const openBeach = (code: string) => {
-    setSelected(code);
-    setProMoment(null);
-    const beach = beaches.find((b) => b.code === code);
-    if (beach) posthog.capture("beach_viewed", { board_location: "California", ...beachProperties(beach, "southbay"), entry_point: view });
-    focusHeading();
-  };
-  const switchView = (next: typeof view) => { setView(next); setSelected(null); setProMoment(null); posthog.capture("dashboard_view_selected", { board_location: "California", region: "southbay", view: next }); };
-
   const alertSignupRef = useRef<CaliforniaAlertSignupHandle>(null);
-  const alertSignup = alertsEnabled && view !== "news" ? <CaliforniaAlertSignup ref={alertSignupRef} key={active?.code ?? view} beaches={beaches.map(b => ({code:b.code,name:b.name}))} beach={active?.code} pro={entitled} onSaved={() => setAlertsRevision(value => value + 1)} source={active ? "california_beach" : `california_${view}`} /> : null;
+
+  useEffect(() => {
+    posthog.capture("water_quality_dashboard_viewed", { board_location: "California", region: "california", access: entitled ? "pro" : "free" });
+    if (openForecast && entitled && beaches[0]) {
+      posthog.capture("pro_activation_dashboard_opened", { board_location: "California" });
+      router.push(`/california/beach/${encodeURIComponent(beaches[0].code)}?from=map`);
+    }
+  }, [entitled, openForecast, beaches, router]);
+
+  const regions = useMemo(() => unique(beaches.map((beach) => beach.region).filter((region): region is string => !!region)), [beaches]);
+  const counties = useMemo(() => unique(beaches.map((beach) => beach.county ?? "County not listed")), [beaches]);
+  const showTier = beaches.some((beach) => beach.tier);
+
+  useEffect(() => {
+    if (!initialRegion) return;
+    const wanted = initialRegion.trim().toLowerCase();
+    const match = regions.find((region) => region.toLowerCase() === wanted);
+    if (match) setRegionFilter(match);
+  }, [initialRegion, regions]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = beaches.filter((beach) => {
+    if (countyFilter && (beach.county ?? "County not listed") !== countyFilter) return false;
+    if (regionFilter && beach.region !== regionFilter) return false;
+    if (tierFilter && beach.tier !== tierFilter) return false;
+    if (statusFilter === "none" && beach.hasEstimate) return false;
+    if (statusFilter === "under" && beach.status !== "Normal") return false;
+    if (statusFilter === "near" && beach.status !== "Slightly elevated") return false;
+    if (statusFilter === "over" && beach.status !== "Not recommended") return false;
+    if (!normalizedQuery) return true;
+    const haystack = `${beach.name} ${beach.county ?? ""} ${beach.region ?? ""} ${beach.code}`.toLowerCase();
+    return haystack.includes(normalizedQuery);
+  });
+  const ordered = [...filtered].sort((a, b) => b.latitude - a.latitude || a.name.localeCompare(b.name));
+  const groups = groupByCounty(ordered);
+  const filtersOn = !!(normalizedQuery || countyFilter || regionFilter || statusFilter || tierFilter);
+  const offerLine = lookAheadOfferLine(alertsEnabled);
+
+  const openBeach = (code: string) => {
+    const beach = beaches.find((item) => item.code === code);
+    if (beach) {
+      posthog.capture("beach_viewed", {
+        board_location: "California",
+        beach_id: beach.code,
+        beach_name: beach.name,
+        region: beach.region ?? beach.county ?? "california",
+        entry_point: view,
+      });
+    }
+    router.push(`/california/beach/${encodeURIComponent(code)}?from=${view}`);
+  };
+  const switchView = (next: typeof view) => {
+    setView(next);
+    posthog.capture("dashboard_view_selected", { board_location: "California", region: "california", view: next });
+  };
+  const clearFilters = () => {
+    setQuery("");
+    setCountyFilter("");
+    setRegionFilter("");
+    setStatusFilter("");
+    setTierFilter("");
+  };
+
+  const alertSignup = alertsEnabled && view !== "news" ? (
+    <CaliforniaAlertSignup
+      ref={alertSignupRef}
+      key={view}
+      beaches={beaches.map((beach) => ({ code: beach.code, name: beach.name }))}
+      pro={entitled}
+      onSaved={() => {}}
+      source={`california_${view}`}
+    />
+  ) : null;
 
   return (
     <main className={s.root}>
-
       <header className={s.header}>
         <a href="https://projectneptune.co" aria-label="Project Neptune home"><ProjectNeptuneLogo size={22} /></a>
-        <div className={s.account}>{!entitled && <a className={s.headerPro} href="#sandbox-pro" onClick={() => setProMoment("header_get_pro")}>Get Pro</a>}{entitled && <UserButton />}<SandboxMenu account={account} /></div>
+        <div className={s.account}>{!entitled && <a className={s.headerPro} href="#sandbox-pro">Get Pro</a>}{entitled && <UserButton />}<SandboxMenu account={account} /></div>
       </header>
       <div className={s.content}>
         <div className={s.masthead}>
-          <div><p className={s.eyebrow}><Waves size={16} /> Daily water-quality</p><h1>Neptune Index</h1><p className={s.intro}>Know what you&apos;re going into.</p></div>
+          <div>
+            <p className={s.eyebrow}><Waves size={16} /> Daily water-quality</p>
+            <h1>Neptune Index</h1>
+            <p className={s.intro}>California beach estimates against the 104 MPN/100 mL enterococcus limit.</p>
+          </div>
           <div className={s.dateline}><span>Last updated</span><strong>{updated.dateTime ? <time dateTime={updated.dateTime}>{updated.text}</time> : updated.text}</strong></div>
         </div>
         <div className={s.toolbar}>
           <nav aria-label="Dashboard views" className={s.tabs}>
-            <button aria-current={!active && view === "list" ? "page" : undefined} onClick={() => switchView("list")}><List size={17} /> Beaches</button>
-            <button aria-current={!active && view === "map" ? "page" : undefined} onClick={() => switchView("map")}><Map size={17} /> Map</button>
-            {newsEnabled && <button aria-current={!active && view === "news" ? "page" : undefined} onClick={() => switchView("news")}>News</button>}
+            <button type="button" aria-current={view === "list" ? "page" : undefined} onClick={() => switchView("list")}><List size={17} /> Beaches</button>
+            <button type="button" aria-current={view === "map" ? "page" : undefined} onClick={() => switchView("map")}><MapIcon size={17} /> Map</button>
+            {newsEnabled && <button type="button" aria-current={view === "news" ? "page" : undefined} onClick={() => switchView("news")}>News</button>}
           </nav>
           <div className={s.mobileDateline}>
             <span>Updated</span>
@@ -123,51 +181,131 @@ export default function SandboxDashboard({ beaches, predictionDate, updated, rea
         {predictionDate && !readingsCurrent && (
           <p className={s.stale} role="status">These readings are for {formatMonthDayYear(predictionDate)}, not today.</p>
         )}
-        {!entitled && !active && view === "list" && (
+        {run.checksPassed === false && (
+          <p className={s.stale} role="status">The latest model run reported a check that did not pass. Treat today’s estimates with extra caution.</p>
+        )}
+        {run.staleCounties.length > 0 && (
+          <p className={s.stale} role="status">The latest run marked these counties stale: {run.staleCounties.join(", ")}.</p>
+        )}
+        {!entitled && view === "list" && (
           <aside className={s.proBanner} aria-label="Join Neptune Pro">
             <div><strong>Checking the water should be as easy as checking the weather.</strong><p>{offerLine}</p></div>
-            <a href="#sandbox-pro" onClick={() => setProMoment("list_banner")}>Join Neptune Pro <ArrowRight size={16} aria-hidden="true" /></a>
+            <a href="#sandbox-pro">Join Neptune Pro <ArrowRight size={16} aria-hidden="true" /></a>
           </aside>
         )}
-        {active ? (
-          <>
-            <div className={s.beachNav}>
-              <button onClick={() => { setSelected(null); setProMoment(null); focusHeading(); }}><ArrowLeft size={17} /> Back to {view === "map" ? "map" : "beaches"}</button>
-              <label><span className={s.srOnly}>Choose a beach</span><select value={active.code} onChange={(event) => openBeach(event.target.value)}>{ordered.map((beach) => <option key={beach.code} value={beach.code}>{beach.name}</option>)}</select></label>
-            </div>
-            <div ref={beachNavigation} className={s.beachNavigation}>
-              <BeachNeighborNav beach={active} beaches={beaches} onSelect={openBeach} />
-            </div>
-            <h2 ref={heading} tabIndex={-1} className={s.beachHeading}>{active.name}</h2>
-            <SandboxBeachDetail key={active.code} beach={active} beaches={beaches} onSelect={openBeach} onProMoment={() => setProMoment("beach_forecast_lock")} advisory={activeAdvisory} alertSignup={alertSignup} />
-          </>
-        ) : beaches.length === 0 ? (
+        {beaches.length === 0 ? (
           <div className={s.empty}><h2>No readings published yet.</h2><p>The daily forecast will appear here when it is available.</p></div>
         ) : view === "news" ? <NewsTab items={news} /> : (
           <section className={s.overview}>
-            <div className={s.sectionHeading}><h2 ref={heading} tabIndex={-1}>Today’s water quality</h2><span>{normalizedQuery ? `${matchedBeaches.length} of ${beaches.length}` : beaches.length} beaches</span></div>
-            <p className={s.supporting}>Click a beach for today’s estimate.{alertsEnabled && <> <button type="button" className={s.emailAlertLink} onClick={() => alertSignupRef.current?.open()}>Get email alerts</button></>}</p>
+            <div className={s.sectionHeading}>
+              <h2 ref={heading} tabIndex={-1}>Today’s water quality</h2>
+              <span>{filtersOn ? `${filtered.length} of ${beaches.length}` : beaches.length} beaches</span>
+            </div>
+            <p className={s.supporting}>Search or filter, then open a beach for today’s estimate.{alertsEnabled && <> <button type="button" className={s.emailAlertLink} onClick={() => alertSignupRef.current?.open()}>Get email alerts</button></>}</p>
             <div className={s.searchRow}>
               <label className={s.searchLabel}>
                 <span className={s.srOnly}>Search beaches</span>
                 <input
                   type="search"
                   value={query}
-                  placeholder="Search beaches"
+                  placeholder="Search beaches, counties, or station codes"
                   autoComplete="off"
                   onChange={(event) => setQuery(event.target.value)}
                   aria-controls={view === "list" ? "beach-list" : "beach-map"}
                 />
               </label>
-              <p className={s.srOnly} role="status" aria-live="polite">{normalizedQuery ? `${matchedBeaches.length} of ${beaches.length} beaches` : `${beaches.length} beaches`}</p>
             </div>
-            {normalizedQuery && matchedBeaches.length === 0 ? (
-              <p className={s.emptySearch} role="status">No beaches match “{query.trim()}”.</p>
-            ) : view === "map" ? <div className={s.map} id="beach-map"><OverviewMapClient locateNearby labelMinZoom={11} beaches={normalizedQuery ? matchedBeaches : beaches} fallbackCenter={fallbackCenter} binaryVerdict={false} statusPhrase={(status: Status) => statusReading(status).title} onSelect={openBeach} /></div> : (
-              <div className={s.countyGroups} id="beach-list">{filteredGroups.map((group) => <section key={group.county} aria-label={group.county}><h3 className={s.countyHeading}>{group.county}<span>{group.beaches.length} {group.beaches.length === 1 ? "beach" : "beaches"}</span></h3><ul className={s.beaches}>{group.beaches.map((beach) => {
-                const freshness = labFreshnessLine(beach.daysSinceSample, beach.noRecentSample);
-                return <li key={beach.code}><button type="button" onClick={() => openBeach(beach.code)}><span className={s.beachIdentity}><span className={s.beachName}>{beach.name}</span>{freshness && <span className={s.sampleMeta}>{freshness}</span>}</span><span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}><span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span></span><ChevronRight size={18} aria-hidden="true" /></button></li>;
-              })}</ul></section>)}</div>
+            <div className={s.filters}>
+              <label>County
+                <select value={countyFilter} onChange={(event) => setCountyFilter(event.target.value)}>
+                  <option value="">All counties</option>
+                  {counties.map((county) => <option key={county} value={county}>{county}</option>)}
+                </select>
+              </label>
+              {regions.length > 0 && (
+                <label>Region
+                  <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
+                    <option value="">All regions</option>
+                    {regions.map((region) => <option key={region} value={region}>{region}</option>)}
+                  </select>
+                </label>
+              )}
+              <label>Status
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="under">Under the limit</option>
+                  <option value="near">Near the limit</option>
+                  <option value="over">Over the limit</option>
+                  <option value="none">No estimate today</option>
+                </select>
+              </label>
+              {showTier && (
+                <label>Roster
+                  <select value={tierFilter} onChange={(event) => setTierFilter(event.target.value)}>
+                    <option value="">All beaches</option>
+                    <option value="model_pool">In the model pool</option>
+                    <option value="limited_data">Limited data</option>
+                  </select>
+                </label>
+              )}
+              {filtersOn && <button type="button" className={s.clearFilters} onClick={clearFilters}>Clear filters</button>}
+            </div>
+            <p className={s.srOnly} role="status" aria-live="polite">{filtersOn ? `${filtered.length} of ${beaches.length} beaches` : `${beaches.length} beaches`}</p>
+            {filtered.length === 0 ? (
+              <p className={s.emptySearch} role="status">No beaches match these filters.{query.trim() ? ` Nothing matches “${query.trim()}”.` : ""}</p>
+            ) : view === "map" ? (
+              <div className={s.map} id="beach-map">
+                <OverviewMapClient
+                  locateNearby
+                  cluster
+                  labelMinZoom={12}
+                  beaches={ordered}
+                  fallbackCenter={fallbackCenter}
+                  binaryVerdict={false}
+                  statusPhrase={(status: Status) => statusReading(status).title}
+                  onSelect={openBeach}
+                />
+              </div>
+            ) : (
+              <div className={s.countyGroups} id="beach-list">
+                {groups.map((group) => {
+                  const shown = filtersOn || expanded[group.county] ? group.beaches : group.beaches.slice(0, COUNTY_PAGE);
+                  return (
+                    <section key={group.county} aria-label={group.county}>
+                      <h3 className={s.countyHeading}>{group.county}<span>{group.beaches.length} {group.beaches.length === 1 ? "beach" : "beaches"}</span></h3>
+                      <ul className={s.beaches}>
+                        {shown.map((beach) => {
+                          const freshness = labFreshnessLine(beach.daysSinceSample, beach.noRecentSample, beach.staleAfterDays);
+                          return (
+                            <li key={beach.code}>
+                              <button type="button" onClick={() => openBeach(beach.code)}>
+                                <span className={s.beachIdentity}>
+                                  <span className={s.beachName}>{beach.name}</span>
+                                  {freshness && <span className={s.sampleMeta}>{freshness}</span>}
+                                  {beach.tier === "limited_data" && <span className={s.sampleMeta}>Outside the model pool</span>}
+                                </span>
+                                {beach.hasEstimate && beach.status ? (
+                                  <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
+                                    <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
+                                  </span>
+                                ) : (
+                                  <span className={s.noEstimate}>No estimate</span>
+                                )}
+                                <ChevronRight size={18} aria-hidden="true" />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {shown.length < group.beaches.length && (
+                        <button type="button" className={s.showMore} onClick={() => setExpanded((current) => ({ ...current, [group.county]: true }))}>
+                          Show all {group.beaches.length} in {group.county}
+                        </button>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
             )}
             {view === "map" && alertSignup}
             {view === "map" && (
@@ -177,22 +315,35 @@ export default function SandboxDashboard({ beaches, predictionDate, updated, rea
               </div>
             )}
             <div className={s.legend} aria-label="Status key">{(["Normal", "Slightly elevated", "Not recommended"] as const).map((status) => <span key={status} className={bandClass(status)}><i className={s.dot} />{statusReading(status).pill}</span>)}</div>
-            <p className={s.legendNote}>Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High.</p>
-            <p className={s.caveat}>Estimates, not current lab results. Always follow official beach advisories.</p>
+            <p className={s.legendNote}>Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. Pins group together until you zoom in.</p>
+            <p className={s.caveat}>{run.source === "v2" ? "Beach list from the statewide roster." : "Beach list from the published station files."} Estimates, not current lab results. Always follow official beach advisories.</p>
           </section>
         )}
-        {!active && view !== "map" && alertSignup}
-        {!active && view !== "news" && <h2 className={s.coverageNote}>More California beaches coming soon!</h2>}
-        {!entitled && <SandboxProOffer checkoutReady={checkoutReady} alertsEnabled={alertsEnabled} ctaLocation={proMoment ?? "california_bottom"} pageContext={active ? "beach_page" : view} beach={active} />}
-        {/* List and map only. Inside a beach card the reader is looking at one
-            beach, and a list of every beach they follow is a different job; on
-            News it has nothing to do with what is on screen. */}
-        {entitled && alertsEnabled && !active && view !== "news" && (
-          <SandboxYourNeptune key={alertsRevision} location="california" beaches={beaches.map((b) => ({ code: b.code, name: b.name }))} />
+        {view !== "map" && alertSignup}
+        {!entitled && <SandboxProOffer checkoutReady={checkoutReady} alertsEnabled={alertsEnabled} ctaLocation={"california_bottom" as CtaLocation} pageContext={view} />}
+        {entitled && alertsEnabled && view !== "news" && (
+          <SandboxYourNeptune location="california" beaches={beaches.map((beach) => ({ code: beach.code, name: beach.name }))} />
         )}
       </div>
       <div className={s.faq}>{faq}</div>
-      <footer className={s.footer}><Waves size={20} /><p>Know the water. Enjoy the coast.</p><small>Forecasts are estimates based on environmental data. For official beach advisories, consult <a href={activeAdvisory.href} target="_blank" rel="noopener noreferrer">{activeAdvisory.label}</a>.</small><SandboxSupportLinks /></footer>
+      <footer className={s.footer}><Waves size={20} /><p>Know the water. Enjoy the coast.</p><small>Forecasts are estimates based on environmental data. For official beach advisories, consult <a href={advisory.href} target="_blank" rel="noopener noreferrer">{advisory.label}</a>.</small><SandboxSupportLinks /></footer>
     </main>
   );
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+}
+
+function groupByCounty(beaches: BeachListItem[]): { county: string; beaches: BeachListItem[] }[] {
+  const groups = new Map<string, BeachListItem[]>();
+  for (const beach of beaches) {
+    const county = beach.county ?? "County not listed";
+    const list = groups.get(county);
+    if (list) list.push(beach);
+    else groups.set(county, [beach]);
+  }
+  return [...groups.entries()]
+    .map(([county, items]) => ({ county, beaches: items }))
+    .sort((a, b) => (b.beaches[0]?.latitude ?? 0) - (a.beaches[0]?.latitude ?? 0) || a.county.localeCompare(b.county));
 }

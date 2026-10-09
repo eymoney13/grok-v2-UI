@@ -1,0 +1,29 @@
+station_code,name,lat,lon,county,last_sample_date,sampling_frequency,tier
+0,Huntington State Beach,33.6293,-117.96,Orange,2026-08-05,,model_pool
+13000,"Surfers Point at Seaside, Ventura",34.273,-119.305,Ventura,2026-10-05,,model_pool
+BNB05,Newport Bay,33.613,-117.908,Orange,2026-07-27,,model_pool
+CSD_S8,San Diego - Station S8,32.6368,-117.144,San Diego,2025-12-29,,model_pool
+DHS103,Will Rogers State Beach,34.0348,-118.536,Los Angeles,2026-10-05,,model_pool
+DHS104,Santa Monica State Beach,34.02,-118.51,Los Angeles,2026-10-05,,model_pool
+DHS110,Dockweiler State Beach (North),33.9406,-118.442,Los Angeles,2026-10-05,,model_pool
+DHS111,Dockweiler State Beach (Central),33.9233,-118.433,Los Angeles,2026-10-05,,model_pool
+DHS112,Dockweiler State Beach (South),33.9159,-118.429,Los Angeles,2026-10-05,,model_pool
+DHS112B,Dockweiler State Beach (South Jetty),33.9153,-118.43,Los Angeles,2026-10-05,,model_pool
+DHS113,Manhattan Beach - 28th st,33.8945,-118.418,Los Angeles,2026-10-05,,model_pool
+DHS114,Hermosa Beach - 26th St,33.8715,-118.407,Los Angeles,2026-10-05,,model_pool
+DHS115,Hermosa Beach - Herondo St,33.8522,-118.399,Los Angeles,2026-10-05,,model_pool
+DHS116,Redondo Beach - Topaz,33.8321,-118.391,Los Angeles,2026-10-05,,model_pool
+DPH 002B,Malibu - Surfrider Beach,34.0368898,-118.676899,Los Angeles,2026-09-22,,model_pool
+DPH 122,Playa del Rey,33.9611547,-118.4562179,Los Angeles,2026-10-05,,model_pool
+DSB4Z,Doheny State Beach (Drain 4),33.4601855299999,-117.677785099999,Orange,2026-07-28,,model_pool
+Francis State Beach,Half Moon Bay - Francis State Beach,37.4672,-122.447,San Mateo,2026-10-05,,model_pool
+O490,"Cowell Beach, Santa Cruz",36.9618,-122.023,Santa Cruz,2026-10-06,,model_pool
+OSB04,Seal Beach - Surfside,33.7372,-118.102,Orange,2026-07-28,,model_pool
+PB5,Pismo State Beach,35.141,-120.646,San Luis Obispo,2026-09-08,,model_pool
+SMB-2-10,Dockweiler State Beach (Culver Blvd.),33.95702,-118.45196,Los Angeles,2026-09-29,,model_pool
+SMB-2-11,Dockweiler State Beach (Westchester Storm Drain),33.9444,-118.4442,Los Angeles,2026-09-29,,model_pool
+SMB-2-13,Dockweiler State Beach (Imperial HWY Storm Drain),33.93071,-118.43711,Los Angeles,2026-09-29,,model_pool
+SMB-3-5,Venice Beach (Brooks Ave.),33.99662,-118.48488,Los Angeles,2026-10-03,,model_pool
+SMB-3-6,Venice Beach (Windward Ave.),33.9935842,-118.4824055,Los Angeles,2026-09-30,,model_pool
+SMB-7-9,Outer Cabrillo Beach,33.70936,-118.28302,Los Angeles,2026-09-29,,model_pool
+WP0000037,Goleta Beach,34.4248,-119.829,Santa Barbara,2026-10-05,,model_pool

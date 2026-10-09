@@ -13,7 +13,7 @@ import { isEntitled } from "@/lib/entitlement";
 import { isClerkConfigured } from "@/lib/clerkConfig";
 import { isLiveBillingEnabled, isStripeConfigured } from "@/lib/subscription";
 import { redactForEntitlement } from "@/lib/paywall";
-import { formatMonthDayYear, getLocation, LOCATIONS } from "@/lib/data";
+import { formatMonthDayYear, getLocation, LOCATIONS, toBeachListItem } from "@/lib/data";
 import { calendarDay, lastUpdatedDisplay } from "@/lib/waterStatus";
 import { featuresFor } from "@/lib/features";
 import {
@@ -61,7 +61,7 @@ export default async function LocationPage({
   searchParams,
 }: {
   params: Promise<{ location: string }>;
-  searchParams: Promise<{ pro?: string }>;
+  searchParams: Promise<{ pro?: string; view?: string; region?: string }>;
 }) {
   const { location } = await params;
   const config = getLocation(location);
@@ -76,7 +76,7 @@ export default async function LocationPage({
     config.slug,
     config.newsFilterTerms
   );
-  const [{ beaches: allBeaches, predictionDate, generatedAt }, news, entitled] = await Promise.all([
+  const [{ beaches: allBeaches, unmodeled, predictionDate, generatedAt, dataSource, staleCounties, checksPassed, modelVersion }, news, entitled] = await Promise.all([
     loadDashboardData(config),
     newsEnabled
       ? fetchNewsAlerts(getNewsFeedUrls(), newsFilterTerms)
@@ -107,15 +107,16 @@ export default async function LocationPage({
   // sandbox receives exactly the same server-redacted data as before.
   if (location === "sandbox" || location === "california") {
     const { isPaymentFirstEnabled } = await import("@/lib/purchase");
-    const openForecast = entitled && (await searchParams).pro === "activated";
+    const query = await searchParams;
+    const openForecast = entitled && query.pro === "activated";
+    const regionQuery = typeof query.region === "string" ? query.region : "";
     return (
       <SandboxDashboard
-        beaches={beaches}
+        beaches={[...beaches.map(toBeachListItem), ...(location === "california" ? unmodeled : [])]}
         predictionDate={predictionDate}
         updated={lastUpdatedDisplay(generatedAt, predictionDate, config.timeZone)}
         readingsCurrent={!predictionDate || predictionDate >= calendarDay(config.timeZone)}
         fallbackCenter={config.mapFallbackCenter}
-        listTopStations={config.listTopStations}
         entitled={entitled}
         alertsEnabled={alertsEnabled}
         openForecast={openForecast}
@@ -125,6 +126,9 @@ export default async function LocationPage({
         news={news}
         newsEnabled={newsEnabled}
         advisory={config.advisory ?? DEFAULT_ADVISORY}
+        run={{ source: dataSource, staleCounties, checksPassed, modelVersion }}
+        initialView={query.view === "list" ? "list" : "map"}
+        initialRegion={regionQuery}
       />
     );
   }
