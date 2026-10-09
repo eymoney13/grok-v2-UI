@@ -1,0 +1,370 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { ChevronLeft, Pointer } from "lucide-react";
+import posthog from "posthog-js";
+import { orderForList, VERDICT_AS_STATUS, type BeachData } from "@/lib/data";
+import { beachProperties } from "@/lib/analytics";
+import type { FeatureFlags } from "@/lib/features";
+import type { NewsItem } from "@/lib/news";
+import BeachCard from "./BeachCard";
+import MapClient from "./MapClient";
+import NewsTab from "./NewsTab";
+import OverviewMapClient from "./OverviewMapClient";
+import BeachList from "./BeachList";
+import BeachPicker from "./BeachPicker";
+import BeachNeighborNav from "./BeachNeighborNav";
+import BoardHeading from "./BoardHeading";
+
+const STATUS_UNDERLINE: Record<string, string> = {
+  Normal: "bg-[#2d8a4e]",
+  "Slightly elevated": "bg-[#D5C82E]",
+  "Not recommended": "bg-[#cc3333]",
+};
+
+// Sentinel tab values — neither is a real station code.
+const MAP_TAB = "__map__"; // all-beaches overview map
+const LIST_TAB = "__list__"; // all-beaches list, one row each
+const NEWS_TAB = "__news__"; // global (not per-beach) news
+
+const posthogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_KEY && process.env.NEXT_PUBLIC_POSTHOG_HOST
+);
+
+export default function DashboardTabs({
+  beaches,
+  locationLabel,
+  region,
+  fallbackCenter,
+  features,
+  listTopStations,
+  alertSignup,
+  news,
+  newsEnabled,
+}: {
+  beaches: BeachData[];
+  locationLabel: string;
+  // The location slug, sent as the analytics `region`.
+  region: string;
+  fallbackCenter: [number, number];
+  features: FeatureFlags;
+  // Station codes this board leads its List with (LocationConfig.listTopStations).
+  // The List only: the tab bar, the map and the card picker below all read
+  // `beaches` in its coastline order.
+  listTopStations?: string[];
+  // The alert signup, passed in rather than built here: it needs the location
+  // slug and the alerts-configured check, both of which are the page's to know.
+  // Rendered here because where it belongs depends on which tab is open, which
+  // is this component's state and nothing the page can see.
+  alertSignup?: ReactNode;
+  news: NewsItem[];
+  newsEnabled: boolean;
+}) {
+  // The overview map only earns its own tab when there's more than one beach to
+  // glance across; single-beach locations open straight to that beach.
+  const showMapTab = beaches.length > 1;
+  // Same threshold as the map: a list of one is not a list.
+  const showListTab = features.listTab && beaches.length > 1;
+  // The list opens the board when present. It answers the first question a
+  // reader arrives with - how is the coast this week - where the map answers
+  // the second, which of these is near me. Boards that opt into openOnMap keep
+  // the Map as the way in and treat the List as the second view.
+  const listIsLanding = showListTab && !features.openOnMap;
+  const [activeCode, setActiveCode] = useState<string>(
+    listIsLanding ? LIST_TAB : showMapTab ? MAP_TAB : beaches[0]?.code ?? ""
+  );
+  // Which view a beach card was opened from, so "back" returns there rather
+  // than to a fixed guess. Both the List and the Map open cards, and being sent
+  // to the other one is the small betrayal that makes a back control feel
+  // broken. Defaults to whichever view the board opens on.
+  const [cameFrom, setCameFrom] = useState<string>(
+    listIsLanding ? LIST_TAB : MAP_TAB
+  );
+
+  // Swapping the view is a navigation, but React only replaces the content and
+  // the browser keeps the scroll offset across it. A reader clicking the sixth
+  // row of the list was already several hundred pixels down, and landed that
+  // far into the beach page: usually level with its map, past the reading they
+  // had just asked for.
+  //
+  // Only the entry points reachable from a scrolled position need this. The tab
+  // bar is not sticky, so reaching it means being at the top already.
+  const scrollToTop = () => {
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+  };
+
+  const selectView = (code: string, view: "list" | "map" | "news") => {
+    setActiveCode(code);
+    if (posthogConfigured) {
+      posthog.capture("dashboard_view_selected", {
+        board_location: locationLabel,
+        view,
+      });
+    }
+  };
+
+  const selectBeach = (
+    code: string,
+    entryPoint: "list" | "map" | "picker" | "tab" | "neighbor",
+    scroll = false
+  ) => {
+    setActiveCode(code);
+    if (scroll) scrollToTop();
+    const beach = beaches.find((b) => b.code === code);
+    if (posthogConfigured && beach) {
+      // entry_point, not source: `source` is the first-touch acquisition
+      // channel registered for every event in instrumentation-client.ts.
+      posthog.capture("beach_viewed", {
+        board_location: locationLabel,
+        ...beachProperties(beach, region),
+        entry_point: entryPoint,
+      });
+    }
+  };
+
+  const openBeach = (code: string, from: "list" | "map") => {
+    setCameFrom(from === "list" ? LIST_TAB : MAP_TAB);
+    selectBeach(code, from, true);
+  };
+
+  if (beaches.length === 0) return null;
+
+  // On binary boards the tab underline must agree with the card's Good/Poor
+  // call, not the 3-tier status — a beach can be Poor while its status still
+  // reads "Normal" under the shared tiers.
+  const underlineFor = (b: BeachData): string => {
+    if (!features.binaryVerdict) return STATUS_UNDERLINE[b.status];
+    return STATUS_UNDERLINE[
+      b.verdict ? VERDICT_AS_STATUS[b.verdict] : b.status
+    ];
+  };
+
+  const mapActive = activeCode === MAP_TAB;
+  const listActive = activeCode === LIST_TAB;
+  const newsActive = activeCode === NEWS_TAB;
+  const beachActive = !listActive && !mapActive && !newsActive;
+  const active = beaches.find((b) => b.code === activeCode) ?? beaches[0];
+  // The tab bar earns its keep when there's more than one beach to switch
+  // between, or a News tab to reach.
+  const showTabs = showMapTab || showListTab || newsEnabled;
+
+  return (
+    <>
+      {showTabs && (
+        <nav className="w-full border-b border-gray-100">
+          <div className="mx-auto max-w-6xl px-6 sm:px-10 flex gap-2 sm:gap-8 overflow-x-auto">
+            {showListTab && (
+              <button
+                type="button"
+                onClick={() => selectView(LIST_TAB, "list")}
+                aria-current={listActive ? "page" : undefined}
+                className={`relative shrink-0 py-4 px-2 text-sm font-medium transition-colors ${
+                  listActive
+                    ? "text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                List
+                {listActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gray-900" />
+                )}
+              </button>
+            )}
+            {showMapTab && (
+              <button
+                type="button"
+                onClick={() => selectView(MAP_TAB, "map")}
+                aria-current={mapActive ? "page" : undefined}
+                className={`relative shrink-0 py-4 px-2 text-sm font-medium transition-colors ${
+                  mapActive
+                    ? "text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Map
+                {mapActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gray-900" />
+                )}
+              </button>
+            )}
+            {/* Per-beach tabs. Hidden on boards that opt out: with a long
+                roster they overflow into a scroller, so most sit off-screen,
+                and the List and Map are better ways in. A beach card is still
+                reached by clicking a List row or a Map pin, and the List / Map
+                tabs stay visible while one is open so there is always a way
+                back. */}
+            {!features.hideBeachTabs &&
+              beaches.map((b) => {
+              const isActive =
+                !mapActive && !newsActive && !listActive && b.code === active.code;
+              return (
+                <button
+                  key={b.code}
+                  type="button"
+                  onClick={() => selectBeach(b.code, "tab")}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`relative shrink-0 py-4 px-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "text-gray-900"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {b.name}
+                  {isActive && (
+                    <span
+                      className={`absolute bottom-0 left-2 right-2 h-0.5 ${underlineFor(
+                        b
+                      )}`}
+                    />
+                  )}
+                </button>
+              );
+            })}
+            {newsEnabled && (
+              <button
+                type="button"
+                onClick={() => selectView(NEWS_TAB, "news")}
+                aria-current={newsActive ? "page" : undefined}
+                className={`relative shrink-0 py-4 px-2 text-sm font-medium transition-colors ${
+                  newsActive
+                    ? "text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                News
+                {newsActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gray-900" />
+                )}
+              </button>
+            )}
+          </div>
+        </nav>
+      )}
+
+      {listActive ? (
+        <BeachList
+          beaches={orderForList(beaches, listTopStations)}
+          locationLabel={locationLabel}
+          binaryVerdict={features.binaryVerdict}
+          hidePercent={features.hidePercentSign}
+          onSelect={(code) => openBeach(code, "list")}
+        />
+      ) : mapActive ? (
+        <section className="w-full">
+          {/* The map had no heading of its own, so the brand appeared on the
+              List tab and not on this one, and the date vanished with the page
+              header as soon as a reader scrolled. Same block, same words. */}
+          <div className="mx-auto w-full max-w-6xl px-6 sm:px-10 pt-8 pb-4">
+            <BoardHeading
+              locationLabel={locationLabel}
+              date={beaches[0]?.predictionDate}
+              binaryVerdict={features.binaryVerdict}
+            />
+            {/* The pins are clickable and nothing says so. A pin reads as a
+                finished answer - a labelled dot saying "Normal" - so there is
+                nothing about it to suggest a card sits behind it, and the only
+                affordance it carries is a CSS cursor: no hover state, and on a
+                touch screen no cursor either. This line is the part of that fix
+                that does not depend on the reader hovering or tapping first.
+
+                It matters most on the boards that hide their per-beach tabs
+                (see features.hideBeachTabs): there the map is both the landing
+                view and the only thing that says the cards exist at all.
+
+                Map tab only. The List says the same thing with its chevrons and
+                its rows, so repeating it there would be explaining a control
+                that already explains itself. */}
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-gray-600">
+              <Pointer
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-[#2C8487]"
+              />
+              {/* "Select" rather than "tap" or "click": the board is read on
+                  both, and naming one input names the wrong one for half the
+                  readers. */}
+              Select a beach to see its full forecast and what&rsquo;s driving
+              it.
+            </p>
+          </div>
+          <OverviewMapClient
+            beaches={beaches}
+            fallbackCenter={fallbackCenter}
+            binaryVerdict={features.binaryVerdict}
+            onSelect={(code) => openBeach(code, "map")}
+          />
+        </section>
+      ) : newsActive ? (
+        <NewsTab items={news} />
+      ) : (
+        <>
+          {/* Back to wherever this card was opened from. Only on boards whose
+              per-beach tabs are hidden: everywhere else the tab bar still shows
+              which beach is open and clicking another is the way around, so a
+              back control would be a second, competing idea of "where am I".
+              Matches the card's own container width so it reads as part of it
+              rather than as page furniture. */}
+          {features.hideBeachTabs && (
+            <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-6 sm:px-10 pt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCode(cameFrom);
+                  scrollToTop();
+                }}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-sm text-sm text-gray-500 transition-colors hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                Back to {cameFrom === MAP_TAB ? "map" : "list"}
+              </button>
+
+              {/* What the beach tabs were for, in something that fits. Every
+                  beach is one press away at any roster size, where the strip
+                  needed a reader to scroll past seven names to reach the
+                  eighth, and each one shows its own reading so the choice is
+                  informed rather than blind. */}
+              <div className="min-w-0 max-w-[18rem] flex-1">
+                <BeachPicker
+                  beaches={beaches}
+                  activeCode={active.code}
+                  binaryVerdict={features.binaryVerdict}
+                  onSelect={(code) => selectBeach(code, "picker", true)}
+                />
+              </div>
+            </div>
+          )}
+
+          {beaches.length > 1 && <div className="mx-auto w-full max-w-3xl px-6 sm:px-10 pt-6">
+            <BeachNeighborNav beach={active} beaches={beaches} onSelect={(code) => selectBeach(code, "neighbor")} />
+          </div>}
+
+          <BeachCard
+            beach={active}
+            locationLabel={locationLabel}
+            features={features}
+          />
+
+          {/* Above the map, not below it. A reader who has opened a beach has
+              decided which one they care about, which is the moment the offer
+              to email them about it lands; the map underneath is for finding a
+              different one. Below the map it sat past the fold on a view whose
+              last element is a full-width map. */}
+          {alertSignup}
+
+          <section className="w-full">
+            <MapClient
+              beaches={beaches}
+              selectedCode={active.code}
+              fallbackCenter={fallbackCenter}
+              hidePercent={features.hidePercentSign}
+              binaryVerdict={features.binaryVerdict}
+            />
+          </section>
+        </>
+      )}
+
+      {/* Every other tab keeps it at the foot of the page. There is no single
+          beach in view to attach it to, so it stays where it was. */}
+      {!beachActive && alertSignup}
+    </>
+  );
+}

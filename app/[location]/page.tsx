@@ -1,0 +1,265 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import DashboardTabs from "@/components/DashboardTabs";
+import SandboxDashboard from "@/components/sandbox/SandboxDashboard";
+import ProjectNeptuneLogo from "@/components/ProjectNeptuneLogo";
+import AccountControl from "@/components/AccountControl";
+import BeachAlertSignup from "@/components/BeachAlertSignup";
+import FaqAccordion from "@/components/FaqAccordion";
+import { loadDashboardData } from "@/lib/loadData";
+import { isAlertsConfigured } from "@/lib/alerts";
+import { isEntitled } from "@/lib/entitlement";
+import { isClerkConfigured } from "@/lib/clerkConfig";
+import { isLiveBillingEnabled, isStripeConfigured } from "@/lib/subscription";
+import { redactForEntitlement } from "@/lib/paywall";
+import { formatMonthDayYear, getLocation, LOCATIONS } from "@/lib/data";
+import { calendarDay, lastUpdatedDisplay } from "@/lib/waterStatus";
+import { featuresFor } from "@/lib/features";
+import {
+  fetchNewsAlerts,
+  getNewsFeedUrls,
+  isNewsEnabled,
+  resolveNewsFilterTerms,
+} from "@/lib/news";
+
+export const dynamic = "force-dynamic";
+
+// The CA boards all defer to LA County; a location can name its own authority
+// via LocationConfig.advisory.
+const DEFAULT_ADVISORY = {
+  label: "LA County Department of Public Health",
+  href: "http://publichealth.lacounty.gov/phcommon/public/media/mediapubOdisplay.cfm",
+};
+
+export function generateStaticParams() {
+  return Object.keys(LOCATIONS).map((location) => ({ location }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ location: string }>;
+}): Promise<Metadata> {
+  const { location } = await params;
+  const config = getLocation(location);
+  if (!config) return { title: "Water Quality" };
+  return {
+    title: `${config.displayName} Water Quality`,
+    description: `Daily water quality forecast for ${config.displayName}.`,
+    ...(location === "california" ? { alternates: { canonical: "https://dashboard.projectneptune.co/california" } } : {}),
+    // An experiment board shows another board's live readings under a name
+    // that is not the real one. There is no robots.txt or sitemap in this app,
+    // so without this it would be as crawlable as the board it copies, and a
+    // search for the real beaches could land someone on the wrong one.
+    ...(config.noindex ? { robots: { index: false, follow: false } } : {}),
+  };
+}
+
+export default async function LocationPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ location: string }>;
+  searchParams: Promise<{ pro?: string }>;
+}) {
+  const { location } = await params;
+  const config = getLocation(location);
+  if (!config) notFound();
+
+  const features = featuresFor(location);
+  // A signup form we cannot record anything from is worse than no form, so the
+  // card hides itself when the database isn't wired up (see lib/alerts.ts).
+  const alertsEnabled = features.beachAlerts && isAlertsConfigured();
+  const newsEnabled = isNewsEnabled();
+  const newsFilterTerms = resolveNewsFilterTerms(
+    config.slug,
+    config.newsFilterTerms
+  );
+  const [{ beaches: allBeaches, predictionDate, generatedAt }, news, entitled] = await Promise.all([
+    loadDashboardData(config),
+    newsEnabled
+      ? fetchNewsAlerts(getNewsFeedUrls(), newsFilterTerms)
+      : Promise.resolve([]),
+    // ONLY on a board that sells something. Off the paywalled boards this is
+    // not merely unused — it is not asked. A board with no Pro features has no
+    // business consulting Clerk for a session or the billing table for a
+    // subscription, and until this gate existed /southbay did both for every
+    // signed-in visitor and threw the answer away.
+    //
+    // This is the first half of the isolation invariant: no paywall flag, no
+    // contact with the auth or billing stack at all.
+    features.paywall ? isEntitled() : Promise.resolve(false),
+  ]);
+
+  // THE SECURITY BOUNDARY. Everything below this line runs on data that has
+  // already had the paid half removed, and `beaches` is handed whole to
+  // DashboardTabs — a client component — so anything still attached here is
+  // serialised into the page and readable from view-source. Blurring downstream
+  // hides nothing. A no-op on every board without the paywall flag.
+  const beaches = redactForEntitlement(allBeaches, {
+    entitled,
+    features,
+    publicTodayInsights: location === "sandbox" || location === "california",
+  });
+
+  // Presentation only. The live boards retain the original render path below;
+  // sandbox receives exactly the same server-redacted data as before.
+  if (location === "sandbox" || location === "california") {
+    const { isPaymentFirstEnabled } = await import("@/lib/purchase");
+    const openForecast = entitled && (await searchParams).pro === "activated";
+    return (
+      <SandboxDashboard
+        beaches={beaches}
+        predictionDate={predictionDate}
+        updated={lastUpdatedDisplay(generatedAt, predictionDate, config.timeZone)}
+        readingsCurrent={!predictionDate || predictionDate >= calendarDay(config.timeZone)}
+        fallbackCenter={config.mapFallbackCenter}
+        listTopStations={config.listTopStations}
+        entitled={entitled}
+        alertsEnabled={alertsEnabled}
+        openForecast={openForecast}
+        checkoutReady={isClerkConfigured() && isStripeConfigured() && isPaymentFirstEnabled()}
+        account={<AccountControl location={config.slug} hideAvatar={entitled} />}
+        faq={<FaqAccordion />}
+        news={news}
+        newsEnabled={newsEnabled}
+        advisory={config.advisory ?? DEFAULT_ADVISORY}
+      />
+    );
+  }
+
+  return (
+    <main className="flex flex-col">
+      {/* An experiment board is pixel-identical to the one it copies and shows
+          the same live readings, so nothing on the page would otherwise say
+          which one you are looking at. Above the header rather than inside it,
+          because it is a fact about the whole page and not part of the brand.
+          Amber, not the board's teal: it is the one element here that is not
+          part of the product. */}
+      {config.noindex && (
+        <div className="w-full bg-amber-50 border-b border-amber-200">
+          <p className="mx-auto max-w-6xl px-6 sm:px-10 py-2 text-xs text-amber-900">
+            <strong className="font-semibold">Sandbox.</strong> An experimental
+            copy of South Bay, showing the same live readings. Not the live
+            board. That is{" "}
+            <Link href="/southbay" className="underline underline-offset-2">
+              /southbay
+            </Link>
+            .
+          </p>
+        </div>
+      )}
+
+      <header className="w-full border-b border-gray-100">
+        <div className="mx-auto max-w-6xl px-6 sm:px-10 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex flex-col">
+            <a
+              href="https://projectneptune.co"
+              className="inline-flex items-center"
+            >
+              <ProjectNeptuneLogo size={24} />
+            </a>
+            <p
+              className="pl-0.5 text-[13px] leading-tight"
+              style={{
+                fontFamily: "var(--font-poppins), sans-serif",
+                fontWeight: 700,
+                color: "#2C8487",
+              }}
+            >
+              Ocean Water Quality
+            </p>
+          </div>
+          {/* The date, unadorned. The pulsing dot promised live data on a board
+              that publishes once a morning, and "Forecast for" named the thing
+              the whole page already is. What a reader needs from the header is
+              which day they are looking at. */}
+          <div className="flex items-center gap-4">
+            {predictionDate && (
+              <div className="text-sm text-slate-600">
+                {formatMonthDayYear(predictionDate)}
+              </div>
+            )}
+            {/* Only on a board that sells something. Everywhere else an
+                account would be a control with nothing behind it. */}
+            {features.paywall && <AccountControl location={config.slug} />}
+          </div>
+        </div>
+      </header>
+
+      {beaches.length > 0 ? (
+        <DashboardTabs
+          beaches={beaches}
+          locationLabel={config.displayName}
+          region={location}
+          fallbackCenter={config.mapFallbackCenter}
+          features={features}
+          listTopStations={config.listTopStations}
+          // Rendered inside the tabs: on a beach it belongs between the card
+          // and the map, and only that component knows which tab is open.
+          alertSignup={
+            alertsEnabled && location !== "southbay" ? (
+              <BeachAlertSignup
+                beaches={beaches.map((b) => ({ code: b.code, name: b.name }))}
+                location={config.slug}
+                // Alerts are part of Pro on a paywalled board. The button says
+                // so before the reader starts, and app/actions/alerts.ts
+                // refuses the write regardless of what the dialog does.
+                locked={features.paywall && !entitled}
+                // The offer, the plans and the prices still render; only the
+                // navigation to checkout is withheld. A reviewer sees exactly
+                // what a buyer would see, and the Continue button says so
+                // rather than walking into a 404.
+                checkoutReady={
+                  isClerkConfigured() &&
+                  isStripeConfigured() &&
+                  isLiveBillingEnabled()
+                }
+              />
+            ) : null
+          }
+          news={news}
+          newsEnabled={newsEnabled}
+        />
+      ) : (
+        // A registered location whose backend hasn't published its first run
+        // yet. Without this the page renders as a bare header (DashboardTabs
+        // returns null on an empty roster).
+        <div className="mx-auto w-full max-w-6xl px-6 sm:px-10 py-16">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+            <p className="text-sm font-medium text-slate-700">
+              No readings published yet for {config.displayName}.
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              This dashboard goes live as soon as the daily model run publishes
+              its first forecast.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* After the data and the signup, before the disclaimer. A reader reaches
+          it having already seen a forecast, which is when "how do they know
+          this" occurs to them; the footer's one-line caveat directly below is
+          the short version of two of these answers. */}
+      <FaqAccordion />
+
+      <footer className="w-full py-10">
+        <div className="mx-auto max-w-6xl px-6 sm:px-10 text-xs text-gray-400">
+          Forecasts are estimates based on environmental data. For official
+          beach advisories, consult{" "}
+          <a
+            href={(config.advisory ?? DEFAULT_ADVISORY).href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-gray-600"
+          >
+            {(config.advisory ?? DEFAULT_ADVISORY).label}
+          </a>
+          .
+        </div>
+      </footer>
+    </main>
+  );
+}

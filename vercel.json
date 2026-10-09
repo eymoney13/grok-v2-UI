@@ -1,0 +1,22 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "codex/california-alerts-release": false,
+      "codex/subscription-flow": false,
+      "codex/pro-launch-followup": false,
+      "codex/california-rollout": false,
+      "codex/california-public-launch": false,
+      "codex/california-redirect-fix": false
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/trigger",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/alerts/send",
+      "schedule": "0 14 * * *"
+    }
+  ]
+}

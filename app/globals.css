@@ -1,0 +1,103 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme inline {
+  --font-sans: var(--font-inter);
+}
+
+html,
+body {
+  background: #ffffff;
+  color: #111827;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+/* Overview-map prediction dots: strip Leaflet's default white divIcon chrome
+   and render our own colored, numbered pill. */
+.nb-overview-icon {
+  background: transparent;
+  border: none;
+}
+
+.nb-overview-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* A band word instead of a number, so the marker is a pill rather than a disc.
+   Fixed at the width of "Moderate", the longest of the three, so every pin on a
+   board matches and the label placement has one footprint to work around. */
+.nb-overview-dot--band {
+  width: 64px;
+  height: 22px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+/* Binary boards put no number in the marker, so the 40px disc the numeric
+   version needs would read as a blank blob. Same colour, tighter footprint. */
+.nb-overview-dot--plain {
+  width: 20px;
+  height: 20px;
+}
+
+/* Map labels. Rendered as their own markers rather than Leaflet tooltips so
+   OverviewMap can place them around the dots (a tooltip only offers a fixed
+   direction + offset, which is what made them collide). Styled to match the
+   tooltip look they replace. */
+.nb-map-label-icon {
+  background: transparent;
+  border: none;
+  /* The layer is only a positioning frame — clicks belong to the label itself,
+     not to the empty box around it. */
+  pointer-events: none;
+}
+
+.nb-map-label {
+  display: inline-block;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  color: #1f2937;
+  /* Fallbacks only. OverviewMap sets font-size, padding and line-height inline
+     from the live zoom (see labelMetrics), so those three are overridden on
+     every label; these values are what a label would render at if that ever
+     failed to run. Keep them in step with LABEL_MIN_FONT. */
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Connector back to the dot for a label pushed out of its first-choice spot,
+   so a displaced label is still attributable to its beach. Positioned by an
+   inline left/top that points at the dot; the 1px box reads as a small tick
+   rather than a full leader line, which at this density would be noise. */
+.nb-map-label-tether {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2px 0 0 -2px;
+  border-radius: 9999px;
+  background: rgba(31, 41, 55, 0.35);
+  pointer-events: none;
+}
