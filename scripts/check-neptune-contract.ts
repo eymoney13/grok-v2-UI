@@ -11,8 +11,10 @@ import {
   staleLimitDays,
   latestDatedStatusName,
   optionalModelFields,
+  dayReleasesFromRow,
+  forecastRelease,
   hasLeadColumn,
-  leadMaturityFromWide,
+  leadRelease,
   leadZeroSourceRows,
   parseDailyStatus,
   parseDailyStatusRows,
@@ -511,11 +513,11 @@ assert.equal(hasLeadColumn([{ station_code: "0", lead_days: "" }]), true);
 assert.equal(hasLeadColumn([{ station_code: "0", method: "model" }]), false);
 
 const leadRows = [
-  { station_code: "0", agency: "Orange County", lead_days: 0, method: "pooled_model", confidence: "low", posting_status: "warning" },
+  { station_code: "0", agency: "Orange County", lead_days: 0, method: "pooled_model", confidence: "low", posting_status: "warning", day0_release: "go_live", day1_release: "go_live" },
   { station_code: "0", agency: "San Diego County", lead_days: 0, method: "rules", confidence: "high" },
-  { station_code: "0", agency: "Orange County", lead_days: 1, method: "model", confidence: "medium", go_live: "go_live" },
-  { station_code: "0", agency: "Orange County", lead_days: 2, method: "model", confidence: "high", day_confidence: "go_live", release: "experimental" },
-  { station_code: "0", agency: "Orange County", lead_days: 1, method: "rules", confidence: "low", go_live: "experimental" },
+  { station_code: "0", agency: "Orange County", lead_days: 1, method: "model", confidence: "medium", go_live: "go_live", day1_release: "go_live" },
+  { station_code: "0", agency: "Orange County", lead_days: 2, method: "model", confidence: "high", day_confidence: "go_live", release: "experimental", day2_release: "experimental" },
+  { station_code: "0", agency: "Orange County", lead_days: 1, method: "rules", confidence: "low", go_live: "experimental", day1_release: "experimental" },
   { station_code: "DHS114", lead: 4, method: "model" },
 ];
 assert.equal(hasLeadColumn(leadRows), true);
@@ -532,9 +534,30 @@ assert.equal(orange.find((row) => row.lead === 0)?.reading.method, "pooled_model
 assert.equal(orange.find((row) => row.lead === 0)?.reading.confidence, "low");
 assert.equal(orange.find((row) => row.lead === 0)?.reading.postingStatus, "warning");
 assert.equal(orange.find((row) => row.lead === 1)?.reading.method, "rules");
+assert.equal(orange.find((row) => row.lead === 0)?.maturity, "go_live");
+assert.equal(orange.find((row) => row.lead === 0)?.releases[1], "go_live");
 assert.equal(orange.find((row) => row.lead === 1)?.maturity, "experimental");
 assert.equal(orange.find((row) => row.lead === 2)?.maturity, "experimental");
 assert.equal(orange.find((row) => row.lead === 3), undefined);
+assert.equal(forecastRelease(null, orange, 1), "experimental");
+assert.equal(forecastRelease(null, orange, 2), "experimental");
+assert.equal(forecastRelease([null, "go_live", null, null], orange, 1), "go_live");
+assert.equal(
+  forecastRelease([null, "experimental", null, null], [{ lead: 1, maturity: "go_live", releases: [null, "go_live", null, null] }], 1),
+  "experimental"
+);
+assert.equal(
+  forecastRelease([null, null, null, null], [{ lead: 1, maturity: "go_live", releases: [null, "go_live", null, null] }], 1),
+  "go_live"
+);
+assert.equal(
+  forecastRelease(null, [
+    { lead: 0, maturity: "go_live", releases: ["go_live", "go_live", null, null] },
+    { lead: 1, maturity: null, releases: [null, null, null, null] },
+  ], 1),
+  "go_live"
+);
+assert.equal(forecastRelease([null, null, null, "go_live"], orange, 3), "go_live");
 const sanDiego = matchLeadRows(
   leads.rows,
   { code: "0", name: "Silver Strand", county: "San Diego", agency: "San Diego County", stationKey: null },
@@ -544,23 +567,42 @@ const sanDiego = matchLeadRows(
 assert.equal(sanDiego.find((row) => row.lead === 0)?.reading.method, "rules");
 assert.equal(sanDiego.find((row) => row.lead === 1), undefined);
 assert.deepEqual(leadZeroSourceRows(leadRows).map((row) => row.agency), ["Orange County", "San Diego County"]);
-assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 1), null);
-assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 2), null);
-assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 3), null);
-assert.equal(leadMaturityFromWide({ day1_go_live: "go_live" }, 1), "go_live");
-assert.equal(leadMaturityFromWide({ day1_release: "go_live", day1_confidence: "experimental" }, 1), "go_live");
-assert.equal(leadMaturityFromWide({ day2GoLive: "experimental" }, 2), "experimental");
-assert.equal(leadMaturityFromWide({ day1_status: "go_live", day1_release_status: "go_live" }, 1), "go_live");
-assert.equal(leadMaturityFromWide({ day1_release: "" }, 1), null);
-assert.equal(leadMaturityFromWide({}, 1), null);
+assert.equal(leadRelease({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 1), null);
+assert.equal(leadRelease({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 2), null);
+assert.equal(leadRelease({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 3), null);
+assert.equal(leadRelease({ day1_go_live: "go_live" }, 1), null);
+assert.equal(leadRelease({ day1_release: "go_live", day1_confidence: "experimental" }, 1), "go_live");
+assert.equal(leadRelease({ day2GoLive: "experimental" }, 2), null);
+assert.equal(leadRelease({ day2Release: "experimental" }, 2), "experimental");
+assert.equal(leadRelease({ day0_release: "go_live" }, 0), "go_live");
+assert.equal(leadRelease({ "day3-release": "go_live" }, 3), "go_live");
+assert.equal(leadRelease({ day1_status: "go_live", day1_release_status: "go_live" }, 1), null);
+assert.equal(leadRelease({ day1_release: "" }, 1), null);
+assert.equal(leadRelease({}, 1), null);
+assert.equal(leadRelease({ day1_release: "go_live" }, 4), null);
+assert.deepEqual(dayReleasesFromRow({ day0_release: "experimental", day1_release: "go_live", day2_go_live: "go_live" }), ["experimental", "go_live", null, null]);
 const confidenceOnly = parseLeadStatusRows([
   { station_code: "A", lead_days: 1, confidence: "high", day_confidence: "go_live", lead_confidence: "experimental" },
 ]);
 assert.equal(confidenceOnly.rows[0]?.maturity, null);
 assert.equal(
-  parseLeadStatusRows([{ station_code: "A", lead_days: 1, release_status: "go_live" }]).rows[0]?.maturity,
-  "go_live"
+  parseLeadStatusRows([{ station_code: "A", lead_days: 1, release_status: "go_live", go_live: "go_live", maturity: "go_live" }]).rows[0]?.maturity,
+  null
 );
+assert.equal(parseLeadStatusRows([{ station_code: "A", lead_days: 1, day1_release: "go_live", day2_release: "experimental" }]).rows[0]?.maturity, "go_live");
+assert.equal(parseLeadStatusRows([{ station_code: "A", lead_days: 1, day1_release: "go_live", day2_release: "experimental" }]).rows[0]?.releases[2], "experimental");
+const currentRelease = parseDailyStatusRows([
+  {
+    station_code: "DHS114",
+    day0_release: "go_live",
+    day1_release: "go_live",
+    day2Release: "experimental",
+    "day3-release": "go_live",
+    day1_confidence: "go_live",
+    day1_go_live: "go_live",
+  },
+]);
+assert.deepEqual(currentRelease.rows[0]?.releases, ["go_live", "go_live", "experimental", "go_live"]);
 
 const preferred = mergeReadings(
   { method: "pooled_model", confidence: "low", postingStatus: null, postingSource: null, finalStatus: null, postingDate: null, rainAdvisory: null },

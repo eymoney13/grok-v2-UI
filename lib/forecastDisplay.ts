@@ -2,9 +2,9 @@
  * How the 1–3 day forecast is shown.
  *
  * The same-day nowcast is the validated model. The look-ahead days stay
- * labeled experimental unless the file marks that lead `go_live`
- * in its own per-day column (the header is detected; it is not a
- * confidence column, on forecast_3day.csv or outputs/daily_status.csv).
+ * labeled experimental unless `dayN_release` (N = 1–3) on
+ * `outputs/daily/current.csv` or `outputs/daily_status.csv` is `go_live`.
+ * `forecast_3day.csv` and confidence columns do not set that label.
  * A station list is not hardcoded here.
  *
  * This switch set to "hide" removes the look-ahead entirely. Labeling is the

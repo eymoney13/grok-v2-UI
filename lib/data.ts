@@ -671,9 +671,9 @@ export interface ForecastDay {
   drivers?: Driver[];
   conditions?: Conditions;
   /**
-   * Look-ahead days stay experimental unless the file marks that lead go_live
-   * in its own per-day column. A confidence column is not that mark.
-   * Absent means the file did not mark it, which keeps the Experimental label.
+   * Look-ahead days stay experimental unless `dayN_release` on current.csv
+   * or daily_status.csv is `go_live`. Confidence columns and forecast_3day.csv
+   * do not set this. Absent means the file did not mark it, which keeps the label.
    */
   experimental?: boolean;
   /**

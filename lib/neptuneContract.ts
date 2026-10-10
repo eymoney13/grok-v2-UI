@@ -478,6 +478,12 @@ export interface DailyJoinedRow {
   stationKey: string | null;
   reading: PublishedReading;
   index: DailyIndexFields;
+  /**
+   * `day0_release` through `day3_release` on this row.
+   * Null when that cell is blank, missing, or not `go_live` / `experimental`.
+   * Day 0 is stored and does not label today's reading Experimental.
+   */
+  releases: DayReleases;
 }
 
 export interface DailyStatusFile {
@@ -539,6 +545,7 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
       stationKey: stationKeyFromRow(row),
       reading: withPostingFileDate(parsePublishedReading(row), generatedAt),
       index: readNeptuneFields(row),
+      releases: dayReleasesFromRow(row),
     };
     const key = dailyIdentityKey(joined, agencyColumn);
     if (!byIdentity.has(key)) order.push(key);
@@ -608,24 +615,17 @@ export function selectDailySource(input: {
 }
 
 const LEAD_HEADERS = new Set(["lead_days", "leaddays", "lead_time", "leadtime", "lead"]);
-/**
- * Compact forms of a go-live column name. The published header is not fixed.
- * Anything with "confidence" in the name is a confidence level, not this mark.
- * Bare "status" is not included: that would also match posting_status and final_status.
- */
-const MATURITY_STEMS = new Set([
-  "golive",
-  "experimental",
-  "experiment",
-  "maturity",
-  "release",
-  "releasestatus",
-]);
+
+/** `day0_release` … `day3_release`. Index is the lead. */
+export type DayReleases = readonly [LeadMaturity | null, LeadMaturity | null, LeadMaturity | null, LeadMaturity | null];
 
 /** One station at one lead. Method and the high/medium/low level live on `reading`. */
 export interface LeadStatusRow extends DailyJoinedRow {
   lead: number;
-  /** Null when the file did not mark this lead go_live or experimental. */
+  /**
+   * `day{lead}_release` on this row.
+   * Null when that cell is blank, missing, or not go_live / experimental.
+   */
   maturity: LeadMaturity | null;
 }
 
@@ -663,61 +663,51 @@ export function leadNumberFromRow(row: Record<string, unknown>): number | null {
   return null;
 }
 
-function compactHeader(key: string): string {
-  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function headerHasConfidence(key: string): boolean {
-  return key.toLowerCase().includes("confidence");
-}
-
-function isMaturityStem(compact: string): boolean {
-  return MATURITY_STEMS.has(compact);
-}
-
-/** A long daily_status row is already one lead, so the header has no day prefix. */
-function longHeaderIsMaturity(key: string): boolean {
-  if (headerHasConfidence(key)) return false;
-  const compact = compactHeader(key);
-  if (compact === "status" || compact === "postingstatus" || compact === "finalstatus") return false;
-  if (isMaturityStem(compact)) return true;
-  for (const prefix of ["lead", "forecast", "day"]) {
-    if (compact.startsWith(prefix) && isMaturityStem(compact.slice(prefix.length))) return true;
-  }
-  return false;
-}
-
-function maturityFromLongRow(row: Record<string, unknown>): LeadMaturity | null {
+/**
+ * `dayN_release` for N = 0–3 on `outputs/daily/current.csv` or `outputs/daily_status.csv`.
+ * `dayNRelease` and `dayN-release` are the same column. Nothing else is:
+ * `dayN_go_live`, `dayN_maturity`, `dayN_release_status`, a bare `go_live` or
+ * `release`, and any confidence column stay unread. `forecast_3day.csv` is not
+ * a source; callers must not pass that row here.
+ * A blank cell and an unrecognized word are null, which keeps Experimental.
+ */
+export function leadRelease(row: Record<string, unknown> | null | undefined, lead: number): LeadMaturity | null {
+  if (!row || !Number.isInteger(lead) || lead < 0 || lead > 3) return null;
+  const wanted = `day${lead}_release`;
+  const compactWanted = `day${lead}release`;
   for (const [key, value] of Object.entries(row)) {
-    if (!longHeaderIsMaturity(key)) continue;
-    const parsed = parseLeadMaturity(value);
-    if (parsed) return parsed;
+    const folded = foldedHeader(key);
+    if (folded !== wanted && folded.replace(/_/g, "") !== compactWanted) continue;
+    return parseLeadMaturity(value);
   }
   return null;
 }
 
-/** The part of `dayN_*` after the lead number, compacted. Null when this header is not that lead. */
-function wideMaturityRemainder(key: string, lead: number): string | null {
-  if (headerHasConfidence(key)) return null;
-  const folded = foldedHeader(key);
-  const underscored = folded.match(new RegExp(`^day${lead}_(.+)$`));
-  if (underscored) return underscored[1].replace(/[^a-z0-9]/g, "");
-  const compact = folded.replace(/_/g, "");
-  const camel = compact.match(new RegExp(`^day${lead}([a-z].+)$`));
-  return camel ? camel[1] : null;
+export function dayReleasesFromRow(row: Record<string, unknown>): DayReleases {
+  return [leadRelease(row, 0), leadRelease(row, 1), leadRelease(row, 2), leadRelease(row, 3)];
 }
 
 /**
- * The go-live mark on a wide forecast row. The column name is not fixed.
- * `day1_release`, `day1_go_live`, `day1GoLive`, and `day1_maturity` all count.
- * A header that contains "confidence" does not, even when the cell says go_live.
+ * The mark that decides the Experimental label for look-ahead lead 1–3.
+ * A non-blank cell on the daily file (`current.csv`, or a one-row status file)
+ * wins. Pass null for that argument when the daily file is lead 0 of
+ * `daily_status.csv`, so that lead's wide columns do not override the row for
+ * this lead. A blank cell does not override a filled one. Then this lead's
+ * own `dayN_release`, then the same column on another lead row.
  */
-export function leadMaturityFromWide(row: Record<string, unknown>, lead: number): LeadMaturity | null {
-  for (const [key, value] of Object.entries(row)) {
-    const remainder = wideMaturityRemainder(key, lead);
-    if (!remainder || !isMaturityStem(remainder)) continue;
-    const parsed = parseLeadMaturity(value);
-    if (parsed) return parsed;
+export function forecastRelease(
+  dailyReleases: DayReleases | null | undefined,
+  leadRows: readonly Pick<LeadStatusRow, "lead" | "maturity" | "releases">[],
+  lead: number
+): LeadMaturity | null {
+  if (!Number.isInteger(lead) || lead < 0 || lead > 3) return null;
+  const fromDaily = dailyReleases?.[lead] ?? null;
+  if (fromDaily) return fromDaily;
+  const own = leadRows.find((row) => row.lead === lead)?.maturity ?? null;
+  if (own) return own;
+  for (const row of leadRows) {
+    const value = row.releases[lead];
+    if (value) return value;
   }
   return null;
 }
@@ -750,8 +740,9 @@ export function parseLeadStatusRows(rows: Record<string, unknown>[]): LeadStatus
       stationKey: stationKeyFromRow(row),
       reading,
       index: readNeptuneFields(row),
+      releases: dayReleasesFromRow(row),
       lead,
-      maturity: maturityFromLongRow(row),
+      maturity: leadRelease(row, lead),
     });
   }
   return { rows: kept, agencyColumn };

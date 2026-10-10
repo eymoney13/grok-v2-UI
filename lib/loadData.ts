@@ -24,8 +24,8 @@ import {
 import { loadV2Bundle, readPublishedCsv, readPublishedJson, type V2Bundle } from "./neptuneAdapter";
 import {
   agencyFromRow,
+  forecastRelease,
   hasAgencyColumn,
-  leadMaturityFromWide,
   optionalModelFields,
   regionForCounty,
   staleLimitDays,
@@ -622,12 +622,16 @@ export async function loadDashboardData(
         const dayStatus = classify(p, cutoff);
         if (!dayStatus) continue;
         const leadRow = leadHits.find((row) => row.lead === i) ?? null;
-        const maturity = leadMaturityFromWide(fcRow as unknown as Record<string, unknown>, i) ?? leadRow?.maturity ?? null;
+        // dayN_release on current.csv wins when that cell is filled. When the
+        // daily file is lead 0 of daily_status.csv, only the lead table is used
+        // so that row does not override the lead it belongs to. forecast_3day.csv
+        // does not carry this mark.
+        const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow?.releases, leadHits, i);
         const called = resolveVerdict(dayPublishedCall(fcRow as unknown as Record<string, unknown>, i), p, cutoff);
         const callUnknown = called.callUnknown || isUnknownCall(leadRow?.reading.finalStatus);
         // Forecast days carry top contributing factors (why the model predicts
         // this), but no lab sample — there is no future water-quality test.
-        // The Experimental label stays unless this lead's own column says go_live.
+        // The Experimental label stays unless dayN_release says go_live.
         forecast.push({
           date: String(date),
           probability: p,

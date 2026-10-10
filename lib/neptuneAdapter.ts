@@ -19,6 +19,7 @@ import {
   parseLeadStatusRows,
   selectDailySource,
   type DailyJoinedRow,
+  type DailySourceMode,
   type DailyStatusFile,
   type LeadStatusFile,
   parseManifest,
@@ -83,8 +84,12 @@ export interface V2Bundle {
   /**
    * Optional `outputs/daily_status.csv` when it has a lead column.
    * Empty when that file is absent. It does not replace `outputs/daily/current.csv`.
+   * `dayN_release` on either file is the go-live mark. A filled cell on the
+   * current file wins over a filled cell on the lead table.
    */
   dailyLeads: LeadStatusFile;
+  /** Which file `dailyRows` came from. `leads` means those rows are lead 0. */
+  dailySource: DailySourceMode;
 }
 
 const EMPTY_BUNDLE: V2Bundle = {
@@ -109,6 +114,7 @@ const EMPTY_BUNDLE: V2Bundle = {
   dailyAgencyColumn: false,
   dailyGeneratedAt: null,
   dailyLeads: emptyLeadStatus(),
+  dailySource: "history",
 };
 
 function v2Roots(): string[] {
@@ -297,6 +303,7 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     dailyAgencyColumn: daily.file.agencyColumn,
     dailyGeneratedAt: daily.file.generatedAt,
     dailyLeads: daily.leads,
+    dailySource: daily.source,
   };
 }
 
@@ -314,8 +321,9 @@ export async function loadNeptuneIndexScale(): Promise<IndexScale | null> {
  * When that file has a lead column it is read beside the current file, and it
  * becomes the daily file only when the current file is absent. A status file
  * with no lead column stays the older one-row fallback.
+ * `dayN_release` is read from both files. It is not read from forecast_3day.csv.
  */
-async function loadDailyStatus(root: string): Promise<{ file: DailyStatusFile; leads: LeadStatusFile }> {
+async function loadDailyStatus(root: string): Promise<{ file: DailyStatusFile; leads: LeadStatusFile; source: DailySourceMode }> {
   const currentPath = await firstExisting([
     path.join(root, "outputs", "daily", "current.csv"),
     path.join(root, "outputs", "daily", "current.json"),
@@ -336,17 +344,17 @@ async function loadDailyStatus(root: string): Promise<{ file: DailyStatusFile; l
   const leads = statusRows && statusIsLead ? parseLeadStatusRows(statusRows) : emptyLeadStatus();
 
   if (mode === "current" && currentPath) {
-    return { file: await readDailyFile(currentPath), leads };
+    return { file: await readDailyFile(currentPath), leads, source: mode };
   }
   if (mode === "leads" && statusRows) {
-    return { file: parseDailyStatusRows(leadZeroSourceRows(statusRows)), leads };
+    return { file: parseDailyStatusRows(leadZeroSourceRows(statusRows)), leads, source: mode };
   }
   if (mode === "legacy-status" && statusPath) {
-    return { file: await readDailyFile(statusPath), leads: emptyLeadStatus() };
+    return { file: await readDailyFile(statusPath), leads: emptyLeadStatus(), source: mode };
   }
   const history = await latestDailyHistory(root);
-  if (!history) return { file: emptyDailyStatus(), leads };
-  return { file: await readDailyFile(history), leads };
+  if (!history) return { file: emptyDailyStatus(), leads, source: mode };
+  return { file: await readDailyFile(history), leads, source: mode };
 }
 
 async function readTable(filePath: string): Promise<Record<string, unknown>[]> {

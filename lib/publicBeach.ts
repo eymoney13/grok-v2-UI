@@ -7,7 +7,7 @@ import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./published
 export interface OutlookDay {
   date: string;
   status: Status;
-  /** False only when this lead was marked go_live. Missing means still experimental. */
+  /** False only when dayN_release was go_live. Missing means still experimental. */
   experimental?: boolean;
   /** This day published Unknown. The outlook must not call it under the limit. */
   callUnknown?: boolean;
