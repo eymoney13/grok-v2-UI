@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { LocateFixed, LoaderCircle } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import { STATUS_BAND, VERDICT_AS_STATUS, type Status, type Verdict } from "@/lib/data";
+import { STATUS_BAND, VERDICT_AS_STATUS, type RosterTier, type Status, type Verdict } from "@/lib/data";
 
 /** Fields the overview map actually reads. List rows and full beach records both fit. */
 export type MapBeach = {
@@ -27,6 +27,7 @@ export type MapBeach = {
   finalStatus?: string | null;
   rainAdvisory?: boolean | null;
   callUnknown?: boolean;
+  tier?: RosterTier | null;
 };
 import {
   BASEMAP_ATTRIBUTION,
@@ -39,15 +40,18 @@ import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } f
 import { copyReading, officialPosting, postingHeadline, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 import { POSTING_LABEL } from "@/lib/readerLabels";
 import { unknownCallPhrase } from "@/lib/publicCopy";
+import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 
-function colorFor(status: Status) {
+function colorFor(status: Status, tier?: RosterTier | null) {
+  if (status === "Not recommended" && elevatedCallStyle(tier) === "cautious") return "#8aa3a6";
   if (status === "Not recommended") return "#cc3333";
   if (status === "Slightly elevated") return "#D5C82E";
   return "#2d8a4e";
 }
 
 // Dark yellow text needs a dark number for contrast; the green/red dots take white.
-function textColorFor(status: Status) {
+function textColorFor(status: Status, tier?: RosterTier | null) {
+  if (status === "Not recommended" && elevatedCallStyle(tier) === "cautious") return "#1c2428";
   return status === "Slightly elevated" ? "#3f3a05" : "#ffffff";
 }
 
@@ -63,11 +67,12 @@ function textColorFor(status: Status) {
 const BAND_DOT: [number, number] = [64, 22];
 const PLAIN_DOT: [number, number] = [20, 20];
 
-function dotIcon(beach: { status: Status; verdict?: Verdict | null }, binaryVerdict: boolean): L.DivIcon {
+function dotIcon(beach: { status: Status; verdict?: Verdict | null; tier?: RosterTier | null }, binaryVerdict: boolean): L.DivIcon {
   const verdict = binaryVerdict ? beach.verdict : null;
   const status = verdict ? VERDICT_AS_STATUS[verdict] : beach.status;
-  const bg = colorFor(status);
-  const fg = textColorFor(status);
+  const tier = verdict ? null : beach.tier;
+  const bg = colorFor(status, tier);
+  const fg = textColorFor(status, tier);
   // The band, not the number. A pin is read at a glance and from a distance,
   // and "Moderate" answers "should I swim here" without the reader first
   // having to know where 34% falls on a scale whose key is on another tab.
@@ -604,7 +609,7 @@ function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
   if (posting) return officialPin(postingPinText(posting));
   if (beach.neptuneDisplay) return indexPin(beach.neptuneDisplay);
   if (showsUnknownCall(beach)) return limitedPin();
-  if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict);
+  if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict, tier: beach.tier }, binaryVerdict);
   return limitedPin();
 }
 
@@ -616,10 +621,18 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
     const words = headline.detail ? `${headline.title}: ${headline.detail}` : headline.title;
     return `${beach.name}, ${words}${source}`;
   }
-  if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
+  if (beach.neptuneDisplay) {
+    const lead = `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
+    const note = cautiousElevatedNote(beach.tier, beach.status, "en");
+    const phrase = beach.status ? statusPhrase?.(beach.status) : undefined;
+    if (note && phrase) return `${lead}. ${phrase}. ${note}`;
+    return lead;
+  }
   if (showsUnknownCall(beach)) return `${beach.name}, ${unknownCallPhrase("en")}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
   const phrase = statusPhrase?.(beach.status);
+  const note = cautiousElevatedNote(beach.tier, beach.status, "en");
+  if (phrase && note) return `${beach.name}, ${phrase}. ${note}`;
   return phrase ? `${beach.name}, ${phrase}` : beach.name;
 }
 

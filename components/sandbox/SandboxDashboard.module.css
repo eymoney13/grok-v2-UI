@@ -41,6 +41,15 @@
 .unknownCall { --tone: #3d4c50; --tone-bg: #eef2f3; }
 .moderate { --tone: #786016; --tone-bg: #f8f0d7; }
 .high { --tone: #a63d36; --tone-bg: #fbece7; }
+.cautious { --tone: #3d5558; --tone-bg: #eef2f3; }
+.predictionHero.cautious,
+.futureDay.cautious,
+.band.cautious { border: 1px dashed #8aa3a6; }
+.predictionHero.cautious h3,
+.futureDay.cautious strong,
+.band.cautious { font-style: italic; }
+.cautiousNote,
+.cautiousListNote { color: #3d5558; font-style: italic; font-size: 13px; line-height: 1.45; max-width: 36ch; }
 .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; font-size: 11px; }
 .legend > span { display: inline-flex; gap: 6px; align-items: center; color: var(--tone); }
 .caveat { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 12px; }

@@ -7,6 +7,7 @@ import {
 import { copy, statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { copyReading, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
+import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 import styles from "./public.module.css";
 
 const TONE = {
@@ -94,6 +95,29 @@ function IndexChip({ display, lang }: { display: NeptuneDisplay; lang: Lang }) {
   );
 }
 
+function CallPill({
+  status,
+  tier,
+  lang,
+}: {
+  status: NonNullable<GlanceBeach["status"]>;
+  tier: GlanceBeach["tier"];
+  lang: Lang;
+}) {
+  const cautious = status === "Not recommended" && elevatedCallStyle(tier) === "cautious";
+  const note = cautiousElevatedNote(tier, status, lang);
+  const pill = (
+    <span className={`${styles.pill} ${cautious ? styles.cautious : TONE[status]}`}>{statusPill(status, lang)}</span>
+  );
+  if (!note) return pill;
+  return (
+    <span className={styles.estimateStack}>
+      {pill}
+      <span className={styles.cautiousNote}>{note}</span>
+    </span>
+  );
+}
+
 function EstimateChip({
   beach,
   lang,
@@ -102,13 +126,24 @@ function EstimateChip({
   lang: Lang;
 }) {
   const t = copy[lang];
-  if (beach.neptuneDisplay) return <IndexChip display={beach.neptuneDisplay} lang={lang} />;
+  const cautiousCall =
+    beach.hasEstimate && beach.status ? (
+      <CallPill status={beach.status} tier={beach.tier} lang={lang} />
+    ) : null;
+  if (beach.neptuneDisplay) {
+    const note = cautiousElevatedNote(beach.tier, beach.status, lang);
+    if (!note || !cautiousCall) return <IndexChip display={beach.neptuneDisplay} lang={lang} />;
+    return (
+      <span className={styles.indexStack}>
+        <IndexChip display={beach.neptuneDisplay} lang={lang} />
+        {cautiousCall}
+      </span>
+    );
+  }
   if (showsUnknownCall(beach)) {
     return <span className={styles.muted}>{unknownCallPhrase(lang)}</span>;
   }
-  if (beach.hasEstimate && beach.status) {
-    return <span className={`${styles.pill} ${TONE[beach.status]}`}>{statusPill(beach.status, lang)}</span>;
-  }
+  if (cautiousCall) return cautiousCall;
   return (
     <span className={styles.muted}>
       {t.noEstimate}

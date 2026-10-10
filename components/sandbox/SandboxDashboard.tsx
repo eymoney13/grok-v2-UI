@@ -14,6 +14,7 @@ import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/
 import type { IndexScale } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, methodShort, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
+import { cautiousElevatedNote } from "@/lib/tierCallStyle";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
@@ -302,13 +303,20 @@ export default function SandboxDashboard({
                                   const score = beach.neptuneDisplay;
                                   const confidence = confidenceWords(beach.confidence);
                                   const method = methodShort(beach.method);
+                                  const cautiousNote = cautiousElevatedNote(beach.tier, beach.status, "en");
                                   const estimate = score ? (
-                                    <NeptuneIndexBadge display={score} />
+                                    <span className={s.listReading}>
+                                      <NeptuneIndexBadge display={score} />
+                                      {cautiousNote && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {cautiousNote}</span>}
+                                    </span>
                                   ) : showsUnknownCall(beach) ? (
                                     <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>
                                   ) : beach.hasEstimate && beach.status ? (
-                                    <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
-                                      <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
+                                    <span className={s.listReading}>
+                                      <span className={`${s.band} ${bandClass(beach.status, beach.tier)}`}>
+                                        <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
+                                      </span>
+                                      {cautiousNote && <span className={s.cautiousListNote}>{cautiousNote}</span>}
                                     </span>
                                   ) : (
                                     <span className={s.noEstimate}>No estimate</span>

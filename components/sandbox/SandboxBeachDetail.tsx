@@ -35,6 +35,8 @@ import {
   type PublishedReading,
 } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
+import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
+import type { RosterTier } from "@/lib/data";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
 import LabHistory, { type LabPoint } from "../LabHistory";
 import WhyPrediction from "../WhyPrediction";
@@ -43,7 +45,27 @@ import s from "./SandboxDashboard.module.css";
 import NeptuneMark from "./NeptuneMark";
 
 export const bandLabel = (status: Status) => statusReading(status).title;
-export const bandClass = (status: Status) => status === "Normal" ? s.low : status === "Slightly elevated" ? s.moderate : s.high;
+export function bandClass(status: Status, tier?: RosterTier | null) {
+  if (status === "Normal") return s.low;
+  if (status === "Slightly elevated") return s.moderate;
+  if (status === "Not recommended" && elevatedCallStyle(tier) === "cautious") return s.cautious;
+  return s.high;
+}
+
+function CautiousLine({
+  tier,
+  status,
+  withTitle = false,
+}: {
+  tier: RosterTier | null | undefined;
+  status: Status | null | undefined;
+  withTitle?: boolean;
+}) {
+  const note = cautiousElevatedNote(tier, status, "en");
+  if (!note) return null;
+  const text = withTitle ? `${statusReading("Not recommended").title}. ${note}` : note;
+  return <p className={s.cautiousNote}>{text}</p>;
+}
 
 function dateLabel(iso: string, weekday = false) {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
@@ -60,11 +82,13 @@ function ForecastLookAhead({
   picked,
   onPick,
   onLocked,
+  tier,
 }: {
   forecasts: ForecastDay[];
   picked: ForecastDay | null;
   onPick: (date: string) => void;
   onLocked: (feature: LockedFeature, date: string) => void;
+  tier: RosterTier | null;
 }) {
   const open = forecasts.filter((day) => !day.locked);
   const allGoLive = open.length > 0 && open.every((day) => day.experimental === false);
@@ -88,7 +112,7 @@ function ForecastLookAhead({
             <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
           </a>
         ) : (
-          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown ? s.unknownCall : bandClass(forecast.status)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${forecast.callUnknown ? unknownCallPhrase("en") : bandLabel(forecast.status)}`}>
+          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown ? s.unknownCall : bandClass(forecast.status, tier)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${forecast.callUnknown ? unknownCallPhrase("en") : bandLabel(forecast.status)}`}>
             <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
             <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
             {mixed && dayIsExperimental(forecast) && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
@@ -99,6 +123,7 @@ function ForecastLookAhead({
           <div className={s.forecastPick}>
             <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).title}</p>
             <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>
+            <CautiousLine tier={tier} status={picked.callUnknown ? null : picked.status} />
             <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
             {pickedMethod && <p>{pickedMethod}</p>}
             {pickedConfidence && <p>{pickedConfidence.text}</p>}
@@ -172,7 +197,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null; tier?: RosterTier | null }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -223,6 +248,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           <span>{dateLabel(today.date)}</span>
         </div>
         <NeptuneIndexBadge display={indexScore} size="hero" />
+        <CautiousLine tier={beach.tier} status={todayUnknown ? null : today.status} withTitle />
         {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
         <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
         <p className={s.predictionExplanation}>
@@ -239,13 +265,14 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
       <h3>{unknownCallPhrase("en")}</h3>
     </section>
     ) : (
-    <section className={`${s.predictionHero} ${bandClass(today.status)}`} aria-label="Today’s estimate">
+    <section className={`${s.predictionHero} ${bandClass(today.status, beach.tier)}`} aria-label="Today’s estimate">
       <div className={s.predictionHeader}>
         <p className={s.eyebrow}>{posting ? "Our estimate" : "Today’s estimate"}</p>
         <span>{dateLabel(today.date)}</span>
       </div>
       <h3>{reading.title}</h3>
       <p className={s.predictionExplanation}>{reading.detail}</p>
+      <CautiousLine tier={beach.tier} status={today.status} />
       <div className={s.predictionNote}>
         <div className={s.scaleBar} aria-hidden="true">
           <div className={s.scaleTrack} style={{ background: "linear-gradient(to right, #97C459 0%, #97C459 25%, #EF9F27 40%, #EF9F27 55%, #E24B4A 65%, #A32D2D 100%)" }} />
@@ -303,14 +330,21 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         picked={picked}
         onPick={(date) => setPickedDate((current) => current === date ? null : date)}
         onLocked={lockedClicked}
+        tier={beach.tier}
       />
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}
     {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
-              if (neighbor.neptuneDisplay) return <NeptuneIndexBadge display={neighbor.neptuneDisplay} />;
+              if (neighbor.neptuneDisplay) {
+                const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");
+                return <span className={s.listReading}><NeptuneIndexBadge display={neighbor.neptuneDisplay} />{note && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {note}</span>}</span>;
+              }
               if (showsUnknownCall(neighbor)) return <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>;
-              if (neighbor.hasEstimate !== false && neighbor.status) return <span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span>;
+              if (neighbor.hasEstimate !== false && neighbor.status) {
+                const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");
+                return <span className={s.listReading}><span className={`${s.band} ${bandClass(neighbor.status, neighbor.tier)}`}><span>{statusReading(neighbor.status).pill}</span></span>{note && <span className={s.cautiousListNote}>{note}</span>}</span>;
+              }
               return <span className={s.noEstimate}>No estimate</span>;
             })()}<ArrowRight size={16} aria-hidden="true" /></button></li>)}</ul></section>}
   </div>;

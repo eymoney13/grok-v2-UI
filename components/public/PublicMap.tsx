@@ -5,6 +5,7 @@ import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaf
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, BASEMAP_SUBDOMAINS, BASEMAP_URL } from "@/lib/basemap";
 import { hasMapCoordinates } from "@/lib/geo";
 import { statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
+import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { indexLead } from "@/lib/neptuneIndex";
 import { copyReading, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
@@ -25,9 +26,17 @@ function Fit({ points }: { points: [number, number][] }) {
 
 function modelWords(beach: GlanceBeach, lang: Lang): string {
   const display = beach.neptuneDisplay;
-  if (display) return indexLead(display, lang);
+  const note = cautiousElevatedNote(beach.tier, beach.status, lang);
+  if (display) {
+    const lead = indexLead(display, lang);
+    if (!note || !beach.status) return lead;
+    return `${lead}. ${statusPill(beach.status, lang)}. ${note}`;
+  }
   if (showsUnknownCall(beach)) return unknownCallPhrase(lang);
-  if (beach.hasEstimate && beach.status) return statusPill(beach.status, lang);
+  if (beach.hasEstimate && beach.status) {
+    const pill = statusPill(beach.status, lang);
+    return note ? `${pill}. ${note}` : pill;
+  }
   return lang === "es" ? "Sin estimado hoy" : "No estimate today";
 }
 
@@ -54,7 +63,9 @@ function pinColor(beach: GlanceBeach): string {
   if (showsUnknownCall(beach)) return "#66777b";
   if (beach.status === "Normal") return "#3c6435";
   if (beach.status === "Slightly elevated") return "#786016";
-  if (beach.status === "Not recommended") return "#a63d36";
+  if (beach.status === "Not recommended") {
+    return elevatedCallStyle(beach.tier) === "cautious" ? "#8aa3a6" : "#a63d36";
+  }
   return "#66777b";
 }
 

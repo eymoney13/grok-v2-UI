@@ -31,6 +31,7 @@ import {
 } from "./publishedReading.ts";
 import { rainDepth, rainState, rainTotalMm } from "./rain.ts";
 import { LAB_LIMIT_LABEL } from "./readerLabels.ts";
+import { cautiousElevatedNote } from "./tierCallStyle.ts";
 import {
   TIER_LIMITED_NOTE,
   freshnessLimit,
@@ -163,16 +164,21 @@ function statusSentence(facts: SummaryFacts, lang: Lang): string {
   return model;
 }
 
+function withCautiousNote(sentence: string, facts: SummaryFacts, lang: Lang): string {
+  const note = cautiousElevatedNote(facts.tier, facts.status, lang);
+  return note ? `${sentence} ${note}` : sentence;
+}
+
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
   const indexed = indexSentence(facts.neptuneDisplay, lang);
-  if (indexed) return indexed;
+  if (indexed) return withCautiousNote(indexed, facts, lang);
   if (showsUnknownCall(facts)) return unknownCallPhrase(lang);
   if (!facts.hasEstimate) {
     return lang === "es"
       ? "Hoy no se publicó un estimado para esta playa."
       : "No estimate was published for this beach today.";
   }
-  if (facts.status) return statusDetail(facts.status, lang);
+  if (facts.status) return withCautiousNote(statusDetail(facts.status, lang), facts, lang);
   return lang === "es"
     ? "Hoy no se publicó un estimado para esta playa."
     : "No estimate was published for this beach today.";

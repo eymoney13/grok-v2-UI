@@ -6,6 +6,7 @@ import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/st
 import { displayBandLabel, indexScalePhrase, parseIndexBands, resolveNeptuneDisplay } from "../lib/neptuneIndex.ts";
 import { statusDetail } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
+import { cautiousElevatedNote, elevatedCallStyle, TIER_ELEVATED_STYLE } from "../lib/tierCallStyle.ts";
 import { nearestBeachNeighbors } from "../lib/beachNeighbors.ts";
 import { coordinatesOutsideWestCoast, hasMapCoordinates, nearest } from "../lib/geo.ts";
 
@@ -263,6 +264,56 @@ assert.doesNotMatch(elevated, /Over the limit|\bClosed\b|\bWarning\b/);
 assert.equal(statusReading("Not recommended").pill, "Elevated risk");
 assert.equal(statusReading("Not recommended").phrase, "an elevated risk");
 assert.doesNotMatch(statusDetail("Not recommended", "es"), /Sobre el límite/);
+
+assert.equal(TIER_ELEVATED_STYLE.limited_data, "cautious");
+assert.equal(TIER_ELEVATED_STYLE.model_pool, "full");
+assert.equal(elevatedCallStyle("limited_data"), "cautious");
+assert.equal(elevatedCallStyle("model_pool"), "full");
+assert.equal(elevatedCallStyle(null), "full");
+assert.equal(elevatedCallStyle(undefined), "full");
+assert.equal(elevatedCallStyle("limited_data", { limited_data: "full", model_pool: "cautious" }), "full");
+assert.equal(elevatedCallStyle("model_pool", { limited_data: "full", model_pool: "cautious" }), "cautious");
+assert.equal(
+  cautiousElevatedNote("limited_data", "Not recommended", "en"),
+  "Limited testing history, so this is a cautious estimate."
+);
+assert.match(cautiousElevatedNote("limited_data", "Not recommended", "es") ?? "", /estimado cauteloso/);
+assert.doesNotMatch(cautiousElevatedNote("limited_data", "Not recommended", "es") ?? "", /Sobre el límite/);
+assert.equal(cautiousElevatedNote("model_pool", "Not recommended", "en"), null);
+assert.equal(cautiousElevatedNote("limited_data", "Normal", "en"), null);
+assert.equal(cautiousElevatedNote(null, "Not recommended", "en"), null);
+const limitedHigh = dailySummary(
+  { ...base, status: "Not recommended", tier: "limited_data", confidence: "high" },
+  "en"
+);
+assert.match(limitedHigh.status, /Limited testing history, so this is a cautious estimate/);
+assert.match(limitedHigh.status, /Higher chance of bacteria above the limit/);
+assert.equal(limitedHigh.confidence?.level, "high");
+assert.doesNotMatch(limitedHigh.status, /Over the limit/);
+const limitedIndex = dailySummary(
+  {
+    ...base,
+    status: "Not recommended",
+    tier: "limited_data",
+    confidence: "high",
+    neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "limited_data" }),
+  },
+  "en"
+);
+assert.match(limitedIndex.status, /Poor/);
+assert.match(limitedIndex.status, /Limited testing history, so this is a cautious estimate/);
+assert.doesNotMatch(limitedIndex.status, /Caution/);
+const poolLow = dailySummary(
+  { ...base, status: "Not recommended", tier: "model_pool", confidence: "low" },
+  "en"
+);
+assert.doesNotMatch(poolLow.status, /Limited testing history/);
+assert.match(poolLow.status, /Higher chance of bacteria above the limit/);
+assert.equal(poolLow.confidence?.level, "low");
+assert.doesNotMatch(
+  dailySummary({ ...base, status: "Normal", tier: "limited_data", confidence: "low" }, "en").status,
+  /Limited testing history/
+);
 
 const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);
 assert.ok(spanishGood);

@@ -219,6 +219,24 @@
   color: #8a261f;
 }
 
+.cautious {
+  background: transparent;
+  color: #3d4c50;
+  border: 1px dashed #8aa3a6;
+  font-style: italic;
+  font-weight: 650;
+}
+
+.cautiousNote {
+  display: block;
+  max-width: 18rem;
+  color: #3d4c50;
+  font-size: 0.8rem;
+  font-style: italic;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .muted {
   background: #eef2f3;
   color: #3d4c50;
