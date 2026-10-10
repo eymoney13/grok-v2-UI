@@ -31,7 +31,7 @@ export default function OverviewMapClient({
   binaryVerdict: boolean;
   labelMinZoom?: number;
   locateNearby?: boolean;
-  /** Spoken and hover name for a pin, e.g. "Over the limit". The drawn pill stays short. */
+  /** Spoken and hover name for a pin, e.g. "Elevated risk". The drawn pill stays short. */
   statusPhrase?: (status: Status) => string;
   cluster?: boolean;
   onSelect: (code: string) => void;

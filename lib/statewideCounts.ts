@@ -1,8 +1,9 @@
 import type { Status } from "./data.ts";
 import type { Lang } from "./publicCopy.ts";
+import { elevatedRiskCount } from "./readerLabels.ts";
 
 /**
- * Coast-wide status totals, such as "12 beaches over the limit today".
+ * Coast-wide status totals, such as "12 beaches at elevated risk today".
  *
  * The current model is uncalibrated and runs high. A single beach can show
  * its own reading. A total of those readings would sound like a fact about
@@ -20,11 +21,11 @@ export interface StatusCountable {
   hasEstimate?: boolean;
   neptuneBand?: string | null;
   neptuneDisplay?: { countsAsPoor?: boolean } | null;
-  /** A rules-path Unknown is not an over-limit call. A published poor index still counts. */
+  /** A rules-path Unknown is not an elevated-risk call. A published poor index still counts. */
   callUnknown?: boolean;
 }
 
-/** One beach on the over-limit side of a published estimate. Not a posting. */
+/** One beach on the elevated-risk side of a published estimate. Not a posting or a lab result. */
 export function beachCountsAsOverLimit(beach: StatusCountable): boolean {
   if (beach.hasEstimate === false) return false;
   if (beach.callUnknown) {
@@ -47,8 +48,5 @@ export function statewideStatusHeadline(
 ): string | null {
   if (!enabled) return null;
   const count = beaches.filter(beachCountsAsOverLimit).length;
-  if (lang === "es") {
-    return count === 1 ? "1 playa sobre el límite hoy" : `${count} playas sobre el límite hoy`;
-  }
-  return count === 1 ? "1 beach over the limit today" : `${count} beaches over the limit today`;
+  return elevatedRiskCount(count, lang);
 }

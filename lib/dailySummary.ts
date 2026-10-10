@@ -30,6 +30,7 @@ import {
   type PostingStatus,
 } from "./publishedReading.ts";
 import { rainDepth, rainState, rainTotalMm } from "./rain.ts";
+import { LAB_LIMIT_LABEL } from "./readerLabels.ts";
 import {
   TIER_LIMITED_NOTE,
   freshnessLimit,
@@ -280,11 +281,11 @@ function recentSentence(mpn: number | null, lang: Lang): string | null {
   if (mpn == null || !Number.isFinite(mpn)) return null;
   const shown = Number.isInteger(mpn) ? String(mpn) : mpn.toFixed(1);
   const relation = mpn < EPA_MPN_THRESHOLD ? "under" : mpn > EPA_MPN_THRESHOLD ? "over" : "at";
+  const label = LAB_LIMIT_LABEL[lang][relation];
   if (lang === "es") {
-    const word = relation === "under" ? "bajo" : relation === "over" ? "sobre" : "en";
-    return `El último resultado de laboratorio en el archivo es ${shown} MPN/100 mL, ${word} el límite de ${EPA_MPN_THRESHOLD} MPN/100 mL.`;
+    return `El último resultado de laboratorio en el archivo es ${shown} MPN/100 mL. ${label} (el estándar es ${EPA_MPN_THRESHOLD} MPN/100 mL).`;
   }
-  return `The latest lab result in the file is ${shown} MPN/100 mL, ${relation} the ${EPA_MPN_THRESHOLD} MPN/100 mL limit.`;
+  return `The latest lab result in the file is ${shown} MPN/100 mL. ${label} (the standard is ${EPA_MPN_THRESHOLD} MPN/100 mL).`;
 }
 
 function weekday(iso: string, lang: Lang): string {

@@ -243,9 +243,9 @@ export default function SandboxDashboard({
               <label>Status
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="">All statuses</option>
-                  <option value="under">Under the limit</option>
-                  <option value="near">Near the limit</option>
-                  <option value="over">Over the limit</option>
+                  <option value="under">{statusReading("Normal").title}</option>
+                  <option value="near">{statusReading("Slightly elevated").title}</option>
+                  <option value="over">{statusReading("Not recommended").title}</option>
                   <option value="none">No estimate today</option>
                 </select>
               </label>
@@ -359,7 +359,7 @@ export default function SandboxDashboard({
               <div className={s.indexLegend}>
                 <h3>Neptune Index</h3>
                 <NeptuneIndexLegend scale={indexScale} compact />
-                <p className={s.legendNote}>The band is the label on the pin. The number is the score.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} Each tier uses the bands in its own table, so the same number can be a different band. A rules score with no band stays uncolored. A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on Under, Near, and Over the limit.</p>
+                <p className={s.legendNote}>The band is the label on the pin. The number is the score.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} Each tier uses the bands in its own table, so the same number can be a different band. A rules score with no band stays uncolored. A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on {statusReading("Normal").title}, {statusReading("Slightly elevated").title}, and {statusReading("Not recommended").title}.</p>
               </div>
             )}
             {beaches.some((beach) => beach.hasEstimate && !beach.neptuneDisplay) && (
@@ -368,7 +368,7 @@ export default function SandboxDashboard({
             <p className={s.legendNote}>
               {beaches.some((beach) => beach.neptuneDisplay)
                 ? `A Neptune Index is a 0–${indexScale?.scaleMax ?? 100} score from the model file.${indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} `
-                : "Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. "}
+                : `${statusReading("Normal").pill}, ${statusReading("Slightly elevated").pill}, and ${statusReading("Not recommended").pill} compare today’s estimate with the 104 MPN/100 mL enterococcus standard. ${statusReading("Not recommended").title} is a precaution, not a measured lab result. On the map, the same three readings are labeled Low, Moderate, and High. `}
               <NeptuneIndexExplainerLink />. Pins group together until you zoom in.
             </p>
             {beaches.some((beach) => officialPosting(copyReading(beach))) && (

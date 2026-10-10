@@ -1,33 +1,38 @@
 import { EPA_MPN_THRESHOLD, formatMonthDayYear, type Status } from "./data.ts";
+import { MODEL_LABEL, MODEL_TIER_GLOSS, modelDetail, type ReaderLang } from "./readerLabels.ts";
 
 /**
- * Words a reader sees for a beach's bacteria status, and for the probability
+ * Words a reader sees for a beach's model status, and for the probability
  * next to it. The cutoffs those words describe live in `RISK_TIERS` (and
- * `statusFromProb` reads that same table). Change the scale there; change
- * the sentences here. Neither file invents a second set of numbers.
+ * `statusFromProb` reads that same table). The words themselves live in
+ * `readerLabels.ts`. Neither file invents a second set of numbers.
  *
- * The phrases describe an estimate against the beach standard. They do not
- * say the water is safe to swim, and they do not claim a confidence score.
+ * "Not recommended" is a precautionary model flag, not a lab result and not
+ * a posting. A lab result above the standard, and an official Closed or
+ * Warning, use the other labels in that same file.
  */
-export const STATUS_READING: Record<
-  Status,
-  { pill: string; title: string; detail: string }
-> = {
-  Normal: {
-    pill: "Under limit",
-    title: "Under the limit",
-    detail: `The model estimates enterococcus is under the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-  },
-  "Slightly elevated": {
-    pill: "Near limit",
-    title: "Near the limit",
-    detail: `The model estimates enterococcus is higher, and still under the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-  },
-  "Not recommended": {
-    pill: "Over limit",
-    title: "Over the limit",
-    detail: `The model estimates enterococcus may be over the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-  },
+export interface StatusWords {
+  pill: string;
+  title: string;
+  phrase: string;
+  detail: string;
+}
+
+export interface StatusReading extends StatusWords {
+  es: StatusWords;
+}
+
+function wordsFor(status: Status, lang: ReaderLang): StatusWords {
+  return {
+    ...MODEL_LABEL[lang][status],
+    detail: modelDetail(status, lang, EPA_MPN_THRESHOLD),
+  };
+}
+
+export const STATUS_READING: Record<Status, StatusReading> = {
+  Normal: { ...wordsFor("Normal", "en"), es: wordsFor("Normal", "es") },
+  "Slightly elevated": { ...wordsFor("Slightly elevated", "en"), es: wordsFor("Slightly elevated", "es") },
+  "Not recommended": { ...wordsFor("Not recommended", "en"), es: wordsFor("Not recommended", "es") },
 };
 
 export function statusReading(status: Status) {
@@ -35,15 +40,8 @@ export function statusReading(status: Status) {
 }
 
 /** Plain gloss for each `RISK_TIERS` row, in the same order. */
-const TIER_READINGS = [
-  "Under the limit",
-  "Near the limit",
-  "Over the limit",
-  "Well over the limit",
-] as const;
-
 export function tierReading(index: number, fallback: string): string {
-  return TIER_READINGS[index] ?? fallback;
+  return MODEL_TIER_GLOSS.en[index] ?? fallback;
 }
 
 export const PROBABILITY_CAPTION = `Estimated chance a lab test would exceed ${EPA_MPN_THRESHOLD} MPN/100 mL. A model estimate, not a water sample.`;

@@ -49,7 +49,7 @@ In the sample, `tier` is `model_pool` for every station that has a published now
 | `target_date` | Day the estimate is for. |
 | `lead_days` | `0` is the same-day nowcast. `1`–`3` are the experimental look-ahead. |
 | `probability` | Exceedance probability. Values from 0 to 1 are fractions. Values above 1 and at most 100 are percents. |
-| `call` | `Safe` or `Unsafe`. |
+| `call` | `Safe` or `Unsafe`. An `Unsafe` call is a precautionary model flag. The site shows Elevated risk, not “Over the limit.” Those words, and Closed / Warning for official postings, live in `lib/readerLabels.ts`. |
 | `threshold` | Model cutoff, same fraction/percent rule as `probability`. |
 | `publish_timestamp_utc` | Shown when present. |
 | `model_version` | Shown as small print when present. |
@@ -106,7 +106,7 @@ Columns named for this file:
 | `agency` | Optional. Read only when the header includes `agency`. Blank stays blank. Used when `station_key` is blank. | 
 | `name`, `county` | Optional on this file. When `agency` is absent, they keep two rows with the same `station_code` apart. | 
 | `generated_at` | “Last updated,” after `outputs/run_manifest.json` and before a `generated_at` column on the wide nowcast. |
-| `posting_status` | `closure`, `warning`, `advisory`, `open`, or `unknown`. Also accepts `closed` for a closure. Any other word is ignored. |
+| `posting_status` | `closure`, `warning`, `advisory`, `open`, or `unknown`. Also accepts `closed` for a closure. Any other word is ignored. A closure is shown as Closed and a warning as Warning. Those words are not used for a model call. |
 | `posting_source` | Credited on a closure, warning, advisory, or open check. Blank stays blank. |
 | `posting_fetched_at` | Preferred county check time. The calendar day is shown next to an `open` posting. `posting_date`, `checked_date`, and `as_of` are still accepted when this cell is blank. If every date cell is blank and the row or the file has `generated_at`, that calendar day is used. The model prediction date is not the county date. |
 | `final_status` | The label on a closure, warning, or advisory, such as “Beach closed.” The word `Unknown` is not that label. It means the rules path did not have enough recent data to call, and the page says “Not enough recent data to call.” That is not a Safe reading, and it is not the same as `posting_status: unknown`. On its own, or next to `open` or posting `unknown`, any other `final_status` does not override the prediction. |

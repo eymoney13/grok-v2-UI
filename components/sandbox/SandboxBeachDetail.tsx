@@ -254,7 +254,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           </div>
         </div>
         <div className={s.scaleEnds} aria-hidden="true"><span>0%</span><span>100%</span></div>
-        <p>The marker sits on today’s estimated chance of a result over the limit. <NeptuneIndexExplainerLink />. <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a></p>
+        <p>The marker sits on today’s estimated chance of a lab result above 104 MPN/100 mL. <NeptuneIndexExplainerLink />. <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a></p>
       </div>
     </section>
     )}

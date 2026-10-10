@@ -36,7 +36,8 @@ import {
 } from "@/lib/basemap";
 import { hasMapCoordinates } from "@/lib/geo";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
-import { copyReading, officialPosting, postingLabel, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
+import { copyReading, kindTitle, officialPosting, postingLabel, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
+import { POSTING_LABEL } from "@/lib/readerLabels";
 import { unknownCallPhrase } from "@/lib/publicCopy";
 
 function colorFor(status: Status) {
@@ -587,7 +588,7 @@ function limitedPin(): L.DivIcon {
 
 function officialPin(label: string): L.DivIcon {
   const raw = label.trim();
-  const text = raw.length > 0 && raw.length <= 14 ? raw : "Closure";
+  const text = raw.length > 0 && raw.length <= 14 ? raw : POSTING_LABEL.en.closure.label;
   const w = text.length <= 8 ? 64 : Math.min(132, 18 + text.length * 7);
   const h = 22;
   return L.divIcon({
@@ -611,7 +612,10 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
   const posting = officialPosting(copyReading(beach));
   if (posting) {
     const source = posting.source ? `, source ${posting.source}` : "";
-    return `${beach.name}, ${posting.kind}, ${postingLabel(posting)}${source}`;
+    const title = kindTitle(posting.kind);
+    const label = postingLabel(posting);
+    const words = title.toLowerCase() === label.toLowerCase() ? title : `${title}: ${label}`;
+    return `${beach.name}, ${words}${source}`;
   }
   if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
   if (showsUnknownCall(beach)) return `${beach.name}, ${unknownCallPhrase("en")}`;

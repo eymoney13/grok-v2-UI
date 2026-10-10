@@ -1,4 +1,5 @@
-import { EPA_MPN_THRESHOLD, type Status } from "./data.ts";
+import type { Status } from "./data.ts";
+import { statusReading } from "./waterStatus.ts";
 
 export type Lang = "en" | "es";
 
@@ -91,55 +92,21 @@ export const copy = {
   },
 } as const;
 
-const PILL: Record<Lang, Record<Status, string>> = {
-  en: {
-    Normal: "Under limit",
-    "Slightly elevated": "Near limit",
-    "Not recommended": "Over limit",
-  },
-  es: {
-    Normal: "Bajo el límite",
-    "Slightly elevated": "Cerca del límite",
-    "Not recommended": "Sobre el límite",
-  },
-};
-
-const PHRASE: Record<Lang, Record<Status, string>> = {
-  en: {
-    Normal: "under the limit",
-    "Slightly elevated": "near the limit",
-    "Not recommended": "over the limit",
-  },
-  es: {
-    Normal: "bajo el límite",
-    "Slightly elevated": "cerca del límite",
-    "Not recommended": "sobre el límite",
-  },
-};
-
-const STATUS_DETAIL: Record<Lang, Record<Status, string>> = {
-  en: {
-    Normal: `The model estimates enterococcus is under the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-    "Slightly elevated": `The model estimates enterococcus is higher, and still under the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-    "Not recommended": `The model estimates enterococcus may be over the ${EPA_MPN_THRESHOLD} MPN/100 mL beach standard.`,
-  },
-  es: {
-    Normal: `El modelo estima que el enterococo está bajo el estándar de playa de ${EPA_MPN_THRESHOLD} MPN/100 mL.`,
-    "Slightly elevated": `El modelo estima que el enterococo está más alto, y todavía bajo el estándar de playa de ${EPA_MPN_THRESHOLD} MPN/100 mL.`,
-    "Not recommended": `El modelo estima que el enterococo puede estar sobre el estándar de playa de ${EPA_MPN_THRESHOLD} MPN/100 mL.`,
-  },
-};
+function statusWords(status: Status, lang: Lang) {
+  const reading = statusReading(status);
+  return lang === "es" ? reading.es : reading;
+}
 
 export function statusPill(status: Status, lang: Lang): string {
-  return PILL[lang][status];
+  return statusWords(status, lang).pill;
 }
 
 export function statusPhrase(status: Status, lang: Lang): string {
-  return PHRASE[lang][status];
+  return statusWords(status, lang).phrase;
 }
 
 export function statusDetail(status: Status, lang: Lang): string {
-  return STATUS_DETAIL[lang][status];
+  return statusWords(status, lang).detail;
 }
 
 /** Rules path published Unknown. Neutral, and never a translation of "safe". */

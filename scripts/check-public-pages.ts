@@ -64,7 +64,8 @@ const named = publishedOutlook(
 );
 assert.deepEqual(named, [{ date: "2026-10-10", status: "Not recommended", experimental: true }]);
 const namedSummary = dailySummary({ ...base, outlook: named }, "en");
-assert.match(namedSummary.outlook, /Saturday is over the limit/);
+assert.match(namedSummary.outlook, /Saturday is an elevated risk/);
+assert.doesNotMatch(namedSummary.outlook, /Over the limit/);
 assert.match(namedSummary.outlook, /still being tested/);
 assert.doesNotMatch(namedSummary.outlook, /Sunday is under the limit/);
 
@@ -97,7 +98,8 @@ const posted = dailySummary(
   },
   "en"
 );
-assert.match(posted.status, /County closure: Beach closed/);
+assert.match(posted.status, /Closed: Beach closed/);
+assert.doesNotMatch(posted.status, /Closed: Closed|County closure/);
 assert.match(posted.status, /Source: Orange County/);
 assert.match(posted.status, /Our estimate:/);
 assert.equal(posted.postingNote, null);
@@ -153,7 +155,8 @@ assert.match(opened.postingNote ?? "", /October 9, 2026/);
 assert.doesNotMatch(opened.postingNote ?? "", /safe/i);
 
 const warning = dailySummary({ ...base, postingStatus: "warning", postingSource: "Ventura County" }, "en");
-assert.match(warning.status, /County warning: Warning/);
+assert.match(warning.status, /^Warning\. Source: Ventura County/);
+assert.doesNotMatch(warning.status, /Warning: Warning|County warning/);
 assert.match(warning.status, /Source: Ventura County/);
 assert.match(warning.status, /Our estimate:/);
 assert.match(warning.status, /under the/);
@@ -161,8 +164,14 @@ assert.doesNotMatch(warning.status, /\bsafe\b/i);
 assert.equal(warning.postingNote, null);
 
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /40 MPN/);
-assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /under the 104/);
-assert.match(dailySummary({ ...base, lastResultMpn: 180 }, "en").recentResult ?? "", /over the 104/);
+assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /Under the limit/);
+assert.doesNotMatch(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /Over the limit/);
+assert.match(dailySummary({ ...base, lastResultMpn: 104 }, "en").recentResult ?? "", /At the limit/);
+assert.doesNotMatch(dailySummary({ ...base, lastResultMpn: 104 }, "en").recentResult ?? "", /Over the limit/);
+const labOver = dailySummary({ ...base, lastResultMpn: 180 }, "en").recentResult ?? "";
+assert.match(labOver, /180 MPN/);
+assert.match(labOver, /Over the limit/);
+assert.doesNotMatch(labOver, /Elevated risk/);
 
 const missingAge = dailySummary({ ...base, daysSinceSample: null }, "en");
 assert.equal(missingAge.lastTested, null);
@@ -200,9 +209,9 @@ const postedUnknown = dailySummary(
   { ...base, postingStatus: "closure", postingSource: "Orange County", finalStatus: "Unknown" },
   "en"
 );
-assert.match(postedUnknown.status, /County closure: Closure/);
+assert.match(postedUnknown.status, /^Closed\. Source: Orange County/);
 assert.match(postedUnknown.status, /Not enough recent data to call/);
-assert.doesNotMatch(postedUnknown.status, /County closure: Unknown|under the/);
+assert.doesNotMatch(postedUnknown.status, /Closed: Closed|Closed: Unknown|County closure|under the/);
 const kept = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(42, "hazardous", indexScale) },
   "en"
@@ -245,7 +254,15 @@ assert.match(dailySummary({ ...base, fallbackUsed: true }, "en").fallback ?? "",
 
 for (const status of ["Normal", "Slightly elevated", "Not recommended"] as const) {
   assert.equal(statusDetail(status, "en"), statusReading(status).detail);
+  assert.equal(statusDetail(status, "es"), statusReading(status).es.detail);
 }
+const elevated = statusDetail("Not recommended", "en");
+assert.match(elevated, /Higher chance of bacteria above the limit/);
+assert.match(elevated, /about half of exceedances/);
+assert.doesNotMatch(elevated, /Over the limit|\bClosed\b|\bWarning\b/);
+assert.equal(statusReading("Not recommended").pill, "Elevated risk");
+assert.equal(statusReading("Not recommended").phrase, "an elevated risk");
+assert.doesNotMatch(statusDetail("Not recommended", "es"), /Sobre el límite/);
 
 const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);
 assert.ok(spanishGood);
@@ -324,6 +341,9 @@ assert.equal(resolveSlugMatch(catalog, slugifyName("San Diego — Ocean Beach"))
 
 const spanish = dailySummary({ ...base, outlook: named, lastResultMpn: 40, rainTodayMm: 0, rainPrior3dMm: 0 }, "es");
 assert.match(spanish.outlook, /sábado/i);
+assert.match(spanish.outlook, /en riesgo elevado/);
+assert.doesNotMatch(spanish.outlook, /Sobre el límite|Over the limit/);
+assert.match(spanish.recentResult ?? "", /Bajo el límite/);
 assert.match(spanish.status, /104/);
 assert.match(spanish.rain ?? "", /no muestra lluvia/);
 assert.equal(spanish.outlookLabel, "Experimental");
@@ -340,10 +360,10 @@ const coast = [
 ];
 assert.equal(statewideStatusHeadline(coast), null);
 assert.equal(statewideStatusHeadline(coast, "es"), null);
-assert.equal(statewideStatusHeadline(coast, "en", true), "2 beaches over the limit today");
+assert.equal(statewideStatusHeadline(coast, "en", true), "2 beaches at elevated risk today");
 assert.equal(
   statewideStatusHeadline([{ status: "Normal", hasEstimate: true, neptuneBand: "poor" }], "en", true),
-  "1 beach over the limit today"
+  "1 beach at elevated risk today"
 );
 assert.equal(
   statewideStatusHeadline(
@@ -351,28 +371,29 @@ assert.equal(
     "en",
     true
   ),
-  "0 beaches over the limit today"
+  "0 beaches at elevated risk today"
 );
 assert.equal(
   statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true }], "en", true),
-  "1 beach over the limit today"
+  "1 beach at elevated risk today"
 );
 assert.equal(
   statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true, callUnknown: true }], "en", true),
-  "0 beaches over the limit today"
+  "0 beaches at elevated risk today"
 );
 assert.equal(
   statewideStatusHeadline([{ status: "Normal", hasEstimate: true, callUnknown: true, neptuneBand: "poor" }], "en", true),
-  "1 beach over the limit today"
+  "1 beach at elevated risk today"
 );
-assert.equal(statewideStatusHeadline([], "es", true), "0 playas sobre el límite hoy");
+assert.equal(statewideStatusHeadline([], "es", true), "0 playas en riesgo elevado hoy");
 assert.equal(
   statewideStatusHeadline([{ status: "Normal", hasEstimate: true, neptuneIndex: 40, neptuneBand: "good" }], "en", true),
-  "0 beaches over the limit today"
+  "0 beaches at elevated risk today"
 );
 const overSummary = dailySummary({ ...base, status: "Not recommended" }, "en");
 const overText = Object.values(overSummary).filter((value) => typeof value === "string").join("\n");
-assert.match(overText, /over the/);
+assert.match(overText, /Higher chance of bacteria above the limit/);
+assert.doesNotMatch(overText, /Over the limit/);
 assert.doesNotMatch(overText, /\d+ beaches/i);
 assert.doesNotMatch(overText, /unsafe today/i);
 
@@ -382,7 +403,8 @@ const goLiveDays = [
 ];
 const goLiveSummary = dailySummary({ ...base, outlook: goLiveDays }, "en");
 assert.equal(goLiveSummary.outlookLabel, "Outlook");
-assert.match(goLiveSummary.outlook, /Saturday is over the limit/);
+assert.match(goLiveSummary.outlook, /Saturday is an elevated risk/);
+assert.doesNotMatch(goLiveSummary.outlook, /Over the limit/);
 assert.doesNotMatch(goLiveSummary.outlook, /still being tested/);
 const mixedSummary = dailySummary(
   {

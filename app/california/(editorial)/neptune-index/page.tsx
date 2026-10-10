@@ -3,10 +3,13 @@ import { loadNeptuneIndexScale } from "@/lib/neptuneAdapter";
 import { NeptuneIndexLegend } from "@/components/NeptuneIndex";
 import { scaleGroups } from "@/lib/neptuneIndex";
 import { EditorialSection, PageHero } from "@/components/sandbox/SandboxEditorial";
+import { statusReading } from "@/lib/waterStatus";
+
+const emptyIndexReading = `${statusReading("Normal").title}, ${statusReading("Slightly elevated").title}, and ${statusReading("Not recommended").title}`;
 
 export const metadata: Metadata = {
   title: "Neptune Index · Neptune",
-  description: "The Neptune Index is a 0–100 score. A higher number is cleaner. Empty index fields stay on Under, Near, and Over the limit.",
+  description: `The Neptune Index is a 0–100 score. A higher number is cleaner. Empty index fields stay on ${emptyIndexReading}.`,
   alternates: { canonical: "https://dashboard.projectneptune.co/california/neptune-index" },
 };
 
@@ -38,14 +41,14 @@ export default async function NeptuneIndexPage() {
         ) : (
           <p>
             This copy of the data does not include the Neptune Index band table.
-            Until that file is present, a beach with an index number is shown as a score out of 100, and a beach with no index fields stays on Under, Near, or Over the limit.
+            Until that file is present, a beach with an index number is shown as a score out of 100, and a beach with no index fields stays on {emptyIndexReading}.
           </p>
         )}
       </EditorialSection>
       <EditorialSection number="02" title="When there is no number">
         <p>
           The modeling team publishes <code>neptune_index</code> and <code>neptune_band</code>.
-          When both are empty, the beach keeps the Under / Near / Over the limit reading.
+          When both are empty, the beach keeps the {emptyIndexReading} reading.
           A missing score is left blank. It is not filled in from the percentage.
         </p>
         <p>

@@ -1,3 +1,5 @@
+import { POSTING_LABEL } from "./readerLabels.ts";
+
 /**
  * Fields on the v2 daily output (`outputs/daily/current.csv`).
  *
@@ -205,15 +207,11 @@ export function officialPosting(reading: PublishedReading | null | undefined): O
 }
 
 export function kindTitle(kind: ActivePosting, lang: ReadingLang = "en"): string {
-  if (kind === "closure") return lang === "es" ? "Cierre del condado" : "County closure";
-  if (kind === "warning") return lang === "es" ? "Advertencia del condado" : "County warning";
-  return lang === "es" ? "Aviso del condado" : "County advisory";
+  return POSTING_LABEL[lang][kind].title;
 }
 
 function kindLabel(kind: ActivePosting, lang: ReadingLang): string {
-  if (kind === "closure") return lang === "es" ? "Cierre" : "Closure";
-  if (kind === "warning") return lang === "es" ? "Advertencia" : "Warning";
-  return lang === "es" ? "Aviso" : "Advisory";
+  return POSTING_LABEL[lang][kind].label;
 }
 
 export function postingLabel(posting: OfficialPosting, lang: ReadingLang = "en"): string {
@@ -344,7 +342,8 @@ export function officialSummaryLead(posting: OfficialPosting, modelSentence: str
     : "";
   const label = postingLabel(posting, lang);
   const title = kindTitle(posting.kind, lang);
+  const head = title.trim().toLowerCase() === label.trim().toLowerCase() ? `${title}.` : `${title}: ${label}.`;
   return lang === "es"
-    ? `${title}: ${label}.${source} Nuestro estimado: ${modelSentence}`
-    : `${title}: ${label}.${source} Our estimate: ${modelSentence}`;
+    ? `${head}${source} Nuestro estimado: ${modelSentence}`
+    : `${head}${source} Our estimate: ${modelSentence}`;
 }

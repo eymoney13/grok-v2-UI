@@ -166,7 +166,7 @@ assert.equal(isUnknownCall("safe"), false);
 const unknownClosure = officialPosting(parsePublishedReading({ posting_status: "closure", final_status: "Unknown" }));
 assert.equal(unknownClosure?.kind, "closure");
 assert.equal(unknownClosure?.detail, null);
-assert.equal(unknownClosure ? postingLabel(unknownClosure) : null, "Closure");
+assert.equal(unknownClosure ? postingLabel(unknownClosure) : null, "Closed");
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "closure", final_status: "Beach closed" }))?.detail, "Beach closed");
 assert.deepEqual(resolvePublishedCall("Unknown", 0.1, 0.5), { verdict: null, callUnknown: true });
 assert.deepEqual(resolvePublishedCall("safe", 0.1, 0.5).callUnknown, false);
