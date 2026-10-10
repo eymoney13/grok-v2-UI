@@ -316,14 +316,32 @@
 
 .indexChip {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   width: fit-content;
   max-width: 18rem;
   min-height: 32px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 6px 12px;
+  border-radius: 12px;
   font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.indexChip strong {
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.indexNumber {
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.indexPlain {
+  color: #173a3c;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 

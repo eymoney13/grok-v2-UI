@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { loadNeptuneIndexScale } from "@/lib/neptuneAdapter";
-import { NeptuneIndexScale } from "@/components/NeptuneIndex";
+import { NeptuneIndexLegend } from "@/components/NeptuneIndex";
+import { scaleGroups } from "@/lib/neptuneIndex";
 import { EditorialSection, PageHero } from "@/components/sandbox/SandboxEditorial";
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function NeptuneIndexPage() {
   const scale = await loadNeptuneIndexScale();
-  const hasBands = !!scale && scale.bands.length > 0;
+  const hasBands = scaleGroups(scale).length > 0;
   return (
     <>
       <PageHero
@@ -23,11 +24,14 @@ export default async function NeptuneIndexPage() {
       <EditorialSection number="01" title="The scale">
         {hasBands && scale ? (
           <>
-            <NeptuneIndexScale scale={scale} />
+            <NeptuneIndexLegend scale={scale} />
             <p>
               {scale.scaleMin} is the low end and {scale.scaleMax} is the high end.
               {scale.higherIsBetter ? " A higher number is cleaner." : ""}
-              {" "}The band names and the cutoffs come from the published bands file, not from a table baked into this site.
+              {" "}The band is the label. The number is the score under it.
+              Each roster tier has its own bands, and a tier can list as many as the file gives it.
+              The same number can sit in different bands at different beaches.
+              The names and the cutoffs come from the published bands file, not from a table baked into this site.
               A posted county advisory still comes first.
             </p>
           </>
@@ -45,8 +49,10 @@ export default async function NeptuneIndexPage() {
           A missing score is left blank. It is not filled in from the percentage.
         </p>
         <p>
-          A published band name is shown as written. An official county warning or closure moves a shown index to Poor.
-          An advisory does not. When the lab test is old, or the estimate used a fallback, the band is grey and the page says why in words.
+          A published band name is shown as written. An official county warning or closure moves a shown band to Poor.
+          An advisory does not. A warning does not paint a band onto a score that has none.
+          A rules row can publish a number and no band. That number stays uncolored, with a note that it is based on the last lab test and the rain rule.
+          When the lab test is old, or the estimate used a fallback, a shown band is grey and the page says why in words.
         </p>
       </EditorialSection>
     </>

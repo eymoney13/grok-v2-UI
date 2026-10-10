@@ -14,7 +14,7 @@ import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/
 import type { IndexScale } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
-import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
+import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
@@ -358,8 +358,8 @@ export default function SandboxDashboard({
             {beaches.some((beach) => beach.neptuneDisplay) && (
               <div className={s.indexLegend}>
                 <h3>Neptune Index</h3>
-                <NeptuneIndexScale scale={indexScale} compact />
-                <p className={s.legendNote}>The number and the band name are both on the pin.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on Under, Near, and Over the limit.</p>
+                <NeptuneIndexLegend scale={indexScale} compact />
+                <p className={s.legendNote}>The band is the label on the pin. The number is the score.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} Each tier uses the bands in its own table, so the same number can be a different band. A rules score with no band stays uncolored. A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on Under, Near, and Over the limit.</p>
               </div>
             )}
             {beaches.some((beach) => beach.hasEstimate && !beach.neptuneDisplay) && (

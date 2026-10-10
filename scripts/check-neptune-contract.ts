@@ -405,10 +405,44 @@ assert.ok(sampleScale);
 assert.equal(sampleScale.scaleMin, 0);
 assert.equal(sampleScale.scaleMax, 100);
 assert.equal(sampleScale.higherIsBetter, true);
-assert.equal(sampleScale.bands.find((band) => band.id === "good")?.min, 85);
-assert.equal(sampleScale.bands.find((band) => band.id === "caution")?.min, 65);
-assert.equal(sampleScale.bands.find((band) => band.id === "caution")?.max, 84);
-assert.equal(sampleScale.bands.find((band) => band.id === "poor")?.max, 64);
+assert.equal(sampleScale.tiers.model_pool?.length, 3);
+assert.equal(sampleScale.tiers.limited_data?.length, 2);
+assert.equal(sampleScale.tiers.limited_data?.some((band) => band.id === "caution"), false);
+assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "poor")?.max, 84);
+assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "caution")?.min, 85);
+assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "caution")?.max, 97);
+assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "good")?.min, 98);
+assert.equal(sampleScale.tiers.limited_data?.find((band) => band.id === "poor")?.max, 94);
+assert.equal(sampleScale.tiers.limited_data?.find((band) => band.id === "good")?.min, 95);
+assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool" })?.bandId, "caution");
+assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "limited_data" })?.bandId, "poor");
+assert.equal(resolveNeptuneDisplay(96, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(96, null, sampleScale, { tier: "model_pool" })?.bandId, "caution");
+assert.equal(resolveNeptuneDisplay(98, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(84, null, sampleScale, { tier: "model_pool" })?.bandId, "poor");
+const rulesScore = resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool", method: "rules" });
+assert.equal(rulesScore?.bandId, null);
+assert.equal(rulesScore?.index, 92);
+assert.equal(rulesScore?.rulesIndex, true);
+assert.equal(rulesScore?.bands.length, 0);
+assert.equal(resolveNeptuneDisplay(92, "good", sampleScale, { tier: "model_pool", method: "rules" })?.bandId, "good");
+assert.equal(
+  resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool", method: "rules", postingStatus: "warning" })?.bandId,
+  null
+);
+const four = parseIndexBands({
+  by_tier: {
+    model_pool: [
+      { id: "a", min: 0, max: 24 },
+      { id: "b", min: 25, max: 49 },
+      { id: "c", min: 50, max: 74 },
+      { id: "d", min: 75, max: 100 },
+    ],
+  },
+});
+assert.equal(four?.tiers.model_pool?.length, 4);
+assert.equal(resolveNeptuneDisplay(80, null, four, { tier: "model_pool" })?.bandId, "d");
+assert.equal(resolveNeptuneDisplay(80, null, four, { tier: "limited_data" })?.bandId, null);
 
 const oldScore = resolveNeptuneDisplay(indexed.neptuneIndex, indexed.neptuneBand, sampleScale);
 assert.equal(oldScore?.index, null);

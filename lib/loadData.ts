@@ -750,6 +750,7 @@ export async function loadDashboardData(
       ...reading,
       ...presentIndex(mergedIndex, {
         tier: entry.tier,
+        method: reading.method,
         postingStatus: reading.postingStatus,
         daysSinceSample: days,
         noRecentSample: parseBool(now.no_recent_sample),
@@ -904,6 +905,7 @@ function unmodeledItem(
       ),
       {
         tier: entry.tier,
+        method: reading.method,
         postingStatus: reading.postingStatus,
         daysSinceSample: archive?.lastSampleAgeDays ?? null,
         noRecentSample: false,

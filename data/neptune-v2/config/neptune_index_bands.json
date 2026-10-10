@@ -2,27 +2,45 @@
   "scale_min": 0,
   "scale_max": 100,
   "higher_is_better": true,
-  "bands": [
-    {
-      "id": "good",
-      "label": "Good",
-      "min": 85,
-      "max": 100,
-      "guidance": "A higher score is a cleaner day. Posted beach advisories still come first."
-    },
-    {
-      "id": "caution",
-      "label": "Caution",
-      "min": 65,
-      "max": 84,
-      "guidance": "The score sits in the middle of the scale. A posted advisory still comes first."
-    },
-    {
-      "id": "poor",
-      "label": "Poor",
-      "min": 0,
-      "max": 64,
-      "guidance": "This is the low end of the scale. A posted advisory still comes first."
-    }
-  ]
+  "tiers": {
+    "model_pool": [
+      {
+        "id": "poor",
+        "label": "Poor",
+        "min": 0,
+        "max": 84,
+        "guidance": "This is the low end of the scale for a beach in the model pool. A posted advisory still comes first."
+      },
+      {
+        "id": "caution",
+        "label": "Caution",
+        "min": 85,
+        "max": 97,
+        "guidance": "The score sits in the middle of the scale for a beach in the model pool. A posted advisory still comes first."
+      },
+      {
+        "id": "good",
+        "label": "Good",
+        "min": 98,
+        "max": 100,
+        "guidance": "A higher score is a cleaner day. A posted advisory still comes first."
+      }
+    ],
+    "limited_data": [
+      {
+        "id": "poor",
+        "label": "Poor",
+        "min": 0,
+        "max": 94,
+        "guidance": "This is the low end of the scale for a beach with limited data. A posted advisory still comes first."
+      },
+      {
+        "id": "good",
+        "label": "Good",
+        "min": 95,
+        "max": 100,
+        "guidance": "A higher score is a cleaner day. A posted advisory still comes first."
+      }
+    ]
+  }
 }

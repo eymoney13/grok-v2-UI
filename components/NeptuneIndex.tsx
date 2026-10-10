@@ -1,9 +1,8 @@
 import Link from "next/link";
 import {
   bandWidths,
-  displayBandLabel,
-  indexConfidenceNote,
-  indexScalePhrase,
+  indexReading,
+  scaleGroups,
   type IndexScale,
   type NeptuneDisplay,
 } from "@/lib/neptuneIndex";
@@ -17,9 +16,16 @@ export function NeptuneIndexBadge({
   size?: "list" | "hero";
   lang?: "en" | "es";
 }) {
-  const phrase = indexScalePhrase(display, lang);
-  const label = displayBandLabel(display, lang);
-  const note = indexConfidenceNote(display, lang);
+  const reading = indexReading(display, lang);
+  if (!reading.label) {
+    return (
+      <span className={`nb-index-plain nb-index-plain--${size}`}>
+        {reading.phrase && <strong>{reading.phrase}</strong>}
+        {reading.rules && <span className="nb-index-note">{reading.rules}</span>}
+        {reading.note && <span className="nb-index-note">{reading.note}</span>}
+      </span>
+    );
+  }
   return (
     <span className="nb-index-stack">
       <span
@@ -27,11 +33,11 @@ export function NeptuneIndexBadge({
         style={display.lowered ? undefined : { background: display.color, color: display.textColor }}
       >
         <span className="nb-index-badge-copy">
-          {phrase && <strong>{phrase}</strong>}
-          {label && <span>{label}</span>}
+          <strong>{reading.label}</strong>
+          {reading.phrase && <span>{reading.phrase}</span>}
         </span>
       </span>
-      {note && <span className="nb-index-note">{note}</span>}
+      {reading.note && <span className="nb-index-note">{reading.note}</span>}
     </span>
   );
 }
@@ -40,10 +46,12 @@ export function NeptuneIndexScale({
   scale,
   value = null,
   compact = false,
+  title = null,
 }: {
   scale: IndexScale | null;
   value?: number | null;
   compact?: boolean;
+  title?: string | null;
 }) {
   if (!scale || scale.bands.length === 0) return null;
   const bands = [...scale.bands].sort((a, b) => a.min - b.min || a.max - b.max);
@@ -55,6 +63,7 @@ export function NeptuneIndexScale({
       : null;
   return (
     <div className={compact ? "nb-index-scale-block nb-index-scale-block--compact" : "nb-index-scale-block"}>
+      {title && <p className="nb-index-tier">{title}</p>}
       <div className="nb-index-bar" aria-hidden="true">
         {bands.map((band, index) => (
           <span key={band.id} style={{ width: `${(widths[index] ?? 0) * 100}%`, background: band.color }} />
@@ -93,6 +102,30 @@ export function scaleForDisplay(display: NeptuneDisplay): IndexScale | null {
     bands: display.bands,
     tiers: {},
   };
+}
+
+/** One block per tier table. A tier can list any number of bands. */
+export function NeptuneIndexLegend({
+  scale,
+  compact = false,
+}: {
+  scale: IndexScale | null;
+  compact?: boolean;
+}) {
+  const groups = scaleGroups(scale);
+  if (groups.length === 0 || !scale) return null;
+  return (
+    <div className="nb-index-legend">
+      {groups.map((group) => (
+        <NeptuneIndexScale
+          key={group.key}
+          title={groups.length > 1 ? group.title : null}
+          compact={compact}
+          scale={{ ...scale, bands: group.bands, tiers: {} }}
+        />
+      ))}
+    </div>
+  );
 }
 
 export function NeptuneIndexExplainerLink({ className }: { className?: string }) {

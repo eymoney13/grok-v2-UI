@@ -1,3 +1,5 @@
+import type { EstimateMethod } from "./publishedReading.ts";
+import { methodWords } from "./publishedReading.ts";
 import { hasLimitedLabData } from "./waterStatus.ts";
 
 /**
@@ -6,8 +8,10 @@ import { hasLimitedLabData } from "./waterStatus.ts";
  * The pipeline publishes `neptune_index` (0–100, higher is cleaner) and
  * `neptune_band`. This module does not turn a probability or a lab result
  * into a score. Band names and cutoffs come from
- * `config/neptune_index_bands.json` when that file is present. They are not
- * constants here. A published band is kept even when it is not in the file.
+ * `config/neptune_index_bands.json` when that file is present. Each roster
+ * tier can list its own bands, and the count is whatever that tier's list
+ * contains. They are not constants here. A published band is kept even when
+ * it is not in the file. A rules row is not given a band from a cutoff.
  */
 
 /** Product scale used when a bands file omits its ends, or when no file is loaded. */
@@ -67,10 +71,17 @@ export interface NeptuneDisplay {
   forcedByPosting: boolean;
   /** The score's own band is poor. A posting override does not set this. */
   countsAsPoor: boolean;
+  /**
+   * A rules row published a score and no band. The number stays uncolored.
+   * The page uses the lab-test and rain note beside it.
+   */
+  rulesIndex: boolean;
 }
 
 export interface IndexContext {
   tier?: string | null;
+  /** `rules` is not placed on a tier's bands. A published band is still kept. */
+  method?: EstimateMethod | null;
   postingStatus?: string | null;
   daysSinceSample?: number | null;
   noRecentSample?: boolean;
@@ -214,11 +225,38 @@ export function parseIndexBands(raw: unknown): IndexScale | null {
   return { scaleMin, scaleMax, higherIsBetter, bands, tiers };
 }
 
+/** This tier's own list. A tier the file does not name uses the shared list, never another tier. */
 export function bandsForTier(scale: IndexScale | null, tier: string | null | undefined): IndexBand[] {
   if (!scale) return [];
   const key = tier?.trim().toLowerCase();
   if (key && scale.tiers[key]?.length) return scale.tiers[key];
   return scale.bands;
+}
+
+export function tierScaleTitle(tier: string): string {
+  if (tier === "model_pool") return "In the model pool";
+  if (tier === "limited_data") return "Limited data";
+  return titleCaseBand(tier);
+}
+
+/** Every band table in the file, in roster-tier order. The length of each list is the file's. */
+export function scaleGroups(scale: IndexScale | null): { key: string; title: string; bands: IndexBand[] }[] {
+  if (!scale) return [];
+  const groups: { key: string; title: string; bands: IndexBand[] }[] = [];
+  if (scale.bands.length > 0) groups.push({ key: "default", title: "All beaches", bands: scale.bands });
+  const preferred = ["model_pool", "limited_data"];
+  const keys = Object.keys(scale.tiers).sort((a, b) => {
+    const ia = preferred.indexOf(a);
+    const ib = preferred.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  for (const key of keys) {
+    groups.push({ key, title: tierScaleTitle(key), bands: scale.tiers[key] ?? [] });
+  }
+  return groups;
 }
 
 /** Inclusive match. When ranges overlap, the narrowest span wins. */
@@ -288,9 +326,11 @@ function literalPoor(): Pick<IndexBand, "id" | "label" | "color" | "textColor" |
 
 /**
  * A score is shown only from published fields.
- * The band column wins over a cutoff. A number with no band uses the file's
- * inclusive ranges. No file means the number is shown with no invented band.
- * A warning or closure forces Poor, and only when an index is already shown.
+ * The band column wins over a cutoff. A number with no band uses that beach's
+ * tier ranges. A rules row is not placed on those ranges. No file means the
+ * number is shown with no invented band. A warning or closure forces Poor
+ * only when a band is already shown. It does not paint a band onto a number
+ * that has none.
  */
 export function resolveNeptuneDisplay(
   index: number | null | undefined,
@@ -301,11 +341,12 @@ export function resolveNeptuneDisplay(
   const scaleMin = scale?.scaleMin ?? PRODUCT_SCALE_MIN;
   const scaleMax = scale?.scaleMax ?? PRODUCT_SCALE_MAX;
   const higherIsBetter = scale?.higherIsBetter ?? true;
-  const bands = bandsForTier(scale, context.tier);
+  const tierBands = bandsForTier(scale, context.tier);
+  const rulesRow = context.method === "rules";
   const published = normalizeBandToken(bandToken);
   const numeric = index != null && Number.isFinite(index) && inScale(index, scaleMin, scaleMax) ? index : null;
-  const matched = findBand(bands, published);
-  const derived = numeric != null ? bandForValue(numeric, bands) : null;
+  const matched = findBand(tierBands, published);
+  const derived = !rulesRow && numeric != null ? bandForValue(numeric, tierBands) : null;
 
   let bandId: string | null = null;
   let label = "";
@@ -339,8 +380,8 @@ export function resolveNeptuneDisplay(
   }
 
   let forcedByPosting = false;
-  if (context.postingStatus === "warning" || context.postingStatus === "closure") {
-    const poor = poorBand(bands, scaleMin) ?? literalPoor();
+  if (bandId && (context.postingStatus === "warning" || context.postingStatus === "closure")) {
+    const poor = poorBand(tierBands, scaleMin) ?? literalPoor();
     forcedByPosting = bandId !== poor.id;
     bandId = poor.id;
     label = poor.label;
@@ -348,6 +389,8 @@ export function resolveNeptuneDisplay(
     guidance = poor.guidance;
     guidanceEs = poor.guidanceEs;
   }
+  const rulesIndex = rulesRow && numeric != null && bandId == null;
+  const bands = rulesRow ? [] : tierBands;
 
   const oldSample = hasLimitedLabData(
     context.daysSinceSample ?? null,
@@ -381,6 +424,7 @@ export function resolveNeptuneDisplay(
     loweredNoRecent: oldSample && loweredDays == null,
     forcedByPosting,
     countsAsPoor,
+    rulesIndex,
   };
 }
 
@@ -434,11 +478,35 @@ export function indexConfidenceNote(
   return parts.join(" ") || null;
 }
 
+export interface IndexReading {
+  /** Band name. Null when this score has no band. */
+  label: string | null;
+  /** The score, secondary to the band. */
+  phrase: string | null;
+  /** Lab-test and rain note for a rules score that has no band. */
+  rules: string | null;
+  note: string | null;
+}
+
+/** Band first, then the number. A rules score is the number and its note. */
+export function indexReading(display: NeptuneDisplay, lang: Lang): IndexReading {
+  return {
+    label: display.bandId ? displayBandLabel(display, lang) : null,
+    phrase: indexScalePhrase(display, lang),
+    rules: display.rulesIndex ? methodWords("rules", lang) : null,
+    note: indexConfidenceNote(display, lang),
+  };
+}
+
+export function indexLead(display: NeptuneDisplay, lang: Lang = "en"): string {
+  const reading = indexReading(display, lang);
+  const head = [reading.label, reading.phrase].filter((part) => !!part).join(", ");
+  return [head, reading.rules, reading.note].filter((part) => !!part).join(" ");
+}
+
 export function neptuneIndexName(display: NeptuneDisplay, lang: Lang = "en"): string {
-  const phrase = indexScalePhrase(display, lang);
-  const label = displayBandLabel(display, lang);
-  const note = indexConfidenceNote(display, lang);
-  return ["Neptune Index", phrase, label, note].filter((part) => !!part).join(", ");
+  const lead = indexLead(display, lang);
+  return lead ? `Neptune Index, ${lead}` : "Neptune Index";
 }
 
 function escapeHtml(text: string): string {
@@ -451,17 +519,20 @@ function escapeHtml(text: string): string {
   });
 }
 
-/** Leaflet pin. The number and the band word are both in the marker. */
+/** Leaflet pin. The band name leads. A score with no band is the number on a neutral pin. */
 export function indexPinHtml(display: NeptuneDisplay): string {
   const value =
     display.index == null
       ? ""
       : `<span class="nb-index-value">${escapeHtml(formatNeptuneIndex(display.index))}</span>`;
+  if (!display.bandId) {
+    return `<div class="nb-overview-dot nb-overview-dot--index nb-overview-dot--number" style="background:#eef1f2;color:#173a3c">${value}</div>`;
+  }
   const band = display.label
     ? `<span class="nb-index-band">${escapeHtml(display.label)}</span>`
     : "";
   const lowered = display.lowered ? " nb-overview-dot--lowered" : "";
-  return `<div class="nb-overview-dot nb-overview-dot--index${lowered}" style="background:${display.color};color:${display.textColor}">${value}${band}</div>`;
+  return `<div class="nb-overview-dot nb-overview-dot--index${lowered}" style="background:${display.color};color:${display.textColor}">${band}${value}</div>`;
 }
 
 /** Share of the bar, normalized so the segments fill it. Low scores sit on the left. */

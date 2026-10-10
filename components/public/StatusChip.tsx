@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  displayBandLabel,
-  indexConfidenceNote,
-  indexScalePhrase,
+  indexReading,
   type NeptuneDisplay,
 } from "@/lib/neptuneIndex";
 import { copy, statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
@@ -71,19 +69,26 @@ export function StatusChip({
 }
 
 function IndexChip({ display, lang }: { display: NeptuneDisplay; lang: Lang }) {
-  const phrase = indexScalePhrase(display, lang);
-  const label = displayBandLabel(display, lang);
-  const note = indexConfidenceNote(display, lang);
+  const reading = indexReading(display, lang);
+  if (!reading.label) {
+    return (
+      <span className={styles.indexStack}>
+        {reading.phrase && <span className={styles.indexPlain}>{reading.phrase}</span>}
+        {reading.rules && <span className={styles.indexNote}>{reading.rules}</span>}
+        {reading.note && <span className={styles.indexNote}>{reading.note}</span>}
+      </span>
+    );
+  }
   return (
     <span className={styles.indexStack}>
       <span
         className={`${styles.indexChip} ${display.lowered ? styles.indexChipLowered : ""}`}
         style={display.lowered ? undefined : { background: display.color, color: display.textColor }}
       >
-        {phrase && <strong>{phrase}</strong>}
-        {label && <span>{label}</span>}
+        <strong>{reading.label}</strong>
+        {reading.phrase && <span className={styles.indexNumber}>{reading.phrase}</span>}
       </span>
-      {note && <span className={styles.indexNote}>{note}</span>}
+      {reading.note && <span className={styles.indexNote}>{reading.note}</span>}
     </span>
   );
 }

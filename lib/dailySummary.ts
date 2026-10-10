@@ -5,9 +5,7 @@ import {
   type ForecastHorizon,
 } from "./forecastDisplay.ts";
 import {
-  displayBandLabel,
-  indexConfidenceNote,
-  indexScalePhrase,
+  indexReading,
   type NeptuneDisplay,
 } from "./neptuneIndex.ts";
 import {
@@ -132,7 +130,7 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
     rain: rainSentence(facts, lang),
     rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
     postingNote: openPostingWords(copyReading(facts), lang) ?? unknownPostingWords(copyReading(facts), lang),
-    method: methodWords(facts.method, lang),
+    method: facts.neptuneDisplay?.rulesIndex ? null : methodWords(facts.method, lang),
     confidence: confidenceWords(facts.confidence, lang),
     recentResult: recentSentence(facts.lastResultMpn, lang),
     fallback:
@@ -181,28 +179,30 @@ function modelSentence(facts: SummaryFacts, lang: Lang): string {
 
 function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | null {
   if (!display) return null;
-  const label = displayBandLabel(display, lang);
-  const phrase = indexScalePhrase(display, lang);
+  const reading = indexReading(display, lang);
   const guidance = (lang === "es" ? display.guidanceEs : display.guidance) ?? "";
-  const note = indexConfidenceNote(display, lang);
   let sentence: string;
-  if (phrase && label) {
+  if (reading.label && reading.phrase) {
     sentence = lang === "es"
-      ? `El índice Neptune de hoy es ${phrase}, ${label}.`
-      : `Today’s Neptune Index is ${phrase}, ${label}.`;
-  } else if (phrase) {
+      ? `El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
+      : `Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
+  } else if (reading.phrase && reading.rules) {
     sentence = lang === "es"
-      ? `El índice Neptune de hoy es ${phrase}.`
-      : `Today’s Neptune Index is ${phrase}.`;
-  } else if (label) {
+      ? `El índice Neptune de hoy es ${reading.phrase}. ${reading.rules}`
+      : `Today’s Neptune Index is ${reading.phrase}. ${reading.rules}`;
+  } else if (reading.phrase) {
     sentence = lang === "es"
-      ? `La banda del índice Neptune de hoy es ${label}. No se publicó un número con ella.`
-      : `Today’s Neptune Index band is ${label}. No number was published with it.`;
+      ? `El índice Neptune de hoy es ${reading.phrase}.`
+      : `Today’s Neptune Index is ${reading.phrase}.`;
+  } else if (reading.label) {
+    sentence = lang === "es"
+      ? `La banda del índice Neptune de hoy es ${reading.label}. No se publicó un número con ella.`
+      : `Today’s Neptune Index band is ${reading.label}. No number was published with it.`;
   } else {
     return null;
   }
   if (guidance) sentence = `${sentence} ${guidance}`;
-  if (note) sentence = `${sentence} ${note}`;
+  if (reading.note) sentence = `${sentence} ${reading.note}`;
   return sentence;
 }
 

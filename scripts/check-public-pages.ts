@@ -213,6 +213,30 @@ const loweredIndex = dailySummary(
   "en"
 );
 assert.match(loweredIndex.status, /Lower confidence: last lab test 12 days ago/);
+const rulesIndex = dailySummary(
+  {
+    ...base,
+    method: "rules",
+    neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "model_pool", method: "rules" }),
+  },
+  "en"
+);
+assert.match(rulesIndex.status, /92 \/ 100/);
+assert.match(rulesIndex.status, /last lab test \+ rain rule/);
+assert.equal(rulesIndex.method, null);
+assert.doesNotMatch(rulesIndex.status, /\bGood\b|\bCaution\b|\bPoor\b/);
+const tierCaution = dailySummary(
+  { ...base, neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "model_pool" }) },
+  "en"
+);
+assert.match(tierCaution.status, /Caution/);
+assert.doesNotMatch(tierCaution.status, /is Good/);
+const tierPoor = dailySummary(
+  { ...base, tier: "limited_data", neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "limited_data" }) },
+  "en"
+);
+assert.match(tierPoor.status, /Poor/);
+assert.doesNotMatch(tierPoor.status, /Caution/);
 
 assert.equal(dailySummary({ ...base, fallbackUsed: null }, "en").fallback, null);
 assert.match(dailySummary({ ...base, fallbackUsed: true }, "en").fallback ?? "", /fallback/);

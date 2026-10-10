@@ -117,7 +117,7 @@ body {
   font-weight: 650;
 }
 
-/* Neptune Index. The number and the band word travel with the color. */
+/* Neptune Index. The band name leads. The number sits under it. */
 .nb-overview-dot--index {
   width: 80px;
   height: 36px;
@@ -127,14 +127,18 @@ body {
   font-size: 10px;
   border-radius: 8px;
 }
-.nb-index-value {
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
 .nb-index-band {
+  font-size: 13px;
+  font-weight: 750;
+}
+.nb-index-value {
   font-size: 10px;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.nb-overview-dot--number .nb-index-value {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .nb-index-stack {
@@ -166,13 +170,33 @@ body {
   min-width: 0;
 }
 .nb-index-badge-copy strong {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
 }
 .nb-index-badge-copy span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
+}
+.nb-index-plain {
+  display: grid;
+  gap: 4px;
+  color: #173a3c;
+}
+.nb-index-plain strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+.nb-index-plain--hero strong {
+  font-size: clamp(28px, 5vw, 44px);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.nb-index-tier {
+  margin: 14px 0 0;
+  font-size: 14px;
+  font-weight: 750;
 }
 .nb-index-badge--hero {
   max-width: none;
@@ -186,11 +210,12 @@ body {
 }
 .nb-index-badge--hero .nb-index-badge-copy strong {
   font-size: clamp(28px, 5vw, 44px);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 .nb-index-badge--hero .nb-index-badge-copy span {
   font-size: 16px;
+  font-weight: 650;
 }
 
 .nb-index-scale-block {
