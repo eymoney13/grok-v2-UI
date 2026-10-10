@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import posthog from "posthog-js";
 import { ArrowRight, ArrowUpRight, Lock } from "lucide-react";
-import { formatMonthDayYear, RISK_TIERS, riskTier, type BeachData, type Status } from "@/lib/data";
+import { formatMonthDayYear, RISK_TIERS, riskTier, type BeachData, type ForecastDay, type Status } from "@/lib/data";
 import { buildWindowCells } from "@/lib/window";
 import { beachProperties, type LockedFeature } from "@/lib/analytics";
 import {
@@ -48,6 +48,64 @@ function dateLabel(iso: string, weekday = false) {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
     timeZone: "UTC", ...(weekday ? { weekday: "long" as const } : { month: "short" as const, day: "numeric" as const }),
   });
+}
+
+function dayIsExperimental(day: ForecastDay): boolean {
+  return day.experimental !== false;
+}
+
+function ForecastLookAhead({
+  forecasts,
+  picked,
+  onPick,
+  onLocked,
+}: {
+  forecasts: ForecastDay[];
+  picked: ForecastDay | null;
+  onPick: (date: string) => void;
+  onLocked: (feature: LockedFeature, date: string) => void;
+}) {
+  const open = forecasts.filter((day) => !day.locked);
+  const allGoLive = open.length > 0 && open.every((day) => day.experimental === false);
+  const mixed = open.some((day) => day.experimental === false) && open.some((day) => day.experimental !== false);
+  const pickedMethod = picked ? methodWords(picked.method) : null;
+  const pickedConfidence = picked ? confidenceWords(picked.confidence) : null;
+  return (
+    <section className={s.forecastPanel} aria-label={allGoLive ? "3-day forecast" : "Experimental 3-day forecast"}>
+      <div className={s.forecastPanelHead}>
+        {!allGoLive && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
+        {forecasts.some((forecast) => forecast.locked) && <span className={s.proBadge}>NEPTUNE PRO</span>}
+      </div>
+      <div className={s.sectionHeading}><h3>Next 3 days</h3></div>
+      {!allGoLive && <p className={s.forecastExplain}>{FORECAST_EXPERIMENTAL_EXPLANATION}</p>}
+      {forecasts.length > 0 ? <>
+        <p className={s.supporting}>Looking ahead · {dateLabel(forecasts[0].date)}–{dateLabel(forecasts[forecasts.length - 1].date)}</p>
+        <div className={s.futureDays}>{forecasts.map((forecast) => forecast.locked ? (
+          <a href="#sandbox-pro" onClick={() => onLocked("three_day_forecast", forecast.date)} key={forecast.date} className={`${s.futureDay} ${s.futureLocked}`} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental forecast, " : "forecast, "}unlock with Neptune Pro`}>
+            <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
+            <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
+            <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
+          </a>
+        ) : (
+          <button key={forecast.date} type="button" className={`${s.futureDay} ${bandClass(forecast.status)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${bandLabel(forecast.status)}`}>
+            <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
+            <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
+            {mixed && dayIsExperimental(forecast) && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
+            <strong>{statusReading(forecast.status).pill}</strong>
+          </button>
+        ))}</div>
+        {picked && (
+          <div className={s.forecastPick}>
+            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {statusReading(picked.status).title}</p>
+            <p>{statusReading(picked.status).detail}</p>
+            <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
+            {pickedMethod && <p>{pickedMethod}</p>}
+            {pickedConfidence && <p>{pickedConfidence.text}</p>}
+          </div>
+        )}
+      </> : <p className={s.supporting}>The next three days are not available yet.</p>}
+    </section>
+  );
 }
 
 export function OfficialBanner({ reading }: { reading: PublishedReading }) {
@@ -229,37 +287,12 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
       <p className={s.forecastOmitted}>{FORECAST_HIDDEN_STATION_NOTE}</p>
     )}
     {horizon === "label" && (
-      <section className={s.forecastPanel} aria-label="Experimental 3-day forecast">
-        <div className={s.forecastPanelHead}>
-          <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>
-          {forecasts.some((forecast) => forecast.locked) && <span className={s.proBadge}>NEPTUNE PRO</span>}
-        </div>
-        <div className={s.sectionHeading}><h3>Next 3 days</h3></div>
-        <p className={s.forecastExplain}>{FORECAST_EXPERIMENTAL_EXPLANATION}</p>
-        {forecasts.length > 0 ? <>
-          <p className={s.supporting}>Looking ahead · {dateLabel(forecasts[0].date)}–{dateLabel(forecasts[forecasts.length - 1].date)}</p>
-          <div className={s.futureDays}>{forecasts.map((forecast) => forecast.locked ? (
-            <a href="#sandbox-pro" onClick={() => lockedClicked("three_day_forecast", forecast.date)} key={forecast.date} className={`${s.futureDay} ${s.futureLocked}`} aria-label={`${formatMonthDayYear(forecast.date)}: experimental forecast, unlock with Neptune Pro`}>
-              <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
-              <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
-              <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
-            </a>
-          ) : (
-            <button key={forecast.date} type="button" className={`${s.futureDay} ${bandClass(forecast.status)}`} onClick={() => setPickedDate((current) => current === forecast.date ? null : forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: experimental, ${bandLabel(forecast.status)}`}>
-              <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
-              <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
-              <strong>{statusReading(forecast.status).pill}</strong>
-            </button>
-          ))}</div>
-          {picked && (
-            <div className={s.forecastPick}>
-              <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {statusReading(picked.status).title}</p>
-              <p>{statusReading(picked.status).detail}</p>
-              <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
-            </div>
-          )}
-        </> : <p className={s.supporting}>The next three days are not available yet.</p>}
-      </section>
+      <ForecastLookAhead
+        forecasts={forecasts}
+        picked={picked}
+        onPick={(date) => setPickedDate((current) => current === date ? null : date)}
+        onLocked={lockedClicked}
+      />
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}

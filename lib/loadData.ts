@@ -27,16 +27,17 @@ import { loadV2Bundle, readPublishedCsv, readPublishedJson, type V2Bundle } from
 import {
   agencyFromRow,
   hasAgencyColumn,
+  leadMaturityFromWide,
   optionalModelFields,
   regionForCounty,
   staleLimitDays,
   type StationArchive,
 } from "./neptuneContract";
-import { matchDailyRow } from "./stationIdentity.ts";
+import { matchDailyRow, matchLeadRows } from "./stationIdentity.ts";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
 import { mergeNeptuneFields, publishedNeptuneScore, readNeptuneFields } from "./neptuneIndex";
-import { copyReading, mergeReadings } from "./publishedReading.ts";
+import { EMPTY_READING, copyReading, mergeReadings } from "./publishedReading.ts";
 
 interface NowcastRow {
   StationCode: string;
@@ -562,14 +563,25 @@ export async function loadDashboardData(
     const nowRecord = now as unknown as Record<string, unknown>;
     const wideOptional = optionalModelFields(nowRecord);
     const dailyRow = dailyFor(bundle, entry, sharing);
+    const leadHits = leadsFor(bundle, entry, sharing);
+    const lead0 = leadHits.find((row) => row.lead === 0) ?? null;
     const mergedIndex = mergeNeptuneFields(
+      lead0?.index,
       dailyRow?.index,
       archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
       readNeptuneFields(nowRecord)
     );
     const publishedIndex = publishedNeptuneScore(mergedIndex.index, mergedIndex.band);
     const reading = copyReading(
-      mergeReadings(dailyRow?.reading, archivedNow?.reading, wideOptional.reading)
+      mergeReadings(
+        lead0
+          ? { ...EMPTY_READING, method: lead0.reading.method, confidence: lead0.reading.confidence }
+          : null,
+        dailyRow?.reading,
+        lead0?.reading,
+        archivedNow?.reading,
+        wideOptional.reading
+      )
     );
 
     const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
@@ -586,8 +598,11 @@ export async function loadDashboardData(
         const cutoff = dayThreshold(fcRow, i, threshold);
         const dayStatus = classify(p, cutoff);
         if (!dayStatus) continue;
+        const leadRow = leadHits.find((row) => row.lead === i) ?? null;
+        const maturity = leadMaturityFromWide(fcRow as unknown as Record<string, unknown>, i) ?? leadRow?.maturity ?? null;
         // Forecast days carry top contributing factors (why the model predicts
         // this), but no lab sample — there is no future water-quality test.
+        // The Experimental label stays unless this lead is marked go_live.
         forecast.push({
           date: String(date),
           probability: p,
@@ -598,6 +613,9 @@ export async function loadDashboardData(
           factors: buildFactors(dayFactors(fcRow, i)),
           drivers: buildDrivers(dayFactors(fcRow, i), dayDirections(fcRow, i)),
           conditions: buildConditions(fcRow, `day${i}_`),
+          experimental: maturity !== "go_live",
+          method: leadRow?.reading.method ?? null,
+          confidence: leadRow?.reading.confidence ?? null,
         });
       }
     }
@@ -620,6 +638,7 @@ export async function loadDashboardData(
             status: dayStatus,
             threshold: cutoff,
             verdict: resolveVerdict(row.call, row.probability, cutoff),
+            experimental: true,
           });
         }
       }
@@ -784,6 +803,7 @@ function unmodeledItem(
   sharing: number
 ): BeachListItem {
   const dailyRow = dailyFor(bundle, entry, sharing);
+  const lead0 = leadsFor(bundle, entry, sharing).find((row) => row.lead === 0) ?? null;
   return {
     id: entry.id,
     stationKey: entry.stationKey,
@@ -805,16 +825,27 @@ function unmodeledItem(
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
-    ...unmodeledIndex(dailyRow?.index, archive),
-    ...copyReading(mergeReadings(dailyRow?.reading, archive?.nowcast?.reading)),
+    ...unmodeledIndex(lead0?.index, dailyRow?.index, archive),
+    ...copyReading(
+      mergeReadings(
+        lead0
+          ? { ...EMPTY_READING, method: lead0.reading.method, confidence: lead0.reading.confidence }
+          : null,
+        dailyRow?.reading,
+        lead0?.reading,
+        archive?.nowcast?.reading
+      )
+    ),
   };
 }
 
 function unmodeledIndex(
+  leadIndex: { index: number | null; band: string | null } | null | undefined,
   dailyIndex: { index: number | null; band: string | null } | null | undefined,
   archive: StationArchive | null
 ): { neptuneIndex: number | null; neptuneBand: string | null } {
   const merged = mergeNeptuneFields(
+    leadIndex,
     dailyIndex,
     archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
   );
@@ -858,6 +889,22 @@ function archiveFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number
   }
   if (sharing > 1) return null;
   return bundle.archive.get(entry.code) ?? null;
+}
+
+function leadsFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) {
+  if (!bundle) return [];
+  return matchLeadRows(
+    bundle.dailyLeads.rows,
+    {
+      code: entry.code,
+      name: entry.name,
+      county: entry.county,
+      agency: entry.agency,
+      stationKey: entry.stationKey,
+    },
+    bundle.dailyLeads.agencyColumn,
+    sharing
+  );
 }
 
 function dailyFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) {

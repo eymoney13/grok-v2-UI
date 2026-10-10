@@ -68,6 +68,23 @@ export function parseMethod(raw: unknown): EstimateMethod | null {
   return null;
 }
 
+/**
+ * Whether a forecast lead is ready to drop the Experimental label.
+ * `go_live` is the only value that does. `experimental` keeps the label.
+ * high, medium, and low are confidence levels, not this flag.
+ */
+export type LeadMaturity = "go_live" | "experimental";
+
+export function parseLeadMaturity(raw: unknown): LeadMaturity | null {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "number") return null;
+  if (typeof raw === "boolean") return raw ? "go_live" : "experimental";
+  const text = String(raw).trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (text === "go live" || text === "golive") return "go_live";
+  if (text === "experimental" || text === "experiment") return "experimental";
+  return null;
+}
+
 /** high, medium, or low. A number or any other word is not a confidence level. */
 export function parseConfidenceLevel(raw: unknown): ConfidenceLevel | null {
   if (raw == null || raw === "") return null;

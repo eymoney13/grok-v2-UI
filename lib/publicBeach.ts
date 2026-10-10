@@ -6,6 +6,8 @@ import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./published
 export interface OutlookDay {
   date: string;
   status: Status;
+  /** False only when this lead was marked go_live. Missing means still experimental. */
+  experimental?: boolean;
 }
 
 /**

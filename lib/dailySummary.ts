@@ -95,7 +95,7 @@ const TIER_ES =
  * A hidden horizon contributes no days, so the page cannot describe a direction.
  */
 export function publishedOutlook(
-  days: { date: string; status: Status; locked?: boolean }[],
+  days: { date: string; status: Status; locked?: boolean; experimental?: boolean }[],
   predictionDate: string,
   horizon: ForecastHorizon
 ): OutlookDay[] {
@@ -104,7 +104,11 @@ export function publishedOutlook(
     .filter((day) => !day.locked && day.date > predictionDate && day.status)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3)
-    .map((day) => ({ date: day.date, status: day.status }));
+    .map((day) => ({
+      date: day.date,
+      status: day.status,
+      experimental: day.experimental !== false,
+    }));
 }
 
 /** One beach. A coast-wide count does not belong in this sentence. */
@@ -116,7 +120,7 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
       ? limitedSentence(facts.staleAfterDays, facts.county, lang)
       : null,
     tierNote: facts.tier === "limited_data" ? (lang === "es" ? TIER_ES : TIER_LIMITED_NOTE) : null,
-    outlookLabel: "Experimental",
+    outlookLabel: outlookLabel(facts, lang),
     outlook: outlookSentence(facts, lang),
     rain: rainSentence(facts, lang),
     rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
@@ -204,6 +208,15 @@ function limitedSentence(staleAfterDays: number | null, county: string | null, l
   return "Datos de laboratorio limitados. Muchas playas se analizan solo de vez en cuando, así que este estimado se apoya en el clima y las mareas hasta la próxima prueba de agua.";
 }
 
+function everyLeadGoLive(facts: SummaryFacts): boolean {
+  return facts.horizon === "label" && facts.outlook.length > 0 && facts.outlook.every((day) => day.experimental === false);
+}
+
+function outlookLabel(facts: SummaryFacts, lang: Lang): string {
+  if (everyLeadGoLive(facts)) return lang === "es" ? "Pronóstico" : "Outlook";
+  return "Experimental";
+}
+
 function outlookSentence(facts: SummaryFacts, lang: Lang): string {
   if (facts.horizon !== "label") return lang === "es" ? HIDDEN_ES : FORECAST_HIDDEN_STATION_NOTE;
   if (facts.outlook.length === 0) return lang === "es" ? NO_OUTLOOK_ES : NO_OUTLOOK_EN;
@@ -213,6 +226,7 @@ function outlookSentence(facts: SummaryFacts, lang: Lang): string {
     return lang === "es" ? `${name} está ${phrase}` : `${name} is ${phrase}`;
   });
   const list = joinList(parts, lang);
+  if (everyLeadGoLive(facts)) return `${list}.`;
   return lang === "es" ? `${list}. ${EXPERIMENTAL_ES}` : `${list}. ${FORECAST_EXPERIMENTAL_EXPLANATION}`;
 }
 

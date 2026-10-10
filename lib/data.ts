@@ -670,6 +670,15 @@ export interface ForecastDay {
   drivers?: Driver[];
   conditions?: Conditions;
   /**
+   * Look-ahead days stay experimental unless the file marks that lead go_live.
+   * Absent means the file did not mark it, which keeps the Experimental label.
+   */
+  experimental?: boolean;
+  /** Method for this lead, when outputs/daily_status.csv published one. */
+  method?: EstimateMethod | null;
+  /** high, medium, or low for this lead. Not the go_live flag. */
+  confidence?: ConfidenceLevel | null;
+  /**
    * This day exists but its values were withheld from the payload for an
    * unentitled reader (see lib/paywall.ts). Distinct from a day that is simply
    * absent: a beach the backend never published a Thursday for must not be

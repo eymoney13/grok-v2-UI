@@ -34,7 +34,7 @@ node scripts/build-v2-sample.mjs
 ## What the board shows
 
 - Under / Near / Over the limit, from the same cutoffs as the legend. A published Neptune Index (0–500, six bands) replaces that reading on the map, the list, and the beach page. The scale is at `/california/neptune-index`. Bands live in `config/neptune-index.ts`. Absent index fields keep Under / Near / Over, and the board does not invent a score.
-- Day 1–3 forecasts in an Experimental panel (`FORECAST_HORIZON_MODE` and `FORECAST_HIDDEN_STATIONS` in `lib/forecastDisplay.ts`).
+- Day 1–3 forecasts in an Experimental panel (`FORECAST_HORIZON_MODE` and `FORECAST_HIDDEN_STATIONS` in `lib/forecastDisplay.ts`). A day drops that label only when the file marks that lead `go_live` (`dayN_confidence` on `forecast_3day.csv`, or the same mark on optional `outputs/daily_status.csv`). Every other look-ahead day stays Experimental. The station list is not hardcoded. `outputs/daily/current.csv` remains the daily file until that new status file is the one published.
 - Search, plus county, region, status, and roster filters. Region appears when the regions file names any.
 - A clustered map, and a beach page at `/california/beach/<slug>` with today’s status, the last test, lab results against the limit, and the experimental forecast. The slug is the same one used on the public beach page.
 - A phone-first home at `/` that lists the nearest beaches after the browser shares a location, and a search when it does not. The map on that screen loads only after “Show these on a map.”

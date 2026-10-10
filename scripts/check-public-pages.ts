@@ -58,7 +58,7 @@ const named = publishedOutlook(
   "2026-10-09",
   "label"
 );
-assert.deepEqual(named, [{ date: "2026-10-10", status: "Not recommended" }]);
+assert.deepEqual(named, [{ date: "2026-10-10", status: "Not recommended", experimental: true }]);
 const namedSummary = dailySummary({ ...base, outlook: named }, "en");
 assert.match(namedSummary.outlook, /Saturday is over the limit/);
 assert.match(namedSummary.outlook, /still being tested/);
@@ -280,5 +280,30 @@ const overText = Object.values(overSummary).filter((value) => typeof value === "
 assert.match(overText, /over the/);
 assert.doesNotMatch(overText, /\d+ beaches/i);
 assert.doesNotMatch(overText, /unsafe today/i);
+
+const goLiveDays = [
+  { date: "2026-10-10", status: "Not recommended" as const, experimental: false },
+  { date: "2026-10-11", status: "Normal" as const, experimental: false },
+];
+const goLiveSummary = dailySummary({ ...base, outlook: goLiveDays }, "en");
+assert.equal(goLiveSummary.outlookLabel, "Outlook");
+assert.match(goLiveSummary.outlook, /Saturday is over the limit/);
+assert.doesNotMatch(goLiveSummary.outlook, /still being tested/);
+const mixedSummary = dailySummary(
+  {
+    ...base,
+    outlook: [
+      { date: "2026-10-10", status: "Not recommended", experimental: false },
+      { date: "2026-10-11", status: "Normal", experimental: true },
+    ],
+  },
+  "en"
+);
+assert.equal(mixedSummary.outlookLabel, "Experimental");
+assert.match(mixedSummary.outlook, /still being tested/);
+assert.equal(
+  dailySummary({ ...base, outlook: [{ date: "2026-10-10", status: "Normal" }] }, "en").outlookLabel,
+  "Experimental"
+);
 
 console.log("public page checks passed");

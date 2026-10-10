@@ -1,14 +1,17 @@
 /**
  * How the 1–3 day forecast is shown.
  *
- * The same-day nowcast is the validated model. The look-ahead days have not
- * shown real skill live, so they are labeled experimental unless this switch
- * is set to "hide", which removes them. Labeling is the default. Hiding does
- * not change today's reading.
+ * The same-day nowcast is the validated model. The look-ahead days stay
+ * labeled experimental unless the file marks that lead `go_live`
+ * (`dayN_confidence` on forecast_3day.csv, or the same mark on
+ * outputs/daily_status.csv). A station list is not hardcoded here.
+ *
+ * This switch set to "hide" removes the look-ahead entirely. Labeling is the
+ * default. Hiding does not change today's reading.
  *
  * `FORECAST_HIDDEN_STATIONS` drops the look-ahead for named station codes
  * even while the switch is "label". Leave it empty; the product owner decides
- * which beaches, if any.
+ * which beaches, if any. It is not the go-live list.
  */
 export type ForecastHorizonMode = "label" | "hide";
 

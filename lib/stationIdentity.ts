@@ -1,4 +1,4 @@
-import type { DailyJoinedRow } from "./neptuneContract.ts";
+import type { DailyJoinedRow, LeadStatusRow } from "./neptuneContract.ts";
 
 export interface StationMatch {
   code: string;
@@ -46,4 +46,20 @@ export function matchDailyRow(
   }
   if (stationsSharingCode > 1) return null;
   return same.at(-1) ?? null;
+}
+
+/** The lead rows for this beach. Last row wins inside one lead. */
+export function matchLeadRows(
+  rows: LeadStatusRow[],
+  station: StationMatch,
+  agencyColumn: boolean,
+  stationsSharingCode: number
+): LeadStatusRow[] {
+  const found: LeadStatusRow[] = [];
+  for (const lead of [0, 1, 2, 3]) {
+    const subset = rows.filter((row) => row.lead === lead);
+    const hit = matchDailyRow(subset, station, agencyColumn, stationsSharingCode);
+    if (hit) found.push(hit as LeadStatusRow);
+  }
+  return found;
 }

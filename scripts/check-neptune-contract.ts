@@ -11,17 +11,23 @@ import {
   staleLimitDays,
   latestDatedStatusName,
   optionalModelFields,
+  hasLeadColumn,
+  leadMaturityFromWide,
+  leadZeroSourceRows,
   parseDailyStatus,
   parseDailyStatusRows,
+  parseLeadStatusRows,
+  selectDailySource,
   textFlag,
 } from "../lib/neptuneContract.ts";
-import { matchDailyRow } from "../lib/stationIdentity.ts";
+import { matchDailyRow, matchLeadRows } from "../lib/stationIdentity.ts";
 import {
   confidenceWords,
   mergeReadings,
   methodWords,
   officialPosting,
   openPostingWords,
+  parseLeadMaturity,
   parseMethod,
   parsePostingStatus,
   parsePublishedReading,
@@ -406,5 +412,74 @@ for (const band of NEPTUNE_INDEX.bands) {
   assert.ok(contrast(band.color, band.textColor) >= 4.5, `${band.id} badge contrast`);
   assert.ok(contrast(band.surface, band.surfaceText) >= 4.5, `${band.id} card contrast`);
 }
+
+assert.equal(parseLeadMaturity("go_live"), "go_live");
+assert.equal(parseLeadMaturity("Go-Live"), "go_live");
+assert.equal(parseLeadMaturity("experimental"), "experimental");
+assert.equal(parseLeadMaturity("high"), null);
+assert.equal(parseLeadMaturity(0.8), null);
+assert.equal(parseLeadMaturity(true), "go_live");
+assert.equal(parseMethod("pooled_model"), "pooled_model");
+assert.equal(selectDailySource({ hasCurrent: true, statusPresent: true, statusIsLead: true }), "current");
+assert.equal(selectDailySource({ hasCurrent: false, statusPresent: true, statusIsLead: true }), "leads");
+assert.equal(selectDailySource({ hasCurrent: false, statusPresent: true, statusIsLead: false }), "legacy-status");
+assert.equal(selectDailySource({ hasCurrent: false, statusPresent: false, statusIsLead: false }), "history");
+assert.equal(hasLeadColumn([{ station_code: "0", lead_days: "" }]), true);
+assert.equal(hasLeadColumn([{ station_code: "0", method: "model" }]), false);
+
+const leadRows = [
+  { station_code: "0", agency: "Orange County", lead_days: 0, method: "pooled_model", confidence: "low", posting_status: "warning" },
+  { station_code: "0", agency: "San Diego County", lead_days: 0, method: "rules", confidence: "high" },
+  { station_code: "0", agency: "Orange County", lead_days: 1, method: "model", confidence: "medium", go_live: "go_live" },
+  { station_code: "0", agency: "Orange County", lead_days: 2, method: "model", confidence: "high", day_confidence: "experimental" },
+  { station_code: "0", agency: "Orange County", lead_days: 1, method: "rules", confidence: "low", go_live: "experimental" },
+  { station_code: "DHS114", lead: 4, method: "model" },
+];
+assert.equal(hasLeadColumn(leadRows), true);
+const leads = parseLeadStatusRows(leadRows);
+assert.equal(leads.agencyColumn, true);
+assert.equal(leads.rows.length, 5);
+const orange = matchLeadRows(
+  leads.rows,
+  { code: "0", name: "Huntington", county: "Orange", agency: "Orange County", stationKey: null },
+  true,
+  2
+);
+assert.equal(orange.find((row) => row.lead === 0)?.reading.method, "pooled_model");
+assert.equal(orange.find((row) => row.lead === 0)?.reading.confidence, "low");
+assert.equal(orange.find((row) => row.lead === 0)?.reading.postingStatus, "warning");
+assert.equal(orange.find((row) => row.lead === 1)?.reading.method, "rules");
+assert.equal(orange.find((row) => row.lead === 1)?.maturity, "experimental");
+assert.equal(orange.find((row) => row.lead === 2)?.maturity, "experimental");
+assert.equal(orange.find((row) => row.lead === 3), undefined);
+const sanDiego = matchLeadRows(
+  leads.rows,
+  { code: "0", name: "Silver Strand", county: "San Diego", agency: "San Diego County", stationKey: null },
+  true,
+  2
+);
+assert.equal(sanDiego.find((row) => row.lead === 0)?.reading.method, "rules");
+assert.equal(sanDiego.find((row) => row.lead === 1), undefined);
+assert.deepEqual(leadZeroSourceRows(leadRows).map((row) => row.agency), ["Orange County", "San Diego County"]);
+assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 1), "go_live");
+assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 2), "experimental");
+assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 3), null);
+assert.equal(leadMaturityFromWide({}, 1), null);
+
+const preferred = mergeReadings(
+  { method: "pooled_model", confidence: "low", postingStatus: null, postingSource: null, finalStatus: null, postingDate: null, rainAdvisory: null },
+  parsePublishedReading({ method: "model", confidence: "high", posting_status: "warning", posting_source: "OC" })
+);
+assert.equal(preferred.method, "pooled_model");
+assert.equal(preferred.confidence, "low");
+assert.equal(preferred.postingStatus, "warning");
+assert.equal(preferred.postingSource, "OC");
+const fallbackReading = mergeReadings(
+  { method: null, confidence: null, postingStatus: null, postingSource: null, finalStatus: null, postingDate: null, rainAdvisory: null },
+  parsePublishedReading({ method: "rules", confidence: "medium", posting_status: "open" })
+);
+assert.equal(fallbackReading.method, "rules");
+assert.equal(fallbackReading.confidence, "medium");
+assert.equal(fallbackReading.postingStatus, "open");
 
 console.log("neptune contract checks passed");

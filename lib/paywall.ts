@@ -42,6 +42,7 @@ function lockDay(day: ForecastDay): ForecastDay {
     // are reading these two fields on a locked day, that is the bug.
     status: "Normal",
     probability: 0,
+    experimental: day.experimental,
   };
 }
 

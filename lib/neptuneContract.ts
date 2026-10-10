@@ -6,7 +6,14 @@
  */
 
 import { readNeptuneFields } from "./neptuneIndex.ts";
-import { EMPTY_READING, parsePublishedReading, withPostingFileDate, type PublishedReading } from "./publishedReading.ts";
+import {
+  EMPTY_READING,
+  parseLeadMaturity,
+  parsePublishedReading,
+  withPostingFileDate,
+  type LeadMaturity,
+  type PublishedReading,
+} from "./publishedReading.ts";
 
 export type RosterTier = "model_pool" | "limited_data";
 
@@ -579,6 +586,157 @@ export function parseDailyStatus(data: unknown): DailyStatusFile {
     return { ...readingsFromRows([data], generatedAt), generatedAt };
   }
   return emptyDailyStatus(generatedAt);
+}
+
+/**
+ * Which daily file to trust. `outputs/daily/current.csv` stays the fallback
+ * until the pipeline publishes `outputs/daily_status.csv` in its place.
+ * A lead column on that status file is the new multi-lead table. Without one,
+ * the same path is the older one-row daily file.
+ */
+export type DailySourceMode = "current" | "leads" | "legacy-status" | "history";
+
+export function selectDailySource(input: {
+  hasCurrent: boolean;
+  statusPresent: boolean;
+  statusIsLead: boolean;
+}): DailySourceMode {
+  if (input.hasCurrent) return "current";
+  if (input.statusPresent && input.statusIsLead) return "leads";
+  if (input.statusPresent) return "legacy-status";
+  return "history";
+}
+
+const LEAD_HEADERS = new Set(["lead_days", "leaddays", "lead_time", "leadtime", "lead"]);
+const LONG_MATURITY_HEADERS = new Set([
+  "go_live",
+  "golive",
+  "lead_confidence",
+  "leadconfidence",
+  "forecast_confidence",
+  "forecastconfidence",
+  "day_confidence",
+  "dayconfidence",
+  "maturity",
+  "release_status",
+  "releasestatus",
+]);
+
+/** One station at one lead. Method and the high/medium/low level live on `reading`. */
+export interface LeadStatusRow extends DailyJoinedRow {
+  lead: number;
+  /** Null when the file did not mark this lead go_live or experimental. */
+  maturity: LeadMaturity | null;
+}
+
+export interface LeadStatusFile {
+  rows: LeadStatusRow[];
+  agencyColumn: boolean;
+}
+
+export function emptyLeadStatus(): LeadStatusFile {
+  return { rows: [], agencyColumn: false };
+}
+
+function foldedHeader(key: string): string {
+  return key.toLowerCase().replace(/-/g, "_");
+}
+
+/** True when a row carries a lead header, even if that cell is blank. */
+export function hasLeadColumn(rows: Record<string, unknown>[]): boolean {
+  return rows.some((row) => Object.keys(row).some((key) => LEAD_HEADERS.has(foldedHeader(key).replace(/_/g, "")) || LEAD_HEADERS.has(foldedHeader(key))));
+}
+
+function leadNumber(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  const value = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isInteger(value) || value < 0 || value > 3) return null;
+  return value;
+}
+
+export function leadNumberFromRow(row: Record<string, unknown>): number | null {
+  for (const [key, value] of Object.entries(row)) {
+    const folded = foldedHeader(key);
+    if (!LEAD_HEADERS.has(folded) && !LEAD_HEADERS.has(folded.replace(/_/g, ""))) continue;
+    return leadNumber(value);
+  }
+  return null;
+}
+
+function maturityFromLongRow(row: Record<string, unknown>): LeadMaturity | null {
+  for (const [key, value] of Object.entries(row)) {
+    const folded = foldedHeader(key).replace(/_/g, "");
+    if (!LONG_MATURITY_HEADERS.has(foldedHeader(key)) && !LONG_MATURITY_HEADERS.has(folded)) continue;
+    const parsed = parseLeadMaturity(value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+/**
+ * `dayN_confidence` on a wide forecast row, or the same mark under another name.
+ * high, medium, and low in that cell are not a go-live mark.
+ */
+export function leadMaturityFromWide(row: Record<string, unknown>, lead: number): LeadMaturity | null {
+  const names = new Set([
+    `day${lead}_confidence`,
+    `day${lead}_go_live`,
+    `day${lead}_maturity`,
+    `day${lead}confidence`,
+    `day${lead}golive`,
+    `day${lead}maturity`,
+  ]);
+  for (const [key, value] of Object.entries(row)) {
+    const folded = foldedHeader(key).replace(/_/g, "");
+    if (!names.has(foldedHeader(key)) && !names.has(folded)) continue;
+    const parsed = parseLeadMaturity(value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+export function dailyRowsFromPayload(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data.filter(isObj);
+  if (!isObj(data)) return [];
+  for (const key of DAILY_LIST_KEYS) {
+    const value = data[key];
+    if (Array.isArray(value)) return value.filter(isObj);
+  }
+  if (stationCode(first(data, DAILY_STATION_KEYS))) return [data];
+  return [];
+}
+
+/** Long daily_status table: one row per station per lead 0–3. Last row wins later, at match time. */
+export function parseLeadStatusRows(rows: Record<string, unknown>[]): LeadStatusFile {
+  const agencyColumn = hasAgencyColumn(rows);
+  const kept: LeadStatusRow[] = [];
+  for (const row of rows) {
+    const code = stationCode(first(row, DAILY_STATION_KEYS));
+    const lead = leadNumberFromRow(row);
+    if (!code || lead == null) continue;
+    const reading = parsePublishedReading(row);
+    kept.push({
+      code,
+      agency: agencyColumn ? agencyFromRow(row) : null,
+      name: textOrNull(first(row, DAILY_NAME_KEYS)),
+      county: normalizeCounty(first(row, DAILY_COUNTY_KEYS)),
+      stationKey: stationKeyFromRow(row),
+      reading,
+      index: readNeptuneFields(row),
+      lead,
+      maturity: maturityFromLongRow(row),
+    });
+  }
+  return { rows: kept, agencyColumn };
+}
+
+export function parseLeadStatus(data: unknown): LeadStatusFile {
+  return parseLeadStatusRows(dailyRowsFromPayload(data));
+}
+
+/** Lead 0 rows from a multi-lead file, in file order, for the current-file parser. */
+export function leadZeroSourceRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.filter((row) => leadNumberFromRow(row) === 0);
 }
 
 export function parseDailyStatusRows(rows: Record<string, unknown>[]): DailyStatusFile {

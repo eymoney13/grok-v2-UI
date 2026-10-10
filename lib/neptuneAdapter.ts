@@ -4,16 +4,23 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import Papa from "papaparse";
 import {
+  dailyRowsFromPayload,
   emptyDailyStatus,
+  emptyLeadStatus,
   groupArchive,
   hasAgencyColumn,
+  hasLeadColumn,
   jsonHasAgencyColumn,
   latestDatedStatusName,
+  leadZeroSourceRows,
   parseArchiveRow,
   parseDailyStatus,
   parseDailyStatusRows,
+  parseLeadStatusRows,
+  selectDailySource,
   type DailyJoinedRow,
   type DailyStatusFile,
+  type LeadStatusFile,
   parseManifest,
   parseRegions,
   parseRosterJson,
@@ -70,6 +77,11 @@ export interface V2Bundle {
   dailyAgencyColumn: boolean;
   /** Clock from that daily file. Used after the manifest and before the nowcast column. */
   dailyGeneratedAt: string | null;
+  /**
+   * Optional `outputs/daily_status.csv` when it has a lead column.
+   * Empty when that file is absent. It does not replace `outputs/daily/current.csv`.
+   */
+  dailyLeads: LeadStatusFile;
 }
 
 const EMPTY_BUNDLE: V2Bundle = {
@@ -92,6 +104,7 @@ const EMPTY_BUNDLE: V2Bundle = {
   dailyRows: [],
   dailyAgencyColumn: false,
   dailyGeneratedAt: null,
+  dailyLeads: emptyLeadStatus(),
 };
 
 function v2Roots(): string[] {
@@ -269,11 +282,12 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     history,
     accuracy,
     thresholds,
-    daily: daily.readings,
-    dailyIndex: daily.indexes,
-    dailyRows: daily.rows,
-    dailyAgencyColumn: daily.agencyColumn,
-    dailyGeneratedAt: daily.generatedAt,
+    daily: daily.file.readings,
+    dailyIndex: daily.file.indexes,
+    dailyRows: daily.file.rows,
+    dailyAgencyColumn: daily.file.agencyColumn,
+    dailyGeneratedAt: daily.file.generatedAt,
+    dailyLeads: daily.leads,
   };
 }
 
@@ -281,18 +295,53 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
  * `outputs/daily/current.csv` is the live statewide file. History is used only
  * when no current file exists. A current file that parses to no stations still
  * wins, so an empty publish does not resurrect yesterday's history.
+ *
+ * `outputs/daily_status.csv` is the optional multi-lead table (leads 0–3).
+ * When that file has a lead column it is read beside the current file, and it
+ * becomes the daily file only when the current file is absent. A status file
+ * with no lead column stays the older one-row fallback.
  */
-async function loadDailyStatus(root: string): Promise<DailyStatusFile> {
-  const current = await firstExisting([
+async function loadDailyStatus(root: string): Promise<{ file: DailyStatusFile; leads: LeadStatusFile }> {
+  const currentPath = await firstExisting([
     path.join(root, "outputs", "daily", "current.csv"),
     path.join(root, "outputs", "daily", "current.json"),
-    ...wideCandidates(root, "daily_status.csv"),
-    ...wideCandidates(root, "daily_status.json"),
   ]);
-  if (current) return readDailyFile(current);
+  const statusPath = await firstExisting([
+    path.join(root, "outputs", "daily_status.csv"),
+    path.join(root, "outputs", "daily_status.json"),
+    ...wideCandidates(root, "daily_status.csv").slice(1),
+    ...wideCandidates(root, "daily_status.json").slice(1),
+  ]);
+  const statusRows = statusPath ? await readTable(statusPath) : null;
+  const statusIsLead = statusRows ? hasLeadColumn(statusRows) : false;
+  const mode = selectDailySource({
+    hasCurrent: currentPath != null,
+    statusPresent: statusRows != null,
+    statusIsLead,
+  });
+  const leads = statusRows && statusIsLead ? parseLeadStatusRows(statusRows) : emptyLeadStatus();
+
+  if (mode === "current" && currentPath) {
+    return { file: await readDailyFile(currentPath), leads };
+  }
+  if (mode === "leads" && statusRows) {
+    return { file: parseDailyStatusRows(leadZeroSourceRows(statusRows)), leads };
+  }
+  if (mode === "legacy-status" && statusPath) {
+    return { file: await readDailyFile(statusPath), leads: emptyLeadStatus() };
+  }
   const history = await latestDailyHistory(root);
-  if (!history) return emptyDailyStatus();
-  return readDailyFile(history);
+  if (!history) return { file: emptyDailyStatus(), leads };
+  return { file: await readDailyFile(history), leads };
+}
+
+async function readTable(filePath: string): Promise<Record<string, unknown>[]> {
+  if (filePath.endsWith(".json")) {
+    const text = await readText(filePath);
+    if (text == null) return [];
+    return dailyRowsFromPayload(JSON.parse(text) as unknown);
+  }
+  return readCsvFile(filePath);
 }
 
 async function readDailyFile(filePath: string): Promise<DailyStatusFile> {
