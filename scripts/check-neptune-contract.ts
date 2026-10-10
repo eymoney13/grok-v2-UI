@@ -10,6 +10,7 @@ import {
   regionForCounty,
   staleLimitDays,
   latestDatedStatusName,
+  locationUnknownFromRow,
   optionalModelFields,
   dayReleasesFromRow,
   forecastRelease,
@@ -653,5 +654,24 @@ const fallbackReading = mergeReadings(
 assert.equal(fallbackReading.method, "rules");
 assert.equal(fallbackReading.confidence, "medium");
 assert.equal(fallbackReading.postingStatus, "open");
+
+assert.equal(locationUnknownFromRow({ location_status: "Unknown" }), true);
+assert.equal(locationUnknownFromRow({ locationStatus: "unknown" }), true);
+assert.equal(locationUnknownFromRow({ bad_location: true }), true);
+assert.equal(locationUnknownFromRow({ location_unknown: "yes" }), true);
+assert.equal(locationUnknownFromRow({ location_status: "ok" }), false);
+assert.equal(locationUnknownFromRow({ bad_location: false }), false);
+assert.equal(locationUnknownFromRow({ final_status: "Unknown", call: "Unknown", prediction: "Unknown", posting_status: "unknown" }), false);
+assert.equal(locationUnknownFromRow({}), false);
+const baja = parseRosterJson([{ station_code: "BC-010", name: "Baja", lat: 31.86, lon: -116.62 }])[0];
+assert.equal(baja?.lat, 31.86);
+assert.equal(baja?.lon, -116.62);
+assert.equal(baja?.locationUnknown, false);
+const flagged = parseRosterJson([{ station_code: "BC-020", name: "Flagged", lat: 32.4, lon: -117.1, location_status: "Unknown" }])[0];
+assert.equal(flagged?.lat, 32.4);
+assert.equal(flagged?.locationUnknown, true);
+const word = parseRosterJson([{ station_code: "X", name: "Word", lat: "Unknown", lon: "Unknown" }])[0];
+assert.equal(word?.lat, null);
+assert.equal(word?.locationUnknown, true);
 
 console.log("neptune contract checks passed");

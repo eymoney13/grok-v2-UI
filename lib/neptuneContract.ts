@@ -5,6 +5,9 @@
  * Nothing in this module reads the filesystem or invents a measurement.
  */
 
+import { coordinateWordUnknown, locationMarkedUnknown } from "./westCoastBox.mjs";
+
+export { coordinateWordUnknown };
 import { readNeptuneFields } from "./neptuneIndex.ts";
 import {
   EMPTY_READING,
@@ -30,6 +33,11 @@ export interface RosterStation {
   lastSampleDate: string | null;
   samplingFrequency: string | null;
   tier: RosterTier | null;
+  /**
+   * The file marked this position unknown. The numbers may still be present.
+   * A water-quality Unknown call is not this flag.
+   */
+  locationUnknown: boolean;
 }
 
 export interface ArchiveRow {
@@ -234,21 +242,28 @@ export function optionalModelFields(row: Record<string, unknown> | null | undefi
   };
 }
 
+export function locationUnknownFromRow(row: Record<string, unknown> | null | undefined): boolean {
+  return locationMarkedUnknown(row);
+}
+
 export function parseRosterRecord(row: Record<string, unknown>): RosterStation | null {
   const code = stationCode(first(row, ["station_code", "stationCode", "StationCode", "code", "primary_station"]));
   if (!code) return null;
   const name = textOrNull(first(row, ["name", "station_name", "StationName", "beach_name", "beach"])) ?? code;
+  const latRaw = first(row, ["lat", "latitude", "Latitude"]);
+  const lonRaw = first(row, ["lon", "lng", "longitude", "Longitude"]);
   return {
     stationCode: code,
     name,
-    lat: asNumber(first(row, ["lat", "latitude", "Latitude"])),
-    lon: asNumber(first(row, ["lon", "lng", "longitude", "Longitude"])),
+    lat: asNumber(latRaw),
+    lon: asNumber(lonRaw),
     county: normalizeCounty(first(row, ["county", "County"])),
     agency: agencyFromRow(row),
     stationKey: stationKeyFromRow(row),
     lastSampleDate: asDateString(first(row, ["last_sample_date", "lastSampleDate"])),
     samplingFrequency: textOrNull(first(row, ["sampling_frequency", "samplingFrequency"])),
     tier: asTier(first(row, ["tier", "Tier"])),
+    locationUnknown: locationUnknownFromRow(row) || coordinateWordUnknown(latRaw) || coordinateWordUnknown(lonRaw),
   };
 }
 
@@ -484,6 +499,8 @@ export interface DailyJoinedRow {
    * Day 0 is stored and does not label today's reading Experimental.
    */
   releases: DayReleases;
+  /** This row's location status or flag says the position is unknown. */
+  locationUnknown: boolean;
 }
 
 export interface DailyStatusFile {
@@ -546,6 +563,7 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
       reading: withPostingFileDate(parsePublishedReading(row), generatedAt),
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
+      locationUnknown: locationUnknownFromRow(row),
     };
     const key = dailyIdentityKey(joined, agencyColumn);
     if (!byIdentity.has(key)) order.push(key);
@@ -741,6 +759,7 @@ export function parseLeadStatusRows(rows: Record<string, unknown>[]): LeadStatus
       reading,
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
+      locationUnknown: locationUnknownFromRow(row),
       lead,
       maturity: leadRelease(row, lead),
     });

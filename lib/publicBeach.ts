@@ -27,6 +27,8 @@ export interface PublicBeach {
   county: string | null;
   latitude: number;
   longitude: number;
+  /** Position marked unknown. Not the rules-path Unknown call. */
+  locationUnknown?: boolean;
   hasEstimate: boolean;
   status: Status | null;
   neptuneIndex: number | null;
@@ -62,6 +64,7 @@ export type GlanceBeach = Pick<
   | "county"
   | "latitude"
   | "longitude"
+  | "locationUnknown"
   | "hasEstimate"
   | "status"
   | "neptuneIndex"
@@ -89,6 +92,7 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     county: beach.county,
     latitude: beach.latitude,
     longitude: beach.longitude,
+    locationUnknown: beach.locationUnknown,
     hasEstimate: beach.hasEstimate,
     status: beach.status,
     neptuneIndex: beach.neptuneIndex,

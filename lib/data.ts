@@ -709,6 +709,12 @@ export interface BeachData {
   proseName: string;
   latitude: number;
   longitude: number;
+  /**
+   * A location status or flag said this position is unknown.
+   * The beach stays in the list. It is left off the map and out of near-me sorting.
+   * This is not the rules-path Unknown call.
+   */
+  locationUnknown?: boolean;
   predictionDate: string;
   probability: number;
   mpnLabel?: string;
@@ -829,6 +835,8 @@ export interface BeachListItem {
   proseName: string;
   latitude: number;
   longitude: number;
+  /** Location file marked the position unknown. Not a water-quality call. */
+  locationUnknown?: boolean;
   county: string | null;
   region: string | null;
   tier: RosterTier | null;
@@ -865,6 +873,7 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     proseName: beach.proseName,
     latitude: beach.latitude,
     longitude: beach.longitude,
+    locationUnknown: beach.locationUnknown,
     county: beach.county,
     region: beach.region,
     tier: beach.tier,

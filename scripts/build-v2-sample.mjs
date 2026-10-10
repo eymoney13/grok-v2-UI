@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Papa from "papaparse";
-import { isInCaliforniaBox, outsideCaliforniaLine } from "../lib/californiaBox.mjs";
+import { coordinateWordUnknown, isInWestCoastBox, locationMarkedUnknown, outsideWestCoastLine } from "../lib/westCoastBox.mjs";
 
 const root = process.cwd();
 const source = path.join(root, "public", "data", "southbay");
@@ -123,6 +123,7 @@ const forecastByCode = new Map(forecast.map((row) => [codeOf(row), row]));
 
 const stations = [];
 const archive = [];
+const coordinateNotes = [];
 for (const row of nowcast) {
   const code = codeOf(row);
   if (!code) continue;
@@ -141,6 +142,7 @@ for (const row of nowcast) {
     tier: "model_pool",
   };
   stations.push(station);
+  coordinateNotes.push({ station, row });
   const threshold = thresholdFor.get(code) ?? fallbackThreshold;
   archive.push({
     station_code: code,
@@ -197,15 +199,17 @@ for (const name of ["nowcast_latest.csv", "forecast_3day.csv", "history_3day.csv
   fs.copyFileSync(path.join(source, name), path.join(dest, "outputs", name));
 }
 console.log(`Wrote ${stations.length} roster stations and ${archive.length} archive rows.`);
-for (const station of stations) {
-  if (station.lat === "" || station.lon === "" || station.lat == null || station.lon == null) continue;
-  const latitude = Number(station.lat);
-  const longitude = Number(station.lon);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || isInCaliforniaBox(latitude, longitude)) continue;
-  console.log(outsideCaliforniaLine({
+for (const { station, row } of coordinateNotes) {
+  const latitude = station.lat === "" || station.lat == null ? Number.NaN : Number(station.lat);
+  const longitude = station.lon === "" || station.lon == null ? Number.NaN : Number(station.lon);
+  const locationUnknown = locationMarkedUnknown(row) || locationMarkedUnknown(station) || coordinateWordUnknown(station.lat) || coordinateWordUnknown(station.lon);
+  const outside = Number.isFinite(latitude) && Number.isFinite(longitude) && !isInWestCoastBox(latitude, longitude);
+  if (!outside && !locationUnknown) continue;
+  console.log(outsideWestCoastLine({
     name: station.name,
     code: station.station_code,
     latitude,
     longitude,
+    locationUnknown,
   }));
 }

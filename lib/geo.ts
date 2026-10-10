@@ -1,38 +1,42 @@
-import { CALIFORNIA_BOX, isInCaliforniaBox, outsideCaliforniaLine } from "./californiaBox.mjs";
+import { isInWestCoastBox, outsideWestCoastLine, WEST_COAST_BOX } from "./westCoastBox.mjs";
 
-export { CALIFORNIA_BOX };
+export { WEST_COAST_BOX };
 
 export interface LatLon {
   latitude: number;
   longitude: number;
+  /** Published location flag. Unknown means these numbers are not a map position. */
+  locationUnknown?: boolean | null;
 }
 
 export function hasCoordinates(place: LatLon): boolean {
   return Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
 }
 
-/** Finite coordinates inside the rough California box. Safe to draw and to sort by distance. */
+/** Finite coordinates inside the loose West Coast box, and not marked unknown. */
 export function hasMapCoordinates(place: LatLon): boolean {
-  return isInCaliforniaBox(place.latitude, place.longitude);
+  return place.locationUnknown !== true && isInWestCoastBox(place.latitude, place.longitude);
 }
 
-/** Finite coordinates outside the box. Blank or non-numeric positions are not placeholders. */
-export function coordinatesOutsideCalifornia(place: LatLon): boolean {
-  return hasCoordinates(place) && !hasMapCoordinates(place);
+/** Finite coordinates outside the box. Blank positions and an unknown-location flag are separate. */
+export function coordinatesOutsideWestCoast(place: LatLon): boolean {
+  return hasCoordinates(place) && !isInWestCoastBox(place.latitude, place.longitude);
 }
 
-const loggedOutsideCalifornia = new Set<string>();
+const loggedOutsideWestCoast = new Set<string>();
 
-/** Name each finite out-of-box station once per process, for the dev server and `next build`. */
-export function logStationsOutsideCalifornia(
-  stations: Array<{ name: string; code: string; latitude: number; longitude: number }>
+/** Name each unmapped station once per process, for the dev server and `next build`. */
+export function logStationsOutsideWestCoast(
+  stations: Array<{ name: string; code: string; latitude: number; longitude: number; locationUnknown?: boolean | null }>
 ): void {
   for (const station of stations) {
-    if (!coordinatesOutsideCalifornia(station)) continue;
-    const key = `${station.name}\0${station.code}\0${station.latitude}\0${station.longitude}`;
-    if (loggedOutsideCalifornia.has(key)) continue;
-    loggedOutsideCalifornia.add(key);
-    console.log(outsideCaliforniaLine(station));
+    const outside = coordinatesOutsideWestCoast(station);
+    const flagged = station.locationUnknown === true;
+    if (!outside && !flagged) continue;
+    const key = `${station.name}\0${station.code}\0${station.latitude}\0${station.longitude}\0${flagged}`;
+    if (loggedOutsideWestCoast.has(key)) continue;
+    loggedOutsideWestCoast.add(key);
+    console.log(outsideWestCoastLine({ ...station, locationUnknown: flagged }));
   }
 }
 

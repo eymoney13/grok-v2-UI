@@ -1,5 +1,5 @@
 import { isCoveredStation } from "./californiaCoverage";
-import { logStationsOutsideCalifornia } from "./geo";
+import { logStationsOutsideWestCoast } from "./geo";
 import "server-only";
 import { assignSlugs } from "./beachSlug.ts";
 import {
@@ -25,8 +25,10 @@ import {
 import { loadV2Bundle, readPublishedCsv, readPublishedJson, type V2Bundle } from "./neptuneAdapter";
 import {
   agencyFromRow,
+  coordinateWordUnknown,
   forecastRelease,
   hasAgencyColumn,
+  locationUnknownFromRow,
   optionalModelFields,
   regionForCounty,
   staleLimitDays,
@@ -168,6 +170,8 @@ interface RosterEntry {
   tier: RosterTier | null;
   samplingFrequency: string | null;
   lastSampleDate: string | null;
+  /** Roster file marked the position unknown. Absent on boards that have no roster flag. */
+  locationUnknown?: boolean;
 }
 
 // Resolve which beaches to render. Locations with a rosterFile take their list
@@ -218,6 +222,7 @@ async function resolveRoster(config: LocationConfig, bundle: V2Bundle | null): P
         tier: station.tier,
         samplingFrequency: station.samplingFrequency,
         lastSampleDate: station.lastSampleDate,
+        locationUnknown: station.locationUnknown,
       })),
       agencyColumn
     );
@@ -607,6 +612,7 @@ export async function loadDashboardData(
         wideOptional.reading
       )
     );
+    const locationUnknown = publishedLocationUnknown(entry, nowRecord, dailyRow, leadHits);
 
     const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
 
@@ -732,6 +738,7 @@ export async function loadDashboardData(
       // nowcast itself.
       latitude: entry.latitude ?? Number(now.Latitude),
       longitude: entry.longitude ?? Number(now.Longitude),
+      locationUnknown,
       predictionDate: String(now.prediction_date),
       probability: prob,
       mpnLabel: now.mpn_label,
@@ -795,7 +802,7 @@ export async function loadDashboardData(
     ? beaches
     : beaches.filter((beach) => isCoveredStation(config.slug, beach.code));
   const listed = usingV2 ? [...visible, ...unmodeled] : visible;
-  logStationsOutsideCalifornia(listed);
+  logStationsOutsideWestCoast(listed);
 
   return {
     beaches: visible,
@@ -886,6 +893,7 @@ function unmodeledItem(
     proseName: entry.proseName,
     latitude: entry.latitude ?? Number.NaN,
     longitude: entry.longitude ?? Number.NaN,
+    locationUnknown: publishedLocationUnknown(entry, null, dailyRow, leadsFor(bundle, entry, sharing)),
     county: entry.county,
     region: entry.region,
     tier: entry.tier,
@@ -970,6 +978,25 @@ function leadsFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) 
     bundle.dailyLeads.agencyColumn,
     sharing
   );
+}
+
+function publishedLocationUnknown(
+  entry: RosterEntry,
+  now: Record<string, unknown> | null,
+  dailyRow: { locationUnknown?: boolean } | null,
+  leadRows: readonly { locationUnknown?: boolean }[]
+): boolean {
+  if (entry.locationUnknown) return true;
+  if (dailyRow?.locationUnknown) return true;
+  if (leadRows.some((row) => row.locationUnknown)) return true;
+  if (now && locationUnknownFromRow(now)) return true;
+  const rosterPoint = Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude);
+  if (!rosterPoint && now) {
+    const lat = now.Latitude ?? now.latitude ?? now.lat;
+    const lon = now.Longitude ?? now.longitude ?? now.lon;
+    if (coordinateWordUnknown(lat) || coordinateWordUnknown(lon)) return true;
+  }
+  return false;
 }
 
 function dailyFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) {
