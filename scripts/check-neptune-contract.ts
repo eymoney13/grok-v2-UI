@@ -198,7 +198,36 @@ const ventura = parseDailyStatus({
 assert.equal(ventura.readings.get("V1")?.postingStatus, "open");
 assert.equal(ventura.readings.get("V1")?.postingDate, "2026-10-10");
 assert.equal(parseDailyStatus({}).readings.size, 0);
+assert.equal(parseDailyStatus({}).indexes.size, 0);
 assert.equal(parseDailyStatusRows([]).readings.size, 0);
+
+const liveRow = parseDailyStatusRows([
+  {
+    station_code: "BDP12",
+    generated_at: "2026-10-09T18:00:00Z",
+    posting_status: "warning",
+    posting_source: "Orange County Health Care Agency",
+    posting_fetched_at: "2026-10-08T16:30:00Z",
+    final_status: "",
+    method: "model",
+    confidence: "high",
+    neptune_index: "",
+    neptune_band: "",
+  },
+]);
+const baby = liveRow.readings.get("BDP12");
+assert.equal(baby?.postingStatus, "warning");
+assert.equal(baby?.postingDate, "2026-10-08");
+assert.equal(baby?.method, "model");
+assert.equal(baby?.confidence, "high");
+assert.equal(baby?.finalStatus, null);
+assert.equal(officialPosting(baby)?.kind, "warning");
+assert.equal(officialPosting(baby) ? postingLabel(officialPosting(baby)!) : null, "Warning");
+assert.equal(liveRow.indexes.get("BDP12")?.index, null);
+assert.equal(liveRow.indexes.get("BDP12")?.band, null);
+const dailyIndex = parseDailyStatusRows([{ station_code: "X1", neptune_index: 42, neptune_band: "good" }]);
+assert.equal(dailyIndex.indexes.get("X1")?.index, 42);
+assert.equal(dailyIndex.indexes.get("X1")?.band, "good");
 assert.equal(latestDatedStatusName(["notes.txt", "2026-10-01.csv", "2026-10-09.json", "2026-10-08.csv"]), "2026-10-09.json");
 assert.equal(latestDatedStatusName(["readme.md"]), null);
 

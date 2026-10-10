@@ -134,6 +134,9 @@ assert.doesNotMatch(opened.postingNote ?? "", /safe/i);
 const warning = dailySummary({ ...base, postingStatus: "warning", postingSource: "Ventura County" }, "en");
 assert.match(warning.status, /County warning: Warning/);
 assert.match(warning.status, /Source: Ventura County/);
+assert.match(warning.status, /Our estimate:/);
+assert.match(warning.status, /under the/);
+assert.doesNotMatch(warning.status, /\bsafe\b/i);
 assert.equal(warning.postingNote, null);
 
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /40 MPN/);

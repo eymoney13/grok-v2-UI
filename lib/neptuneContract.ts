@@ -418,8 +418,15 @@ export function countyInStaleList(county: string | null, staleCounties: string[]
   return staleCounties.some((name) => countyKey(name) === key);
 }
 
+export interface DailyIndexFields {
+  index: number | null;
+  band: string | null;
+}
+
 export interface DailyStatusFile {
   readings: Map<string, PublishedReading>;
+  /** Neptune Index columns on the same daily row. Empty cells stay null. */
+  indexes: Map<string, DailyIndexFields>;
   generatedAt: string | null;
 }
 
@@ -427,14 +434,19 @@ const DAILY_STATION_KEYS = ["station_code", "stationCode", "StationCode", "stati
 const DAILY_LIST_KEYS = ["stations", "beaches", "readings", "records", "status"];
 const DATED_STATUS_FILE = /^(\d{4}-\d{2}-\d{2})\.(csv|json)$/;
 
-function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string | null): Map<string, PublishedReading> {
+function readingsFromRows(
+  rows: Record<string, unknown>[],
+  generatedAt: string | null
+): { readings: Map<string, PublishedReading>; indexes: Map<string, DailyIndexFields> } {
   const readings = new Map<string, PublishedReading>();
+  const indexes = new Map<string, DailyIndexFields>();
   for (const row of rows) {
     const code = stationCode(first(row, DAILY_STATION_KEYS));
     if (!code) continue;
     readings.set(code, withPostingFileDate(parsePublishedReading(row), generatedAt));
+    indexes.set(code, readNeptuneFields(row));
   }
-  return readings;
+  return { readings, indexes };
 }
 
 /**
@@ -444,19 +456,25 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
  */
 export function parseDailyStatus(data: unknown): DailyStatusFile {
   if (Array.isArray(data)) {
-    return { readings: readingsFromRows(data.filter(isObj), null), generatedAt: null };
+    return { ...readingsFromRows(data.filter(isObj), null), generatedAt: null };
   }
-  if (!isObj(data)) return { readings: new Map(), generatedAt: null };
+  if (!isObj(data)) return { readings: new Map(), indexes: new Map(), generatedAt: null };
   const generatedAt = asTimestamp(first(data, GENERATED_KEYS));
   for (const key of DAILY_LIST_KEYS) {
     const value = data[key];
     if (Array.isArray(value)) {
-      return { readings: readingsFromRows(value.filter(isObj), generatedAt), generatedAt };
+      return { ...readingsFromRows(value.filter(isObj), generatedAt), generatedAt };
     }
   }
   const code = stationCode(first(data, DAILY_STATION_KEYS));
-  if (code) return { readings: new Map([[code, withPostingFileDate(parsePublishedReading(data), generatedAt)]]), generatedAt };
-  return { readings: new Map(), generatedAt };
+  if (code) {
+    return {
+      readings: new Map([[code, withPostingFileDate(parsePublishedReading(data), generatedAt)]]),
+      indexes: new Map([[code, readNeptuneFields(data)]]),
+      generatedAt,
+    };
+  }
+  return { readings: new Map(), indexes: new Map(), generatedAt };
 }
 
 export function parseDailyStatusRows(rows: Record<string, unknown>[]): DailyStatusFile {
@@ -465,7 +483,7 @@ export function parseDailyStatusRows(rows: Record<string, unknown>[]): DailyStat
     if (generatedAt) break;
     generatedAt = asTimestamp(first(row, GENERATED_KEYS));
   }
-  return { readings: readingsFromRows(rows, generatedAt), generatedAt };
+  return { ...readingsFromRows(rows, generatedAt), generatedAt };
 }
 
 /** Newest `YYYY-MM-DD.csv` or `.json` name. Other names are ignored. */

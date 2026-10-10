@@ -19,7 +19,7 @@ No deployment, and no production database. Auth, billing, and email alerts stay 
 
 All file reads go through `lib/neptuneAdapter.ts`. Column names are parsed in `lib/neptuneContract.ts`. The full shape is in [DATA_CONTRACT.md](DATA_CONTRACT.md).
 
-1. If `NEPTUNE_V2_DIR` is set, that directory is treated as a `project-neptune-v2` checkout (`data/roster.json`, `outputs/forecast_archive/forecasts.csv`, `config/staleness_thresholds.json`, and the wide CSVs).
+1. If `NEPTUNE_V2_DIR` is set, that directory is treated as a `project-neptune-v2` checkout (`data/roster.json`, `outputs/forecast_archive/forecasts.csv`, `outputs/daily/current.csv`, `config/staleness_thresholds.json`, and the wide CSVs).
 2. Otherwise the app uses `data/neptune-v2/`.
 3. A wide CSV that is not in the v2 tree falls back to `public/data/southbay/`.
 
@@ -42,4 +42,4 @@ node scripts/build-v2-sample.mjs
 - Installable PWA basics: a web manifest and a service worker that always asks the network, so a saved page is not reused as today’s reading. English and Spanish on the public home and beach page. Beach names stay as published.
 - “Last tested N days ago,” a calm limited-lab line, “Last updated,” and a banner when the forecast date is not today.
 - “Past lab agreement,” not a confidence score.
-- Optional daily fields, when a v2 file includes them: how the estimate was made, a high / medium / low confidence in words, and a county posting. A closure, warning, or advisory is shown first, with its source when one was published, and our prediction stays visible under it. `open` means that source listed nothing active today. `unknown` is a plain note that no official posting data was published, with no badge, and it is not treated as safe. Low confidence is worded and styled as less certain than high confidence. A rain advisory appears only when the rules path flags recent rain. Absent fields stay off the page.
+- The statewide daily file `outputs/daily/current.csv` (a dated file next to it is history). It carries method, confidence, county posting, and Neptune Index columns. A closure, warning, or advisory is shown first, with its source when one was published, and our prediction stays visible under it. A warning still leads when the model estimate is under the limit. `open` means that source listed nothing active today. `unknown` is a plain note that no official posting data was published, with no badge, and it is not treated as safe. Low confidence is worded and styled as less certain than high confidence. A rain advisory appears only when the rules path flags recent rain. Empty index cells stay empty. Absent fields stay off the page.

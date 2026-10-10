@@ -1,10 +1,9 @@
 /**
- * Optional fields on the v2 daily output.
+ * Fields on the v2 daily output (`outputs/daily/current.csv`).
  *
- * The file path is not settled. These parsers accept the columns wherever a
- * row already exists, and the adapter also looks for a current file plus a
- * dated history folder. A missing column stays null. Nothing here turns a
- * probability or a rain total into a posting, a method, or a confidence level.
+ * These parsers accept the columns wherever a row already exists. A missing
+ * column stays null. Nothing here turns a probability or a rain total into a
+ * posting, a method, or a confidence level.
  */
 
 export type EstimateMethod = "model" | "pooled_model" | "rules";
@@ -40,7 +39,16 @@ const CONFIDENCE_LEVEL_KEYS = ["confidence", "confidence_level", "confidenceLeve
 const POSTING_STATUS_KEYS = ["posting_status", "postingStatus"];
 const POSTING_SOURCE_KEYS = ["posting_source", "postingSource"];
 const FINAL_STATUS_KEYS = ["final_status", "finalStatus"];
-const POSTING_DATE_KEYS = ["posting_date", "postingDate", "checked_date", "checkedDate", "as_of", "asOf"];
+const POSTING_DATE_KEYS = [
+  "posting_fetched_at",
+  "postingFetchedAt",
+  "posting_date",
+  "postingDate",
+  "checked_date",
+  "checkedDate",
+  "as_of",
+  "asOf",
+];
 const GENERATED_DATE_KEYS = ["generated_at", "generatedAt"];
 const RAIN_ADVISORY_KEYS = ["rain_advisory", "rainAdvisory", "recent_rain", "recentRain"];
 

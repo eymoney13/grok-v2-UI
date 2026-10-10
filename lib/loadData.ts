@@ -528,6 +528,7 @@ export async function loadDashboardData(
     const nowRecord = now as unknown as Record<string, unknown>;
     const wideOptional = optionalModelFields(nowRecord);
     const mergedIndex = mergeNeptuneFields(
+      bundle?.dailyIndex.get(code),
       archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
       readNeptuneFields(nowRecord)
     );
@@ -682,7 +683,7 @@ export async function loadDashboardData(
     generatedAtRaw instanceof Date
       ? generatedAtRaw.toISOString()
       : String(generatedAtRaw ?? "").trim() || null;
-  const generatedAt = bundle?.manifest?.generatedAt || generatedFromColumn || bundle?.dailyGeneratedAt || null;
+  const generatedAt = bundle?.manifest?.generatedAt || bundle?.dailyGeneratedAt || generatedFromColumn || null;
 
   const visible = usingV2
     ? beaches
@@ -760,9 +761,24 @@ function unmodeledItem(
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
-    neptuneIndex: null,
-    neptuneBand: null,
+    ...unmodeledIndex(entry.code, archive, bundle),
     ...copyReading(mergeReadings(bundle?.daily.get(entry.code), archive?.nowcast?.reading)),
+  };
+}
+
+function unmodeledIndex(
+  code: string,
+  archive: StationArchive | null,
+  bundle: V2Bundle | null
+): { neptuneIndex: number | null; neptuneBand: string | null } {
+  const merged = mergeNeptuneFields(
+    bundle?.dailyIndex.get(code),
+    archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
+  );
+  const published = publishedNeptuneScore(merged.index, merged.band);
+  return {
+    neptuneIndex: published?.index ?? null,
+    neptuneBand: published?.band.id ?? null,
   };
 }
 

@@ -9,11 +9,13 @@ import {
   parseArchiveRow,
   parseDailyStatus,
   parseDailyStatusRows,
+  type DailyStatusFile,
   parseManifest,
   parseRegions,
   parseRosterJson,
   parseRosterRows,
   parseStaleness,
+  type DailyIndexFields,
   type RegionConfig,
   type RosterStation,
   type RunManifest,
@@ -49,12 +51,13 @@ export interface V2Bundle {
   accuracy: Record<string, unknown>[] | null;
   thresholds: Record<string, number> | null;
   /**
-   * Optional daily status for every station in the current file, or in the
-   * newest dated history file when no current file exists. Empty when absent.
-   * The path is provisional; see DATA_CONTRACT.md.
+   * Daily status from `outputs/daily/current.csv`, or from the newest dated
+   * file beside it when that current file is absent. Empty when neither exists.
    */
   daily: Map<string, PublishedReading>;
-  /** Clock from that daily file. Used only after the manifest and the nowcast column. */
+  /** `neptune_index` and `neptune_band` from that same daily file. Empty cells are null. */
+  dailyIndex: Map<string, DailyIndexFields>;
+  /** Clock from that daily file. Used after the manifest and before the nowcast column. */
   dailyGeneratedAt: string | null;
 }
 
@@ -72,6 +75,7 @@ const EMPTY_BUNDLE: V2Bundle = {
   accuracy: null,
   thresholds: null,
   daily: new Map(),
+  dailyIndex: new Map(),
   dailyGeneratedAt: null,
 };
 
@@ -242,34 +246,37 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     accuracy,
     thresholds,
     daily: daily.readings,
+    dailyIndex: daily.indexes,
     dailyGeneratedAt: daily.generatedAt,
   };
 }
 
 /**
- * Current file first. History is used only when none of the current paths exist.
- * A current file that parses to no stations still wins, so an empty publish
- * does not resurrect yesterday's history.
- *
- * These paths are not final. A rename stays in this function.
+ * `outputs/daily/current.csv` is the live statewide file. History is used only
+ * when no current file exists. A current file that parses to no stations still
+ * wins, so an empty publish does not resurrect yesterday's history.
  */
-async function loadDailyStatus(root: string): Promise<{ readings: Map<string, PublishedReading>; generatedAt: string | null }> {
+async function loadDailyStatus(root: string): Promise<{
+  readings: Map<string, PublishedReading>;
+  indexes: Map<string, DailyIndexFields>;
+  generatedAt: string | null;
+}> {
   const current = await firstExisting([
-    ...wideCandidates(root, "daily_status.csv"),
-    ...wideCandidates(root, "daily_status.json"),
     path.join(root, "outputs", "daily", "current.csv"),
     path.join(root, "outputs", "daily", "current.json"),
+    ...wideCandidates(root, "daily_status.csv"),
+    ...wideCandidates(root, "daily_status.json"),
   ]);
   if (current) return readDailyFile(current);
   const history = await latestDailyHistory(root);
-  if (!history) return { readings: new Map(), generatedAt: null };
+  if (!history) return { readings: new Map(), indexes: new Map(), generatedAt: null };
   return readDailyFile(history);
 }
 
-async function readDailyFile(filePath: string): Promise<{ readings: Map<string, PublishedReading>; generatedAt: string | null }> {
+async function readDailyFile(filePath: string): Promise<DailyStatusFile> {
   if (filePath.endsWith(".json")) {
     const text = await readText(filePath);
-    if (text == null) return { readings: new Map(), generatedAt: null };
+    if (text == null) return { readings: new Map(), indexes: new Map(), generatedAt: null };
     return parseDailyStatus(JSON.parse(text) as unknown);
   }
   return parseDailyStatusRows(await readCsvFile(filePath));
@@ -277,6 +284,7 @@ async function readDailyFile(filePath: string): Promise<{ readings: Map<string, 
 
 async function latestDailyHistory(root: string): Promise<string | null> {
   const dirs = [
+    path.join(root, "outputs", "daily"),
     path.join(root, "outputs", "daily", "history"),
     path.join(root, "outputs", "daily_status"),
     path.join(root, "outputs", "status_history"),
