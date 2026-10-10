@@ -6,6 +6,7 @@
  */
 
 import { readNeptuneFields } from "./neptuneIndex.ts";
+import { EMPTY_READING, parsePublishedReading, type PublishedReading } from "./publishedReading.ts";
 
 export type RosterTier = "model_pool" | "limited_data";
 
@@ -39,6 +40,8 @@ export interface ArchiveRow {
   calibratedProbability: number | null;
   /** Non-numeric pipeline note only. A bare number is not treated as confidence. */
   confidenceFlag: string | null;
+  /** Method, confidence level, and official posting. All null when the columns are absent. */
+  reading: PublishedReading;
   /** Published 0–500 score. Null when the column is absent or out of range. */
   neptuneIndex: number | null;
   /** Published band id from the display config. Null when absent or unknown. */
@@ -55,6 +58,8 @@ export interface StationArchive {
   lastSampleAgeDays: number | null;
   calibratedProbability: number | null;
   confidenceFlag: string | null;
+  /** Lead 0 when that row exists, otherwise the row the archive fell back to. */
+  reading: PublishedReading;
   generatedAt: string | null;
 }
 
@@ -84,6 +89,7 @@ export interface OptionalModelFields {
   calibratedProbability: number | null;
   confidenceFlag: string | null;
   generatedAt: string | null;
+  reading: PublishedReading;
 }
 
 const CALIBRATED_KEYS = [
@@ -92,13 +98,8 @@ const CALIBRATED_KEYS = [
   "p_calibrated",
   "calibratedProbability",
 ];
-const CONFIDENCE_KEYS = [
-  "confidence_flag",
-  "confidence",
-  "model_confidence",
-  "beach_confidence",
-  "confidenceFlag",
-];
+const CONFIDENCE_FLAG_KEYS = ["confidence_flag", "confidenceFlag", "model_confidence", "beach_confidence"];
+const CONFIDENCE_TEXT_KEYS = ["confidence", "confidence_level", "confidenceLevel"];
 const GENERATED_KEYS = ["generated_at", "generatedAt"];
 
 function isObj(value: unknown): value is Record<string, unknown> {
@@ -205,12 +206,18 @@ export function textFlag(raw: unknown): string | null {
 
 export function optionalModelFields(row: Record<string, unknown> | null | undefined): OptionalModelFields {
   if (!row) {
-    return { calibratedProbability: null, confidenceFlag: null, generatedAt: null };
+    return { calibratedProbability: null, confidenceFlag: null, generatedAt: null, reading: { ...EMPTY_READING } };
   }
+  const reading = parsePublishedReading(row);
+  // `confidence: high` is the level. Any other non-numeric word in that column
+  // stays a pipeline note, and a number is dropped so it cannot read as a percent.
+  const namedFlag = textFlag(first(row, CONFIDENCE_FLAG_KEYS));
+  const looseFlag = reading.confidence ? null : textFlag(first(row, CONFIDENCE_TEXT_KEYS));
   return {
     calibratedProbability: asFraction(first(row, CALIBRATED_KEYS)),
-    confidenceFlag: textFlag(first(row, CONFIDENCE_KEYS)),
+    confidenceFlag: namedFlag ?? looseFlag,
     generatedAt: asTimestamp(first(row, GENERATED_KEYS)),
+    reading,
   };
 }
 
@@ -271,6 +278,7 @@ export function parseArchiveRow(row: Record<string, unknown>): ArchiveRow | null
     generatedAt: extra.generatedAt,
     calibratedProbability: extra.calibratedProbability,
     confidenceFlag: extra.confidenceFlag,
+    reading: extra.reading,
     neptuneIndex: indexFields.index,
     neptuneBand: indexFields.band,
   };
@@ -319,6 +327,7 @@ export function groupArchive(rows: ArchiveRow[]): Map<string, StationArchive> {
       lastSampleAgeDays: source?.lastSampleAgeDays ?? null,
       calibratedProbability: nowcast?.calibratedProbability ?? source?.calibratedProbability ?? null,
       confidenceFlag: nowcast?.confidenceFlag ?? source?.confidenceFlag ?? null,
+      reading: nowcast?.reading ?? source?.reading ?? { ...EMPTY_READING },
       generatedAt: source?.generatedAt ?? null,
     });
   }
@@ -407,4 +416,65 @@ export function countyInStaleList(county: string | null, staleCounties: string[]
   const key = countyKey(county);
   if (!key) return false;
   return staleCounties.some((name) => countyKey(name) === key);
+}
+
+export interface DailyStatusFile {
+  readings: Map<string, PublishedReading>;
+  generatedAt: string | null;
+}
+
+const DAILY_STATION_KEYS = ["station_code", "stationCode", "StationCode", "station", "code"];
+const DAILY_LIST_KEYS = ["stations", "beaches", "readings", "records", "status"];
+const DATED_STATUS_FILE = /^(\d{4}-\d{2}-\d{2})\.(csv|json)$/;
+
+function readingsFromRows(rows: Record<string, unknown>[]): Map<string, PublishedReading> {
+  const readings = new Map<string, PublishedReading>();
+  for (const row of rows) {
+    const code = stationCode(first(row, DAILY_STATION_KEYS));
+    if (!code) continue;
+    readings.set(code, parsePublishedReading(row));
+  }
+  return readings;
+}
+
+/**
+ * One current daily file, or one dated history file.
+ * The last row for a station replaces earlier rows in that same file.
+ * An empty payload is an empty map. It does not mean "ignore this file."
+ */
+export function parseDailyStatus(data: unknown): DailyStatusFile {
+  if (Array.isArray(data)) {
+    return { readings: readingsFromRows(data.filter(isObj)), generatedAt: null };
+  }
+  if (!isObj(data)) return { readings: new Map(), generatedAt: null };
+  const generatedAt = asTimestamp(first(data, GENERATED_KEYS));
+  for (const key of DAILY_LIST_KEYS) {
+    const value = data[key];
+    if (Array.isArray(value)) {
+      return { readings: readingsFromRows(value.filter(isObj)), generatedAt };
+    }
+  }
+  const code = stationCode(first(data, DAILY_STATION_KEYS));
+  if (code) return { readings: new Map([[code, parsePublishedReading(data)]]), generatedAt };
+  return { readings: new Map(), generatedAt };
+}
+
+export function parseDailyStatusRows(rows: Record<string, unknown>[]): DailyStatusFile {
+  let generatedAt: string | null = null;
+  for (const row of rows) {
+    if (generatedAt) break;
+    generatedAt = asTimestamp(first(row, GENERATED_KEYS));
+  }
+  return { readings: readingsFromRows(rows), generatedAt };
+}
+
+/** Newest `YYYY-MM-DD.csv` or `.json` name. Other names are ignored. */
+export function latestDatedStatusName(names: string[]): string | null {
+  let best: { date: string; name: string } | null = null;
+  for (const name of names) {
+    const match = name.match(DATED_STATUS_FILE);
+    if (!match) continue;
+    if (!best || match[1] > best.date) best = { date: match[1], name };
+  }
+  return best?.name ?? null;
 }

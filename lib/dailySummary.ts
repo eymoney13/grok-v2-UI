@@ -14,6 +14,16 @@ import {
   type Lang,
 } from "./publicCopy.ts";
 import type { OutlookDay, PublicBeach } from "./publicBeach.ts";
+import {
+  confidenceWords,
+  copyReading,
+  methodWords,
+  officialPosting,
+  officialSummaryLead,
+  rainAdvisoryWords,
+  type ConfidenceLevel,
+  type EstimateMethod,
+} from "./publishedReading.ts";
 import { rainDepth, rainState, rainTotalMm } from "./rain.ts";
 import {
   TIER_LIMITED_NOTE,
@@ -38,6 +48,12 @@ export interface SummaryFacts {
   rainPrior3dMm: number | null;
   lastResultMpn: number | null;
   fallbackUsed: boolean | null;
+  method: EstimateMethod | null;
+  confidence: ConfidenceLevel | null;
+  postingStatus: string | null;
+  postingSource: string | null;
+  finalStatus: string | null;
+  rainAdvisory: boolean | null;
 }
 
 export interface DailySummary {
@@ -50,6 +66,10 @@ export interface DailySummary {
   rain: string | null;
   recentResult: string | null;
   fallback: string | null;
+  method: string | null;
+  confidence: { level: ConfidenceLevel; text: string } | null;
+  /** Rules-path rain note. Separate from the weather-file rain sentence. */
+  rainAdvisory: string | null;
 }
 
 const EXPERIMENTAL_ES =
@@ -92,6 +112,9 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
     outlookLabel: "Experimental",
     outlook: outlookSentence(facts, lang),
     rain: rainSentence(facts, lang),
+    rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
+    method: methodWords(facts.method, lang),
+    confidence: confidenceWords(facts.confidence, lang),
     recentResult: recentSentence(facts.lastResultMpn, lang),
     fallback:
       facts.fallbackUsed === true
@@ -116,6 +139,13 @@ export function glanceLine(
 }
 
 function statusSentence(facts: SummaryFacts, lang: Lang): string {
+  const model = modelSentence(facts, lang);
+  const posting = officialPosting(copyReading(facts));
+  if (posting) return officialSummaryLead(posting, model, lang);
+  return model;
+}
+
+function modelSentence(facts: SummaryFacts, lang: Lang): string {
   if (!facts.hasEstimate) {
     return lang === "es"
       ? "Hoy no se publicó un estimado para esta playa."

@@ -30,7 +30,7 @@ export async function generateMetadata({
   const beach = await resolvePublicBeach(slug);
   if (!beach) return { title: "Beach" };
   const summary = dailySummary(beach, "en");
-  const description = [summary.status, summary.lastTested, summary.outlook]
+  const description = [summary.status, summary.rainAdvisory, summary.lastTested, summary.outlook]
     .filter((part): part is string => Boolean(part))
     .map((part) => (/[.!?]$/.test(part) ? part : `${part}.`))
     .join(" ")

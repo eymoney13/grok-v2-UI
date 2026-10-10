@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { dailySummary } from "@/lib/dailySummary";
 import { copy, type Lang } from "@/lib/publicCopy";
+import type { ConfidenceLevel } from "@/lib/publishedReading";
 import type { GlanceBeach, PublicBeach } from "@/lib/publicBeach";
 import { PublicChrome, usePublicLanguage } from "./Language";
 import { StatusChip } from "./StatusChip";
 import styles from "./public.module.css";
+
+function confidenceClass(level: ConfidenceLevel): string {
+  if (level === "low") return styles.confidenceLow;
+  if (level === "medium") return styles.confidenceMedium;
+  return styles.confidenceHigh;
+}
 
 function formatDay(iso: string, lang: Lang): string {
   const [year, month, day] = iso.split("-").map(Number);
@@ -95,6 +102,11 @@ function Beach({
       <StatusChip beach={beach} lang={lang} />
       <div className={styles.summary}>
         <p>{summary.status}</p>
+        {summary.method && <p className={styles.methodLine}>{summary.method}</p>}
+        {summary.confidence && (
+          <p className={confidenceClass(summary.confidence.level)}>{summary.confidence.text}</p>
+        )}
+        {summary.rainAdvisory && <p>{summary.rainAdvisory}</p>}
         {summary.lastTested && <p>{summary.lastTested}</p>}
         {summary.limitedLab && <p>{summary.limitedLab}</p>}
         {summary.tierNote && <p>{summary.tierNote}</p>}

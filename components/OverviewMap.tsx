@@ -17,6 +17,12 @@ export type MapBeach = {
   hasEstimate?: boolean;
   neptuneIndex?: number | null;
   neptuneBand?: string | null;
+  method?: PublishedReading["method"];
+  confidence?: PublishedReading["confidence"];
+  postingStatus?: string | null;
+  postingSource?: string | null;
+  finalStatus?: string | null;
+  rainAdvisory?: boolean | null;
 };
 import {
   BASEMAP_ATTRIBUTION,
@@ -25,6 +31,7 @@ import {
   BASEMAP_URL,
 } from "@/lib/basemap";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { copyReading, officialPosting, type PublishedReading } from "@/lib/publishedReading";
 
 function colorFor(status: Status) {
   if (status === "Not recommended") return "#cc3333";
@@ -571,7 +578,34 @@ function limitedPin(): L.DivIcon {
   });
 }
 
+function officialPin(label: string): L.DivIcon {
+  const raw = label.trim();
+  const text = raw.length > 0 && raw.length <= 14 ? raw : "Posted";
+  const w = text.length <= 8 ? 64 : Math.min(132, 18 + text.length * 7);
+  const h = 22;
+  return L.divIcon({
+    className: "nb-overview-icon",
+    html: `<div class="nb-overview-dot nb-overview-dot--band" style="width:${w}px;background:#142226;color:#ffffff">${escapeHtml(text)}</div>`,
+    iconSize: [w, h],
+    iconAnchor: [w / 2, h / 2],
+  });
+}
+
+function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
+  const posting = officialPosting(copyReading(beach));
+  if (posting) return officialPin(posting.label);
+  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+  if (score) return indexPin(score);
+  if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict);
+  return limitedPin();
+}
+
 function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): string {
+  const posting = officialPosting(copyReading(beach));
+  if (posting) {
+    const source = posting.source ? `, source ${posting.source}` : "";
+    return `${beach.name}, official posting ${posting.label}${source}`;
+  }
   const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
   if (score) return `${beach.name}, ${neptuneIndexName(score)}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
@@ -611,13 +645,8 @@ function ClusteredPins({
       for (const beach of beaches) {
         if (!Number.isFinite(beach.latitude) || !Number.isFinite(beach.longitude)) continue;
         const name = pinName(beach, statusPhrase);
-        const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
         const marker = L.marker([beach.latitude, beach.longitude], {
-          icon: score
-            ? indexPin(score)
-            : beach.hasEstimate && beach.status
-              ? dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict)
-              : limitedPin(),
+          icon: pinIcon(beach, binaryVerdict),
           title: name,
           alt: name,
           keyboard: true,
@@ -687,14 +716,14 @@ export default function OverviewMap({
         />
       ) : (
         beaches.map((b) => {
-          if (!b.status) return null;
-          const score = publishedNeptuneScore(b.neptuneIndex, b.neptuneBand);
+          const posted = officialPosting(copyReading(b));
+          if (!b.status && !posted) return null;
           const accessibleName = pinName(b, statusPhrase);
           return (
             <Marker
               key={b.code}
               position={[b.latitude, b.longitude]}
-              icon={score ? indexPin(score) : dotIcon({ status: b.status, verdict: b.verdict }, binaryVerdict)}
+              icon={pinIcon(b, binaryVerdict)}
               eventHandlers={{ click: () => onSelect(b.code) }}
               keyboard
               title={accessibleName}

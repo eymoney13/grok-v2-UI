@@ -1,3 +1,5 @@
+import type { ConfidenceLevel, EstimateMethod } from "./publishedReading.ts";
+
 export interface LocationConfig {
   slug: string;
   displayName: string; // e.g. "Hermosa Beach, CA" — used in BeachCard + header + metadata
@@ -718,6 +720,17 @@ export interface BeachData {
   calibratedProbability: number | null;
   /** Non-numeric pipeline note. Never a confidence percent. */
   confidenceFlag: string | null;
+  /** How today's estimate was made, when a daily file says so. */
+  method: EstimateMethod | null;
+  /** high, medium, or low. A number is never stored here. */
+  confidence: ConfidenceLevel | null;
+  /** Official county closure or advisory. Blank means there is no posting. */
+  postingStatus: string | null;
+  postingSource: string | null;
+  /** Resolved label used only when a posting was published. */
+  finalStatus: string | null;
+  /** True only when the rules path flagged recent rain. */
+  rainAdvisory: boolean | null;
   /** Published Neptune Index, 0–500. Null when the file did not include one. */
   neptuneIndex: number | null;
   /** Band id for a published index or a published band name. Null when absent. */
@@ -794,6 +807,12 @@ export interface BeachListItem {
   fallbackUsed: boolean | null;
   neptuneIndex: number | null;
   neptuneBand: string | null;
+  method: EstimateMethod | null;
+  confidence: ConfidenceLevel | null;
+  postingStatus: string | null;
+  postingSource: string | null;
+  finalStatus: string | null;
+  rainAdvisory: boolean | null;
 }
 
 export function toBeachListItem(beach: BeachData): BeachListItem {
@@ -818,6 +837,12 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     fallbackUsed: beach.fallbackUsed,
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
+    method: beach.method,
+    confidence: beach.confidence,
+    postingStatus: beach.postingStatus,
+    postingSource: beach.postingSource,
+    finalStatus: beach.finalStatus,
+    rainAdvisory: beach.rainAdvisory,
   };
 }
 

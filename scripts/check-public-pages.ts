@@ -21,6 +21,12 @@ const base: SummaryFacts = {
   rainPrior3dMm: null,
   lastResultMpn: null,
   fallbackUsed: null,
+  method: null,
+  confidence: null,
+  postingStatus: null,
+  postingSource: null,
+  finalStatus: null,
+  rainAdvisory: null,
 };
 
 const dry = dailySummary(base, "en");
@@ -71,6 +77,34 @@ assert.doesNotMatch(trace.rain ?? "", /because/i);
 
 const wet = dailySummary({ ...base, rainTodayMm: 3, rainPrior3dMm: 1 }, "en");
 assert.match(wet.rain ?? "", /wet/);
+assert.equal(wet.rainAdvisory, null);
+
+const posted = dailySummary(
+  {
+    ...base,
+    method: "rules",
+    confidence: "low",
+    postingStatus: "Closed",
+    postingSource: "Orange County",
+    finalStatus: "Beach closed",
+    rainAdvisory: true,
+  },
+  "en"
+);
+assert.match(posted.status, /Official posting: Beach closed/);
+assert.match(posted.status, /Source: Orange County/);
+assert.match(posted.status, /Our estimate:/);
+assert.match(posted.method ?? "", /last lab test \+ rain rule/);
+assert.match(posted.confidence?.text ?? "", /less certain/);
+assert.match(posted.rainAdvisory ?? "", /Rain advisory/);
+assert.equal(posted.confidence?.level, "low");
+
+const echoed = dailySummary({ ...base, finalStatus: "Under the limit", confidence: "high" }, "en");
+assert.doesNotMatch(echoed.status, /Official posting/);
+assert.equal(echoed.confidence?.level, "high");
+assert.doesNotMatch(echoed.confidence?.text ?? "", /less certain/);
+assert.equal(dailySummary({ ...base, method: "model", rainAdvisory: true }, "en").rainAdvisory, null);
+assert.equal(dailySummary({ ...base, method: "rules", rainAdvisory: false }, "en").rainAdvisory, null);
 
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /40 MPN/);
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /under the 104/);

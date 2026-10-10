@@ -32,6 +32,7 @@ import {
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
 import { mergeNeptuneFields, publishedNeptuneScore, readNeptuneFields } from "./neptuneIndex";
+import { copyReading, mergeReadings } from "./publishedReading.ts";
 
 interface NowcastRow {
   StationCode: string;
@@ -531,6 +532,9 @@ export async function loadDashboardData(
       readNeptuneFields(nowRecord)
     );
     const publishedIndex = publishedNeptuneScore(mergedIndex.index, mergedIndex.band);
+    const reading = copyReading(
+      mergeReadings(bundle?.daily.get(code), archivedNow?.reading, wideOptional.reading)
+    );
 
     const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
 
@@ -647,6 +651,7 @@ export async function loadDashboardData(
       ...rosterFacts(entry, archive, bundle),
       calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
+      ...reading,
       neptuneIndex: publishedIndex?.index ?? null,
       neptuneBand: publishedIndex?.band.id ?? null,
       excRatePct: entry.excRatePct ?? null,
@@ -677,7 +682,7 @@ export async function loadDashboardData(
     generatedAtRaw instanceof Date
       ? generatedAtRaw.toISOString()
       : String(generatedAtRaw ?? "").trim() || null;
-  const generatedAt = bundle?.manifest?.generatedAt || generatedFromColumn || null;
+  const generatedAt = bundle?.manifest?.generatedAt || generatedFromColumn || bundle?.dailyGeneratedAt || null;
 
   const visible = usingV2
     ? beaches
@@ -757,6 +762,7 @@ function unmodeledItem(
     fallbackUsed: archive?.fallbackUsed ?? null,
     neptuneIndex: null,
     neptuneBand: null,
+    ...copyReading(mergeReadings(bundle?.daily.get(entry.code), archive?.nowcast?.reading)),
   };
 }
 

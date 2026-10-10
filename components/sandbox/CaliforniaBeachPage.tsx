@@ -8,6 +8,8 @@ import type { BeachData, BeachListItem } from "@/lib/data";
 import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
 import { assignSlugs } from "@/lib/beachSlug";
+import { copyReading, officialPosting } from "@/lib/publishedReading";
+import { OfficialBanner, ReadingNotes } from "./SandboxBeachDetail";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
 import SandboxBeachDetail from "./SandboxBeachDetail";
@@ -49,6 +51,7 @@ export default function CaliforniaBeachPage({
 }) {
   const router = useRouter();
   const tested = lastTestedLabel(listItem.daysSinceSample);
+  const posted = officialPosting(copyReading(listItem));
   const limited = hasLimitedLabData(listItem.daysSinceSample, listItem.noRecentSample, listItem.staleAfterDays);
   const shareSlug = assignSlugs([listItem, ...choices].map((beach) => ({ code: beach.code, name: beach.name }))).get(listItem.code);
   return (
@@ -89,11 +92,16 @@ export default function CaliforniaBeachPage({
           />
         ) : (
           <div className={s.detail}>
-            <section className={s.empty} aria-label="No estimate today">
-              <h2>No estimate today</h2>
-              <p>This beach is on the roster, and the files do not include a model estimate for it. Nothing here is filled in.</p>
+            <OfficialBanner reading={copyReading(listItem)} />
+            <section className={s.empty} aria-label={posted ? "Our estimate" : "No estimate today"}>
+              <h2>{posted ? "Our estimate" : "No estimate today"}</h2>
+              <p>
+                This beach is on the roster, and the files do not include a model estimate for it.
+                {posted ? " The official posting above is the one to follow." : " Nothing here is filled in."}
+              </p>
             </section>
             <div className={s.sampleFacts}>
+              <ReadingNotes reading={copyReading(listItem)} />
               {tested && <p>{tested}{listItem.lastSampleDate ? ` (${listItem.lastSampleDate})` : ""}</p>}
               {listItem.samplingFrequency && <p>Sampling: {listItem.samplingFrequency}</p>}
               {listItem.tier === "limited_data" && <p className={s.limitedNote}>{TIER_LIMITED_NOTE}</p>}

@@ -351,6 +351,23 @@
 .summaryBlur span:last-child { width: 68%; }
 
 .listReading { display: grid; justify-items: center; gap: 4px; }
+.readingStack { display: grid; justify-items: end; gap: 4px; min-width: 0; }
+.officialList { display: grid; justify-items: end; gap: 2px; max-width: 220px; padding: 6px 8px; border-radius: 10px; background: #142226; color: #fff; text-align: right; line-height: 1.25; }
+.officialList span { font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.officialList strong { font-size: 13px; font-weight: 700; }
+.officialList small { font-size: 11px; font-weight: 500; }
+.estimateSecondary { justify-self: end; }
+.confidenceHighList, .confidenceMediumList, .methodShort { font-size: 11px; font-weight: 600; text-align: right; color: #173a3c; }
+.confidenceMediumList { color: #3d5558; font-weight: 550; }
+.confidenceLowList { font-size: 11px; font-weight: 500; font-style: italic; color: #3d5558; text-align: right; border: 1px dashed #8aa3a6; border-radius: 8px; padding: 1px 6px; }
+.methodShort { color: #3d5558; font-weight: 550; }
+.officialHero { margin-bottom: 16px; padding: 22px 18px; border-radius: 16px; background: #142226; color: #fff; }
+.officialHero h2 { margin: 8px 0 6px; font-size: clamp(28px, 4vw, 40px); font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
+.officialHero p { margin: 4px 0 0; }
+.officialHero .eyebrow { color: #d7e2e4; }
+.confidenceHigh { font-weight: 650; }
+.confidenceMedium { color: #3d5558; }
+.confidenceLow { width: fit-content; padding: 4px 8px; border: 1px dashed #8aa3a6; border-radius: 8px; color: #3d5558; font-style: italic; }
 .listBandLabel { display: inline-flex; align-items: center; gap: 8px; }
 .listProbability { color: inherit; font-size: 11px; line-height: 1.4; }
 

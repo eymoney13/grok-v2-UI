@@ -9,8 +9,21 @@ import {
   parseStaleness,
   regionForCounty,
   staleLimitDays,
+  latestDatedStatusName,
+  optionalModelFields,
+  parseDailyStatus,
+  parseDailyStatusRows,
   textFlag,
 } from "../lib/neptuneContract.ts";
+import {
+  confidenceWords,
+  mergeReadings,
+  methodWords,
+  officialPosting,
+  parseMethod,
+  parsePublishedReading,
+  rainAdvisoryWords,
+} from "../lib/publishedReading.ts";
 import {
   bandForValue,
   parseNeptuneBandId,
@@ -85,7 +98,68 @@ assert.equal(hermosa.forecast[0].probability, 0.8);
 assert.equal(hermosa.forecast[0].leadDays, 1);
 assert.equal(hermosa.calibratedProbability, 0.55);
 assert.equal(hermosa.confidenceFlag, "sparse samples");
+assert.equal(hermosa.nowcast?.reading.confidence, null);
 assert.equal(textFlag(0.8), null);
+
+const high = optionalModelFields({ confidence: "high", confidence_flag: "sparse samples" });
+assert.equal(high.reading.confidence, "high");
+assert.equal(high.confidenceFlag, "sparse samples");
+const highOnly = optionalModelFields({ confidence: "High" });
+assert.equal(highOnly.reading.confidence, "high");
+assert.equal(highOnly.confidenceFlag, null);
+const noted = optionalModelFields({ confidence: "sparse samples" });
+assert.equal(noted.reading.confidence, null);
+assert.equal(noted.confidenceFlag, "sparse samples");
+assert.equal(parseMethod("pooled model"), "pooled_model");
+assert.equal(parseMethod("pooled-model"), "pooled_model");
+assert.equal(parseMethod("nope"), null);
+assert.equal(methodWords("rules"), "Based on last lab test + rain rule.");
+assert.match(confidenceWords("low")?.text ?? "", /less certain/);
+assert.doesNotMatch(confidenceWords("high")?.text ?? "", /less certain/);
+
+const closed = officialPosting(
+  parsePublishedReading({
+    posting_status: "Closed",
+    posting_source: "Orange County",
+    final_status: "Beach closed",
+  })
+);
+assert.equal(closed?.label, "Beach closed");
+assert.equal(closed?.posted, "Closed");
+assert.equal(closed?.source, "Orange County");
+assert.equal(officialPosting(parsePublishedReading({ final_status: "Over limit" })), null);
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "  " })), null);
+assert.ok(rainAdvisoryWords(parsePublishedReading({ method: "rules", rain_advisory: true })));
+assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "rules", rain_advisory: false })), null);
+assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "model", recent_rain: true })), null);
+assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "rules" })), null);
+
+const merged = mergeReadings(
+  parsePublishedReading({ method: "rules", rain_advisory: false, posting_status: "Advisory" }),
+  parsePublishedReading({ method: "model", rain_advisory: true, confidence: "high", posting_source: "LA County" })
+);
+assert.equal(merged.method, "rules");
+assert.equal(merged.rainAdvisory, false);
+assert.equal(merged.confidence, "high");
+assert.equal(merged.postingStatus, "Advisory");
+assert.equal(merged.postingSource, "LA County");
+
+const daily = parseDailyStatus({
+  generated_at: "2026-10-09T18:00:00Z",
+  stations: [
+    { station_code: "DHS114", method: "model", confidence: "low" },
+    { station_code: "0", method: "pooled model", posting_status: "Advisory", posting_source: "OC Health" },
+    { station_code: "DHS114", posting_status: "Closed", posting_source: "LA County" },
+  ],
+});
+assert.equal(daily.generatedAt, "2026-10-09T18:00:00.000Z");
+assert.equal(daily.readings.get("DHS114")?.postingStatus, "Closed");
+assert.equal(daily.readings.get("DHS114")?.method, null);
+assert.equal(daily.readings.get("0")?.method, "pooled_model");
+assert.equal(parseDailyStatus({}).readings.size, 0);
+assert.equal(parseDailyStatusRows([]).readings.size, 0);
+assert.equal(latestDatedStatusName(["notes.txt", "2026-10-01.csv", "2026-10-09.json", "2026-10-08.csv"]), "2026-10-09.json");
+assert.equal(latestDatedStatusName(["readme.md"]), null);
 
 const stale = parseStaleness({ default_days: 7, counties: { "Orange County": 14, "Los Angeles": 10 } });
 assert.equal(staleLimitDays("Orange", stale), 14);

@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { dailySummary } from "@/lib/dailySummary";
 import { resolvePublicBeach } from "@/lib/publicCatalog";
+import { copyReading, officialPosting } from "@/lib/publishedReading";
 
 export const runtime = "nodejs";
 export const alt = "California beach water quality";
@@ -11,6 +12,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const beach = await resolvePublicBeach((await params).slug);
   const name = beach?.name ?? "California beach";
   const status = beach ? dailySummary(beach, "en").status : "No reading published.";
+  const posted = beach ? officialPosting(copyReading(beach)) : null;
   return new ImageResponse(
     (
       <div
@@ -32,7 +34,9 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           <div style={{ display: "flex", fontSize: 32, lineHeight: 1.35, color: "#24383c" }}>{status.slice(0, 180)}</div>
         </div>
         <div style={{ display: "flex", fontSize: 24, color: "#3d4c50" }}>
-          California beach water quality. A model estimate, not a water sample.
+          {posted
+            ? "Official posting shown first. Our estimate is still a model figure, not a water sample."
+            : "California beach water quality. A model estimate, not a water sample."}
         </div>
       </div>
     ),

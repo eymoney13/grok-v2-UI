@@ -22,6 +22,14 @@ import {
   tierReading,
 } from "@/lib/waterStatus";
 import { publishedNeptuneScore } from "@/lib/neptuneIndex";
+import {
+  confidenceWords,
+  copyReading,
+  methodWords,
+  officialPosting,
+  rainAdvisoryWords,
+  type PublishedReading,
+} from "@/lib/publishedReading";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import LabHistory, { type LabPoint } from "../LabHistory";
 import WhyPrediction from "../WhyPrediction";
@@ -38,11 +46,42 @@ function dateLabel(iso: string, weekday = false) {
   });
 }
 
-function Figures({ probability }: { probability: number }) {
+export function OfficialBanner({ reading }: { reading: PublishedReading }) {
+  const posting = officialPosting(reading);
+  if (!posting) return null;
+  return (
+    <section className={s.officialHero} aria-label="Official posting">
+      <p className={s.eyebrow}>Official posting</p>
+      <h2>{posting.label}</h2>
+      {posting.source && <p>Source: {posting.source}</p>}
+      {posting.posted !== posting.label && <p>County posting: {posting.posted}</p>}
+    </section>
+  );
+}
+
+export function ReadingNotes({ reading }: { reading: PublishedReading }) {
+  const method = methodWords(reading.method);
+  const confidence = confidenceWords(reading.confidence);
+  const rain = rainAdvisoryWords(reading);
+  if (!method && !confidence && !rain) return null;
+  return (
+    <>
+      {method && <p>{method}</p>}
+      {confidence && (
+        <p className={confidence.level === "low" ? s.confidenceLow : confidence.level === "medium" ? s.confidenceMedium : s.confidenceHigh}>
+          {confidence.text}
+        </p>
+      )}
+      {rain && <p>{rain}</p>}
+    </>
+  );
+}
+
+function Figures({ probability, ours }: { probability: number; ours: boolean }) {
   const pct = Math.round(Math.max(0, Math.min(1, probability)) * 100);
   return <section className={s.predictionFigures} aria-label="Estimated chance of exceeding the beach standard">
     <div>
-      <p className={s.eyebrow}>Today’s model estimate</p>
+      <p className={s.eyebrow}>{ours ? "Our estimate" : "Today’s model estimate"}</p>
       <p className={s.exceedance}><strong className={s.exceedancePct} style={{ color: riskTier(pct).textColor }}>{pct}%</strong></p>
       <p className={s.probabilityCaption}>{PROBABILITY_CAPTION}</p>
     </div>
@@ -75,6 +114,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
   const today = buildWindowCells(beach).find((cell) => cell.type === "today")!.day;
   const reading = statusReading(today.status);
   const indexScore = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+  const readingFields = copyReading(beach);
+  const posting = officialPosting(readingFields);
   const forecasts = beach.forecast.filter((day) => day.date > beach.predictionDate).slice(0, 3);
   const horizon = forecastHorizonFor(beach.code);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
@@ -100,6 +141,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     : [];
 
   return <div className={s.detail}>
+    <OfficialBanner reading={readingFields} />
     {indexScore ? (
       <section
         className={s.predictionHero}
@@ -107,7 +149,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         aria-label="Today’s Neptune Index"
       >
         <div className={s.predictionHeader}>
-          <p className={s.eyebrow}>Neptune Index</p>
+          <p className={s.eyebrow}>{posting ? "Our estimate" : "Neptune Index"}</p>
           <span>{dateLabel(today.date)}</span>
         </div>
         <NeptuneIndexBadge score={indexScore} size="hero" />
@@ -121,7 +163,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     ) : (
     <section className={`${s.predictionHero} ${bandClass(today.status)}`} aria-label="Today’s estimate">
       <div className={s.predictionHeader}>
-        <p className={s.eyebrow}>Today’s estimate</p>
+        <p className={s.eyebrow}>{posting ? "Our estimate" : "Today’s estimate"}</p>
         <span>{dateLabel(today.date)}</span>
       </div>
       <h3>{reading.title}</h3>
@@ -139,8 +181,9 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     </section>
     )}
 
-    {(tested || limited || beach.tier === "limited_data" || beach.lastSampleDate || beach.samplingFrequency) && (
+    {(tested || limited || beach.tier === "limited_data" || beach.lastSampleDate || beach.samplingFrequency || methodWords(beach.method) || confidenceWords(beach.confidence) || rainAdvisoryWords(readingFields)) && (
       <div className={s.sampleFacts}>
+        <ReadingNotes reading={readingFields} />
         {tested && <p>{tested}{beach.lastSampleDate ? ` (${beach.lastSampleDate})` : ""}</p>}
         {beach.samplingFrequency && <p>Sampling: {beach.samplingFrequency}</p>}
         {beach.tier === "model_pool" && <p>In the model pool.</p>}
@@ -156,7 +199,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <LabHistory samples={labHistory} />
 
-    <Figures probability={today.probability} />
+    <Figures probability={today.probability} ours={!!posting} />
     <WhyPrediction
       key={today.date}
       prominentToggle

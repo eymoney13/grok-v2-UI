@@ -1,5 +1,6 @@
 import type { ForecastHorizon } from "./forecastDisplay.ts";
 import type { RosterTier, Status } from "./data.ts";
+import type { ConfidenceLevel, EstimateMethod } from "./publishedReading.ts";
 
 /** One published day of the experimental outlook. Status words only — no probability. */
 export interface OutlookDay {
@@ -33,6 +34,12 @@ export interface PublicBeach {
   horizon: ForecastHorizon;
   outlook: OutlookDay[];
   fallbackUsed: boolean | null;
+  method: EstimateMethod | null;
+  confidence: ConfidenceLevel | null;
+  postingStatus: string | null;
+  postingSource: string | null;
+  finalStatus: string | null;
+  rainAdvisory: boolean | null;
 }
 
 /** The home screen list. Rain, lab results, and the outlook stay on the beach page. */
@@ -52,6 +59,12 @@ export type GlanceBeach = Pick<
   | "noRecentSample"
   | "staleAfterDays"
   | "tier"
+  | "method"
+  | "confidence"
+  | "postingStatus"
+  | "postingSource"
+  | "finalStatus"
+  | "rainAdvisory"
 >;
 
 export function toGlance(beach: PublicBeach): GlanceBeach {
@@ -70,5 +83,11 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,
     tier: beach.tier,
+    method: beach.method,
+    confidence: beach.confidence,
+    postingStatus: beach.postingStatus,
+    postingSource: beach.postingSource,
+    finalStatus: beach.finalStatus,
+    rainAdvisory: beach.rainAdvisory,
   };
 }

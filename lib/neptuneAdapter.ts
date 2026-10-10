@@ -1,11 +1,14 @@
 import "server-only";
 
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import Papa from "papaparse";
 import {
   groupArchive,
+  latestDatedStatusName,
   parseArchiveRow,
+  parseDailyStatus,
+  parseDailyStatusRows,
   parseManifest,
   parseRegions,
   parseRosterJson,
@@ -17,6 +20,7 @@ import {
   type StalenessTable,
   type StationArchive,
 } from "./neptuneContract";
+import type { PublishedReading } from "./publishedReading.ts";
 
 /**
  * The only module that opens Neptune files.
@@ -44,6 +48,14 @@ export interface V2Bundle {
   history: Record<string, unknown>[] | null;
   accuracy: Record<string, unknown>[] | null;
   thresholds: Record<string, number> | null;
+  /**
+   * Optional daily status for every station in the current file, or in the
+   * newest dated history file when no current file exists. Empty when absent.
+   * The path is provisional; see DATA_CONTRACT.md.
+   */
+  daily: Map<string, PublishedReading>;
+  /** Clock from that daily file. Used only after the manifest and the nowcast column. */
+  dailyGeneratedAt: string | null;
 }
 
 const EMPTY_BUNDLE: V2Bundle = {
@@ -59,6 +71,8 @@ const EMPTY_BUNDLE: V2Bundle = {
   history: null,
   accuracy: null,
   thresholds: null,
+  daily: new Map(),
+  dailyGeneratedAt: null,
 };
 
 function v2Roots(): string[] {
@@ -207,6 +221,7 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
   const manifestText = manifestPath ? await readText(manifestPath) : null;
   const manifest = manifestText ? parseManifest(JSON.parse(manifestText) as unknown) : null;
 
+  const daily = await loadDailyStatus(root);
   const nowcast = await readCsvIfPresent(await firstExisting(wideCandidates(root, "nowcast_latest.csv")));
   const forecast = await readCsvIfPresent(await firstExisting(wideCandidates(root, "forecast_3day.csv")));
   const history = await readCsvIfPresent(await firstExisting(wideCandidates(root, "history_3day.csv")));
@@ -226,5 +241,60 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     history,
     accuracy,
     thresholds,
+    daily: daily.readings,
+    dailyGeneratedAt: daily.generatedAt,
   };
+}
+
+/**
+ * Current file first. History is used only when none of the current paths exist.
+ * A current file that parses to no stations still wins, so an empty publish
+ * does not resurrect yesterday's history.
+ *
+ * These paths are not final. A rename stays in this function.
+ */
+async function loadDailyStatus(root: string): Promise<{ readings: Map<string, PublishedReading>; generatedAt: string | null }> {
+  const current = await firstExisting([
+    ...wideCandidates(root, "daily_status.csv"),
+    ...wideCandidates(root, "daily_status.json"),
+    path.join(root, "outputs", "daily", "current.csv"),
+    path.join(root, "outputs", "daily", "current.json"),
+  ]);
+  if (current) return readDailyFile(current);
+  const history = await latestDailyHistory(root);
+  if (!history) return { readings: new Map(), generatedAt: null };
+  return readDailyFile(history);
+}
+
+async function readDailyFile(filePath: string): Promise<{ readings: Map<string, PublishedReading>; generatedAt: string | null }> {
+  if (filePath.endsWith(".json")) {
+    const text = await readText(filePath);
+    if (text == null) return { readings: new Map(), generatedAt: null };
+    return parseDailyStatus(JSON.parse(text) as unknown);
+  }
+  return parseDailyStatusRows(await readCsvFile(filePath));
+}
+
+async function latestDailyHistory(root: string): Promise<string | null> {
+  const dirs = [
+    path.join(root, "outputs", "daily", "history"),
+    path.join(root, "outputs", "daily_status"),
+    path.join(root, "outputs", "status_history"),
+  ];
+  let best: { date: string; file: string } | null = null;
+  for (const dir of dirs) {
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") continue;
+      throw err;
+    }
+    const name = latestDatedStatusName(names);
+    const match = name?.match(/^(\d{4}-\d{2}-\d{2})\./);
+    if (!name || !match) continue;
+    if (!best || match[1] > best.date) best = { date: match[1], file: path.join(dir, name) };
+  }
+  return best?.file ?? null;
 }

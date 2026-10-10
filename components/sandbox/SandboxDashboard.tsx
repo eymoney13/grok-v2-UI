@@ -11,6 +11,7 @@ import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Statu
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import { publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { confidenceWords, copyReading, methodShort, officialPosting } from "@/lib/publishedReading";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
@@ -287,16 +288,37 @@ export default function SandboxDashboard({
                                   {beach.tier === "limited_data" && <span className={s.sampleMeta}>Outside the model pool</span>}
                                 </span>
                                 {(() => {
+                                  const posting = officialPosting(copyReading(beach));
                                   const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
-                                  if (score) return <NeptuneIndexBadge score={score} />;
-                                  if (beach.hasEstimate && beach.status) {
-                                    return (
-                                      <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
-                                        <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
-                                      </span>
-                                    );
-                                  }
-                                  return <span className={s.noEstimate}>No estimate</span>;
+                                  const confidence = confidenceWords(beach.confidence);
+                                  const method = methodShort(beach.method);
+                                  const estimate = score ? (
+                                    <NeptuneIndexBadge score={score} />
+                                  ) : beach.hasEstimate && beach.status ? (
+                                    <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
+                                      <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
+                                    </span>
+                                  ) : (
+                                    <span className={s.noEstimate}>No estimate</span>
+                                  );
+                                  return (
+                                    <span className={s.readingStack}>
+                                      {posting && (
+                                        <span className={s.officialList}>
+                                          <span>Official posting</span>
+                                          <strong>{posting.label}</strong>
+                                          {posting.source && <small>Source: {posting.source}</small>}
+                                        </span>
+                                      )}
+                                      <span className={posting ? s.estimateSecondary : undefined}>{estimate}</span>
+                                      {confidence && (
+                                        <span className={confidence.level === "low" ? s.confidenceLowList : confidence.level === "medium" ? s.confidenceMediumList : s.confidenceHighList}>
+                                          {confidence.level === "high" ? "High confidence" : confidence.level === "medium" ? "Medium confidence" : "Low confidence"}
+                                        </span>
+                                      )}
+                                      {method && <span className={s.methodShort}>{method}</span>}
+                                    </span>
+                                  );
                                 })()}
                                 <ChevronRight size={18} aria-hidden="true" />
                               </button>
@@ -337,6 +359,9 @@ export default function SandboxDashboard({
                 : "Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. "}
               <NeptuneIndexExplainerLink />. Pins group together until you zoom in.
             </p>
+            {beaches.some((beach) => officialPosting(copyReading(beach))) && (
+              <p className={s.legendNote}>A dark pin is an official county posting. It is shown ahead of our estimate, and the beach page still includes that estimate.</p>
+            )}
             <p className={s.caveat}>{run.source === "v2" ? "Beach list from the statewide roster." : "Beach list from the published station files."} Estimates, not current lab results. Always follow official beach advisories.</p>
           </section>
         )}

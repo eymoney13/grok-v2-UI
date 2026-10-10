@@ -6,6 +6,7 @@ import { publishedOutlook } from "./dailySummary.ts";
 import { forecastHorizonFor } from "./forecastDisplay.ts";
 import { loadDashboardData } from "./loadData.ts";
 import type { PublicBeach } from "./publicBeach.ts";
+import { copyReading } from "./publishedReading.ts";
 import { calendarDay } from "./waterStatus.ts";
 
 export interface PublicCatalog {
@@ -81,6 +82,7 @@ function fromModeled(beach: BeachData, slug: string): PublicBeach {
     horizon,
     outlook: publishedOutlook(beach.forecast, beach.predictionDate, horizon),
     fallbackUsed: beach.fallbackUsed,
+    ...copyReading(beach),
   };
 }
 
@@ -106,5 +108,6 @@ function fromUnmodeled(beach: BeachListItem, slug: string): PublicBeach {
     horizon: forecastHorizonFor(beach.code),
     outlook: [],
     fallbackUsed: beach.fallbackUsed,
+    ...copyReading(beach),
   };
 }

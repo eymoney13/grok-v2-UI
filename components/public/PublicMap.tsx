@@ -6,6 +6,7 @@ import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, BASEMAP_SUBDOMAINS, BASEMAP_URL 
 import { bandLabel, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { copyReading, officialPosting } from "@/lib/publishedReading";
 import "leaflet/dist/leaflet.css";
 
 function Fit({ points }: { points: [number, number][] }) {
@@ -21,7 +22,7 @@ function Fit({ points }: { points: [number, number][] }) {
   return null;
 }
 
-function pinWords(beach: GlanceBeach, lang: Lang): string {
+function modelWords(beach: GlanceBeach, lang: Lang): string {
   const score = beach.hasEstimate ? publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand) : null;
   if (score) {
     const label = bandLabel(score.band.id, lang);
@@ -31,7 +32,18 @@ function pinWords(beach: GlanceBeach, lang: Lang): string {
   return lang === "es" ? "Sin estimado hoy" : "No estimate today";
 }
 
+function pinWords(beach: GlanceBeach, lang: Lang): string {
+  const posting = officialPosting(copyReading(beach));
+  const model = modelWords(beach, lang);
+  if (!posting) return model;
+  const source = posting.source ? ` (${posting.source})` : "";
+  return lang === "es"
+    ? `Aviso oficial: ${posting.label}${source}. Nuestro estimado: ${model}`
+    : `Official posting: ${posting.label}${source}. Our estimate: ${model}`;
+}
+
 function pinColor(beach: GlanceBeach): string {
+  if (officialPosting(copyReading(beach))) return "#142226";
   const score = beach.hasEstimate ? publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand) : null;
   if (score) return score.band.color;
   if (beach.status === "Normal") return "#3c6435";

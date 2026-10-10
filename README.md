@@ -42,3 +42,4 @@ node scripts/build-v2-sample.mjs
 - Installable PWA basics: a web manifest and a service worker that always asks the network, so a saved page is not reused as today’s reading. English and Spanish on the public home and beach page. Beach names stay as published.
 - “Last tested N days ago,” a calm limited-lab line, “Last updated,” and a banner when the forecast date is not today.
 - “Past lab agreement,” not a confidence score.
+- Optional daily fields, when a v2 file includes them: how the estimate was made, a high / medium / low confidence in words, and an official county posting. The posting is shown first, with its source when one was published, and our prediction stays visible under it. Low confidence is worded and styled as less certain than high confidence. A rain advisory appears only when the rules path flags recent rain. Absent fields stay off the page.

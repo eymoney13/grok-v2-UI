@@ -3,6 +3,7 @@
 import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
 import { copy, statusPill, bandLabel, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
+import { copyReading, officialPosting } from "@/lib/publishedReading";
 import styles from "./public.module.css";
 
 const TONE = {
@@ -12,6 +13,48 @@ const TONE = {
 } as const;
 
 export function StatusChip({
+  beach,
+  lang,
+}: {
+  beach: Pick<
+    GlanceBeach,
+    | "hasEstimate"
+    | "status"
+    | "neptuneIndex"
+    | "neptuneBand"
+    | "tier"
+    | "method"
+    | "confidence"
+    | "postingStatus"
+    | "postingSource"
+    | "finalStatus"
+    | "rainAdvisory"
+  >;
+  lang: Lang;
+}) {
+  const posting = officialPosting(copyReading(beach));
+  const estimate = <EstimateChip beach={beach} lang={lang} />;
+  if (!posting) return estimate;
+  return (
+    <span className={styles.officialStack}>
+      <span className={styles.officialKicker}>
+        <span className={styles.officialTag}>{lang === "es" ? "Aviso oficial" : "Official posting"}</span>
+        <strong>{posting.label}</strong>
+        {posting.source && (
+          <span className={styles.officialSource}>
+            {lang === "es" ? `Fuente: ${posting.source}` : `Source: ${posting.source}`}
+          </span>
+        )}
+      </span>
+      <span className={styles.secondaryEstimate}>
+        <span className={styles.estimateLabel}>{lang === "es" ? "Nuestro estimado" : "Our estimate"}</span>
+        {estimate}
+      </span>
+    </span>
+  );
+}
+
+function EstimateChip({
   beach,
   lang,
 }: {
