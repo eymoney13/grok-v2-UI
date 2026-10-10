@@ -10,6 +10,8 @@ import { ArrowRight, ChevronRight, List, Map as MapIcon, Waves } from "lucide-re
 import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Status } from "@/lib/data";
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
+import { publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
@@ -284,13 +286,18 @@ export default function SandboxDashboard({
                                   {freshness && <span className={s.sampleMeta}>{freshness}</span>}
                                   {beach.tier === "limited_data" && <span className={s.sampleMeta}>Outside the model pool</span>}
                                 </span>
-                                {beach.hasEstimate && beach.status ? (
-                                  <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
-                                    <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
-                                  </span>
-                                ) : (
-                                  <span className={s.noEstimate}>No estimate</span>
-                                )}
+                                {(() => {
+                                  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+                                  if (score) return <NeptuneIndexBadge score={score} />;
+                                  if (beach.hasEstimate && beach.status) {
+                                    return (
+                                      <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
+                                        <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
+                                      </span>
+                                    );
+                                  }
+                                  return <span className={s.noEstimate}>No estimate</span>;
+                                })()}
                                 <ChevronRight size={18} aria-hidden="true" />
                               </button>
                             </li>
@@ -314,8 +321,22 @@ export default function SandboxDashboard({
                 <Link href="/california/request-beach">Request your beach <ArrowRight size={16} aria-hidden="true" /></Link>
               </div>
             )}
-            <div className={s.legend} aria-label="Status key">{(["Normal", "Slightly elevated", "Not recommended"] as const).map((status) => <span key={status} className={bandClass(status)}><i className={s.dot} />{statusReading(status).pill}</span>)}</div>
-            <p className={s.legendNote}>Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. Pins group together until you zoom in.</p>
+            {beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand)) && (
+              <div className={s.indexLegend}>
+                <h3>Neptune Index</h3>
+                <NeptuneIndexScale compact />
+                <p className={s.legendNote}>The number and the band name are both on the pin. Color repeats that band. Beaches without a published index stay on Under, Near, and Over the limit.</p>
+              </div>
+            )}
+            {beaches.some((beach) => beach.hasEstimate && !publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand)) && (
+              <div className={s.legend} aria-label="Status key">{(["Normal", "Slightly elevated", "Not recommended"] as const).map((status) => <span key={status} className={bandClass(status)}><i className={s.dot} />{statusReading(status).pill}</span>)}</div>
+            )}
+            <p className={s.legendNote}>
+              {beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand))
+                ? "A Neptune Index is a 0–500 score from the model file. "
+                : "Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. "}
+              <NeptuneIndexExplainerLink />. Pins group together until you zoom in.
+            </p>
             <p className={s.caveat}>{run.source === "v2" ? "Beach list from the statewide roster." : "Beach list from the published station files."} Estimates, not current lab results. Always follow official beach advisories.</p>
           </section>
         )}

@@ -15,6 +15,8 @@ export type MapBeach = {
   status: Status | null;
   verdict?: Verdict | null;
   hasEstimate?: boolean;
+  neptuneIndex?: number | null;
+  neptuneBand?: string | null;
 };
 import {
   BASEMAP_ATTRIBUTION,
@@ -22,6 +24,7 @@ import {
   BASEMAP_SUBDOMAINS,
   BASEMAP_URL,
 } from "@/lib/basemap";
+import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, publishedNeptuneScore } from "@/lib/neptuneIndex";
 
 function colorFor(status: Status) {
   if (status === "Not recommended") return "#cc3333";
@@ -550,6 +553,15 @@ function NearbyLocation({ beaches }: { beaches: MapBeach[] }) {
   </div>;
 }
 
+function indexPin(score: NonNullable<ReturnType<typeof publishedNeptuneScore>>): L.DivIcon {
+  return L.divIcon({
+    className: "nb-overview-icon",
+    html: indexPinHtml(score),
+    iconSize: INDEX_PIN_SIZE,
+    iconAnchor: [INDEX_PIN_SIZE[0] / 2, INDEX_PIN_SIZE[1] / 2],
+  });
+}
+
 function limitedPin(): L.DivIcon {
   return L.divIcon({
     className: "nb-overview-icon",
@@ -560,6 +572,8 @@ function limitedPin(): L.DivIcon {
 }
 
 function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): string {
+  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+  if (score) return `${beach.name}, ${neptuneIndexName(score)}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
   const phrase = statusPhrase?.(beach.status);
   return phrase ? `${beach.name}, ${phrase}` : beach.name;
@@ -597,8 +611,13 @@ function ClusteredPins({
       for (const beach of beaches) {
         if (!Number.isFinite(beach.latitude) || !Number.isFinite(beach.longitude)) continue;
         const name = pinName(beach, statusPhrase);
+        const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
         const marker = L.marker([beach.latitude, beach.longitude], {
-          icon: beach.hasEstimate && beach.status ? dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict) : limitedPin(),
+          icon: score
+            ? indexPin(score)
+            : beach.hasEstimate && beach.status
+              ? dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict)
+              : limitedPin(),
           title: name,
           alt: name,
           keyboard: true,
@@ -669,13 +688,13 @@ export default function OverviewMap({
       ) : (
         beaches.map((b) => {
           if (!b.status) return null;
-          const phrase = statusPhrase?.(b.status);
-          const accessibleName = phrase ? `${b.name}, ${phrase}` : b.name;
+          const score = publishedNeptuneScore(b.neptuneIndex, b.neptuneBand);
+          const accessibleName = pinName(b, statusPhrase);
           return (
             <Marker
               key={b.code}
               position={[b.latitude, b.longitude]}
-              icon={dotIcon({ status: b.status, verdict: b.verdict }, binaryVerdict)}
+              icon={score ? indexPin(score) : dotIcon({ status: b.status, verdict: b.verdict }, binaryVerdict)}
               eventHandlers={{ click: () => onSelect(b.code) }}
               keyboard
               title={accessibleName}
@@ -691,9 +710,11 @@ export default function OverviewMap({
         labelMinZoom={labelMinZoom}
         beaches={beaches}
         dotHalf={
-          binaryVerdict
-            ? { x: PLAIN_DOT[0] / 2, y: PLAIN_DOT[1] / 2 }
-            : { x: BAND_DOT[0] / 2, y: BAND_DOT[1] / 2 }
+          beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand))
+            ? { x: INDEX_PIN_SIZE[0] / 2, y: INDEX_PIN_SIZE[1] / 2 }
+            : binaryVerdict
+              ? { x: PLAIN_DOT[0] / 2, y: PLAIN_DOT[1] / 2 }
+              : { x: BAND_DOT[0] / 2, y: BAND_DOT[1] / 2 }
         }
         onSelect={onSelect}
       />

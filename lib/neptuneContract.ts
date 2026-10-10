@@ -5,6 +5,8 @@
  * Nothing in this module reads the filesystem or invents a measurement.
  */
 
+import { readNeptuneFields } from "./neptuneIndex.ts";
+
 export type RosterTier = "model_pool" | "limited_data";
 
 export interface RosterStation {
@@ -37,6 +39,10 @@ export interface ArchiveRow {
   calibratedProbability: number | null;
   /** Non-numeric pipeline note only. A bare number is not treated as confidence. */
   confidenceFlag: string | null;
+  /** Published 0–500 score. Null when the column is absent or out of range. */
+  neptuneIndex: number | null;
+  /** Published band id from the display config. Null when absent or unknown. */
+  neptuneBand: string | null;
 }
 
 export interface StationArchive {
@@ -248,6 +254,7 @@ export function parseArchiveRow(row: Record<string, unknown>): ArchiveRow | null
   const code = stationCode(first(row, ["station_code", "stationCode", "StationCode", "station"]));
   if (!code) return null;
   const extra = optionalModelFields(row);
+  const indexFields = readNeptuneFields(row);
   return {
     stationCode: code,
     forecastDate: asDateString(first(row, ["forecast_date", "forecastDate", "prediction_date"])),
@@ -264,6 +271,8 @@ export function parseArchiveRow(row: Record<string, unknown>): ArchiveRow | null
     generatedAt: extra.generatedAt,
     calibratedProbability: extra.calibratedProbability,
     confidenceFlag: extra.confidenceFlag,
+    neptuneIndex: indexFields.index,
+    neptuneBand: indexFields.band,
   };
 }
 

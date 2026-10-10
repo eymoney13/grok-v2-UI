@@ -718,6 +718,10 @@ export interface BeachData {
   calibratedProbability: number | null;
   /** Non-numeric pipeline note. Never a confidence percent. */
   confidenceFlag: string | null;
+  /** Published Neptune Index, 0–500. Null when the file did not include one. */
+  neptuneIndex: number | null;
+  /** Band id for a published index or a published band name. Null when absent. */
+  neptuneBand: string | null;
   /** County staleness limit, in days, when the config file names one. */
   staleAfterDays: number | null;
   // Long-run descriptive stats from the backend's roster file: what share of
@@ -788,6 +792,8 @@ export interface BeachListItem {
   probability: number | null;
   predictionDate: string | null;
   fallbackUsed: boolean | null;
+  neptuneIndex: number | null;
+  neptuneBand: string | null;
 }
 
 export function toBeachListItem(beach: BeachData): BeachListItem {
@@ -810,6 +816,8 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     probability: beach.probability,
     predictionDate: beach.predictionDate,
     fallbackUsed: beach.fallbackUsed,
+    neptuneIndex: beach.neptuneIndex,
+    neptuneBand: beach.neptuneBand,
   };
 }
 

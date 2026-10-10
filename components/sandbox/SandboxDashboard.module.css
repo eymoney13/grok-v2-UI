@@ -389,6 +389,8 @@
 .sampleMeta { font-size: 12px; font-weight: 450; color: #3d5558; line-height: 1.45; }
 .emptySearch { margin-top: 20px; font-size: 15px; line-height: 1.5; }
 .legendNote { margin-top: 10px; max-width: 68ch; font-size: 12px; line-height: 1.6; color: #3d5558; }
+.indexLegend { margin-top: 22px; }
+.indexLegend h3 { font-size: 14px; font-weight: 650; }
 .sampleFacts { margin-top: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; }
 .limitedNote { max-width: 62ch; color: #3d5558; font-size: 13px; line-height: 1.55; }
 .scaleEnds { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; }

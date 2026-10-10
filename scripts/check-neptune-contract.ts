@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
 import {
   groupArchive,
   parseArchiveRow,
@@ -10,6 +11,12 @@ import {
   staleLimitDays,
   textFlag,
 } from "../lib/neptuneContract.ts";
+import {
+  bandForValue,
+  parseNeptuneBandId,
+  publishedNeptuneScore,
+  readNeptuneFields,
+} from "../lib/neptuneIndex.ts";
 
 const roster = parseRosterJson({
   stations: [
@@ -102,5 +109,49 @@ const manifest = parseManifest({
 assert.equal(manifest.modelVersion, "v2-test");
 assert.equal(manifest.checksPassed, false);
 assert.deepEqual(manifest.staleCounties, ["Orange"]);
+
+const indexed = parseArchiveRow({
+  station_code: "DHS114",
+  lead_days: 0,
+  neptune_index: 126,
+  neptune_band: "hazardous",
+});
+assert.ok(indexed);
+assert.equal(indexed.neptuneIndex, 126);
+assert.equal(indexed.neptuneBand, "hazardous");
+const fromNumber = publishedNeptuneScore(indexed.neptuneIndex, indexed.neptuneBand);
+assert.equal(fromNumber?.index, 126);
+assert.equal(fromNumber?.band.id, "caution");
+assert.equal(bandForValue(100)?.id, "moderate");
+assert.equal(bandForValue(101)?.id, "caution");
+assert.equal(parseNeptuneBandId("Unhealthy for swimming"), "unhealthy_for_swimming");
+const bandOnly = publishedNeptuneScore(null, parseNeptuneBandId("Unhealthy for swimming"));
+assert.equal(bandOnly?.index, null);
+assert.equal(bandOnly?.band.id, "unhealthy_for_swimming");
+assert.equal(publishedNeptuneScore(900, "good")?.index, null);
+assert.equal(publishedNeptuneScore(900, "good")?.band.id, "good");
+assert.equal(publishedNeptuneScore(900, "not-a-band"), null);
+assert.equal(publishedNeptuneScore(null, null), null);
+assert.deepEqual(readNeptuneFields({ probability: 0.4 }), { index: null, band: null });
+assert.equal(NEPTUNE_INDEX.limitBandId, "caution");
+assert.equal(NEPTUNE_INDEX.bands.find((band) => band.id === "caution")?.min, 101);
+
+function contrast(hexA: string, hexB: string): number {
+  const lum = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const channel = (c: number) => {
+      const s = c / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+  };
+  const a = lum(hexA);
+  const b = lum(hexB);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+for (const band of NEPTUNE_INDEX.bands) {
+  assert.ok(contrast(band.color, band.textColor) >= 4.5, `${band.id} badge contrast`);
+  assert.ok(contrast(band.surface, band.surfaceText) >= 4.5, `${band.id} card contrast`);
+}
 
 console.log("neptune contract checks passed");

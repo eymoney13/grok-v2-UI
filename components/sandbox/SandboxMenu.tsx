@@ -8,6 +8,7 @@ import s from "./SandboxEditorial.module.css";
 
 export const sandboxLinks = [
   { href: "/california/how-it-works", label: "How Neptune Works" },
+  { href: "/california/neptune-index", label: "Neptune Index" },
   { href: "/california/stories", label: "Why It Matters" },
   { href: "/california/team", label: "Meet the Team" },
 ];

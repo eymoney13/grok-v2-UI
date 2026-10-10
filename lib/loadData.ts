@@ -31,6 +31,7 @@ import {
 } from "./neptuneContract";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
+import { mergeNeptuneFields, publishedNeptuneScore, readNeptuneFields } from "./neptuneIndex";
 
 interface NowcastRow {
   StationCode: string;
@@ -523,7 +524,13 @@ export async function loadDashboardData(
     const factors = buildFactors(rawFactors);
     const drivers = buildDrivers(rawFactors, nowcastDirections(now));
     const conditions = buildConditions(now);
-    const wideOptional = optionalModelFields(now as unknown as Record<string, unknown>);
+    const nowRecord = now as unknown as Record<string, unknown>;
+    const wideOptional = optionalModelFields(nowRecord);
+    const mergedIndex = mergeNeptuneFields(
+      archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
+      readNeptuneFields(nowRecord)
+    );
+    const publishedIndex = publishedNeptuneScore(mergedIndex.index, mergedIndex.band);
 
     const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
 
@@ -640,6 +647,8 @@ export async function loadDashboardData(
       ...rosterFacts(entry, archive, bundle),
       calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
+      neptuneIndex: publishedIndex?.index ?? null,
+      neptuneBand: publishedIndex?.band.id ?? null,
       excRatePct: entry.excRatePct ?? null,
       nSamples: entry.nSamples ?? null,
       pastDays,
@@ -746,6 +755,8 @@ function unmodeledItem(
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
+    neptuneIndex: null,
+    neptuneBand: null,
   };
 }
 

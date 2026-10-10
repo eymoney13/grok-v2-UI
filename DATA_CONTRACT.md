@@ -91,6 +91,8 @@ Not in the sample, because they are not published yet. The adapter already accep
 | `generated_at` as a column on the nowcast or archive | Same “Last updated” clock time, in the board’s timezone. |
 | A calibrated probability column on the nowcast, forecast, or archive. Names tried, in order: `calibrated_probability`, `calibrated_exc_probability`, `p_calibrated` | A second line, “Calibrated estimate,” labeled as a model figure, not a lab result. |
 | A per-beach confidence flag. Names tried, in order: `confidence_flag`, `confidence`, `model_confidence`, `beach_confidence` | A non-numeric value is shown as “Pipeline note,” with the words “Not a guarantee about today.” A numeric value is ignored so it cannot be read as a confidence percent. The past-lab panel stays “Past lab agreement.” |
+| `neptune_index` on the nowcast or archive lead 0. Also accepted as `neptuneIndex`. | A number from 0 through 500. The band name, color, and swim guidance come from `config/neptune-index.ts`. The board does not calculate this number. A value outside 0–500 is ignored. |
+| `neptune_band` on the nowcast or archive lead 0. Also accepted as `neptuneBand`. | A band id or label from that same config (`good`, `moderate`, `caution`, `unhealthy_for_swimming`, `unhealthy`, `hazardous`). Used when no in-range index was published, and then the badge has no number. When an in-range index is present, the cutoff table picks the band so the words match the number. |
 
 ## What the board will not invent
 
@@ -99,3 +101,4 @@ Not in the sample, because they are not published yet. The adapter already accep
 - No county staleness limit beyond `default_days` or the 7-day fallback.
 - No region until `regions` names one.
 - No confidence score.
+- No Neptune Index number unless `neptune_index` is present and between 0 and 500. No band unless that number falls on the scale or `neptune_band` names one. The percentage is never converted into an index.
