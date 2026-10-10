@@ -1,7 +1,12 @@
 "use client";
 
-import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
-import { copy, statusPill, bandLabel, type Lang } from "@/lib/publicCopy";
+import {
+  displayBandLabel,
+  indexConfidenceNote,
+  indexScalePhrase,
+  type NeptuneDisplay,
+} from "@/lib/neptuneIndex";
+import { copy, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import styles from "./public.module.css";
@@ -20,8 +25,7 @@ export function StatusChip({
     GlanceBeach,
     | "hasEstimate"
     | "status"
-    | "neptuneIndex"
-    | "neptuneBand"
+    | "neptuneDisplay"
     | "tier"
     | "method"
     | "confidence"
@@ -65,24 +69,33 @@ export function StatusChip({
   );
 }
 
+function IndexChip({ display, lang }: { display: NeptuneDisplay; lang: Lang }) {
+  const phrase = indexScalePhrase(display, lang);
+  const label = displayBandLabel(display, lang);
+  const note = indexConfidenceNote(display, lang);
+  return (
+    <span className={styles.indexStack}>
+      <span
+        className={`${styles.indexChip} ${display.lowered ? styles.indexChipLowered : ""}`}
+        style={display.lowered ? undefined : { background: display.color, color: display.textColor }}
+      >
+        {phrase && <strong>{phrase}</strong>}
+        {label && <span>{label}</span>}
+      </span>
+      {note && <span className={styles.indexNote}>{note}</span>}
+    </span>
+  );
+}
+
 function EstimateChip({
   beach,
   lang,
 }: {
-  beach: Pick<GlanceBeach, "hasEstimate" | "status" | "neptuneIndex" | "neptuneBand" | "tier">;
+  beach: Pick<GlanceBeach, "hasEstimate" | "status" | "neptuneDisplay" | "tier">;
   lang: Lang;
 }) {
   const t = copy[lang];
-  const score = beach.hasEstimate ? publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand) : null;
-  if (score) {
-    return (
-      <span className={styles.indexChip} style={{ background: score.band.color, color: score.band.textColor }}>
-        <span className={styles.level}>{score.band.level}</span>
-        {score.index != null && <strong>{formatNeptuneIndex(score.index)}</strong>}
-        <span>{bandLabel(score.band.id, lang)}</span>
-      </span>
-    );
-  }
+  if (beach.neptuneDisplay) return <IndexChip display={beach.neptuneDisplay} lang={lang} />;
   if (beach.hasEstimate && beach.status) {
     return <span className={`${styles.pill} ${TONE[beach.status]}`}>{statusPill(beach.status, lang)}</span>;
   }

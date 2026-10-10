@@ -1,14 +1,16 @@
-import type { NeptuneBandId } from "../config/neptune-index.ts";
 import { EPA_MPN_THRESHOLD, type Status } from "./data.ts";
 import {
   FORECAST_EXPERIMENTAL_EXPLANATION,
   FORECAST_HIDDEN_STATION_NOTE,
   type ForecastHorizon,
 } from "./forecastDisplay.ts";
-import { formatNeptuneIndex, publishedNeptuneScore } from "./neptuneIndex.ts";
 import {
-  BAND_GUIDANCE_ES,
-  bandLabel,
+  displayBandLabel,
+  indexConfidenceNote,
+  indexScalePhrase,
+  type NeptuneDisplay,
+} from "./neptuneIndex.ts";
+import {
   statusDetail,
   statusPhrase,
   type Lang,
@@ -40,6 +42,7 @@ export interface SummaryFacts {
   status: Status | null;
   neptuneIndex: number | null;
   neptuneBand: string | null;
+  neptuneDisplay: NeptuneDisplay | null;
   daysSinceSample: number | null;
   noRecentSample: boolean;
   staleAfterDays: number | null;
@@ -158,29 +161,44 @@ function statusSentence(facts: SummaryFacts, lang: Lang): string {
 }
 
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
+  const indexed = indexSentence(facts.neptuneDisplay, lang);
+  if (indexed) return indexed;
   if (!facts.hasEstimate) {
     return lang === "es"
       ? "Hoy no se publicó un estimado para esta playa."
       : "No estimate was published for this beach today.";
   }
-  const score = publishedNeptuneScore(facts.neptuneIndex, facts.neptuneBand);
-  if (score) {
-    const label = bandLabel(score.band.id, lang);
-    const guidance = lang === "es" ? BAND_GUIDANCE_ES[score.band.id as NeptuneBandId] : score.band.guidance;
-    if (score.index != null) {
-      const number = formatNeptuneIndex(score.index);
-      return lang === "es"
-        ? `El índice Neptune de hoy es ${number}, ${label}. ${guidance}`
-        : `Today’s Neptune Index is ${number}, ${label}. ${guidance}`;
-    }
-    return lang === "es"
-      ? `La banda del índice Neptune de hoy es ${label}. No se publicó un número con ella. ${guidance}`
-      : `Today’s Neptune Index band is ${label}. No number was published with it. ${guidance}`;
-  }
   if (facts.status) return statusDetail(facts.status, lang);
   return lang === "es"
     ? "Hoy no se publicó un estimado para esta playa."
     : "No estimate was published for this beach today.";
+}
+
+function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | null {
+  if (!display) return null;
+  const label = displayBandLabel(display, lang);
+  const phrase = indexScalePhrase(display, lang);
+  const guidance = (lang === "es" ? display.guidanceEs : display.guidance) ?? "";
+  const note = indexConfidenceNote(display, lang);
+  let sentence: string;
+  if (phrase && label) {
+    sentence = lang === "es"
+      ? `El índice Neptune de hoy es ${phrase}, ${label}.`
+      : `Today’s Neptune Index is ${phrase}, ${label}.`;
+  } else if (phrase) {
+    sentence = lang === "es"
+      ? `El índice Neptune de hoy es ${phrase}.`
+      : `Today’s Neptune Index is ${phrase}.`;
+  } else if (label) {
+    sentence = lang === "es"
+      ? `La banda del índice Neptune de hoy es ${label}. No se publicó un número con ella.`
+      : `Today’s Neptune Index band is ${label}. No number was published with it.`;
+  } else {
+    return null;
+  }
+  if (guidance) sentence = `${sentence} ${guidance}`;
+  if (note) sentence = `${sentence} ${note}`;
+  return sentence;
 }
 
 function lastTestedSentence(days: number | null, lang: Lang): string | null {

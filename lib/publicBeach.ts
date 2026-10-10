@@ -1,5 +1,6 @@
 import type { ForecastHorizon } from "./forecastDisplay.ts";
 import type { RosterTier, Status } from "./data.ts";
+import type { NeptuneDisplay } from "./neptuneIndex.ts";
 import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./publishedReading.ts";
 
 /** One published day of the experimental outlook. Status words only — no probability. */
@@ -28,6 +29,7 @@ export interface PublicBeach {
   status: Status | null;
   neptuneIndex: number | null;
   neptuneBand: string | null;
+  neptuneDisplay: NeptuneDisplay | null;
   daysSinceSample: number | null;
   noRecentSample: boolean;
   staleAfterDays: number | null;
@@ -60,6 +62,7 @@ export type GlanceBeach = Pick<
   | "status"
   | "neptuneIndex"
   | "neptuneBand"
+  | "neptuneDisplay"
   | "daysSinceSample"
   | "noRecentSample"
   | "staleAfterDays"
@@ -85,6 +88,7 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     status: beach.status,
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
+    neptuneDisplay: beach.neptuneDisplay,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,

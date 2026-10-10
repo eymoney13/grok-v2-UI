@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
+import { readFileSync } from "node:fs";
 import { assignSlugs, encodeStationKey, resolveSlugMatch, slugifyName } from "../lib/beachSlug.ts";
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
 import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/statewideCounts.ts";
-import { bandLabel, statusDetail, BAND_GUIDANCE_ES } from "../lib/publicCopy.ts";
+import { displayBandLabel, indexScalePhrase, parseIndexBands, resolveNeptuneDisplay } from "../lib/neptuneIndex.ts";
+import { statusDetail } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
 
 const base: SummaryFacts = {
@@ -11,6 +12,7 @@ const base: SummaryFacts = {
   status: "Normal",
   neptuneIndex: null,
   neptuneBand: null,
+  neptuneDisplay: null,
   daysSinceSample: 4,
   noRecentSample: false,
   staleAfterDays: null,
@@ -154,17 +156,34 @@ const noneEstimate = dailySummary({ ...base, hasEstimate: false, status: "Normal
 assert.match(noneEstimate.status, /No estimate was published/);
 assert.doesNotMatch(noneEstimate.status, /under the/);
 
+const indexScale = parseIndexBands(JSON.parse(readFileSync("data/neptune-v2/config/neptune_index_bands.json", "utf8")));
 const indexOnly = dailySummary(
-  { ...base, neptuneIndex: null, neptuneBand: "unhealthy_for_swimming" },
+  { ...base, neptuneDisplay: resolveNeptuneDisplay(null, "unhealthy_for_swimming", indexScale) },
   "en"
 );
 assert.match(indexOnly.status, /No number was published/);
+assert.match(indexOnly.status, /Unhealthy for Swimming/);
 assert.doesNotMatch(indexOnly.status, /\d/);
 
-const indexed = dailySummary({ ...base, neptuneIndex: 42, neptuneBand: "hazardous" }, "en");
-assert.match(indexed.status, /42/);
+const indexed = dailySummary(
+  { ...base, neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
+  "en"
+);
+assert.match(indexed.status, /92 \/ 100, higher is cleaner/);
 assert.match(indexed.status, /Good/);
 assert.doesNotMatch(indexed.status, /Hazardous/);
+const kept = dailySummary(
+  { ...base, neptuneDisplay: resolveNeptuneDisplay(42, "hazardous", indexScale) },
+  "en"
+);
+assert.match(kept.status, /42/);
+assert.match(kept.status, /Hazardous/);
+assert.doesNotMatch(kept.status, /\bGood\b/);
+const loweredIndex = dailySummary(
+  { ...base, daysSinceSample: 12, neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale, { daysSinceSample: 12 }) },
+  "en"
+);
+assert.match(loweredIndex.status, /Lower confidence: last lab test 12 days ago/);
 
 assert.equal(dailySummary({ ...base, fallbackUsed: null }, "en").fallback, null);
 assert.match(dailySummary({ ...base, fallbackUsed: true }, "en").fallback ?? "", /fallback/);
@@ -173,11 +192,12 @@ for (const status of ["Normal", "Slightly elevated", "Not recommended"] as const
   assert.equal(statusDetail(status, "en"), statusReading(status).detail);
 }
 
-for (const band of NEPTUNE_INDEX.bands) {
-  assert.equal(bandLabel(band.id, "en"), band.label);
-  assert.ok(BAND_GUIDANCE_ES[band.id].length > 20);
-  assert.ok(bandLabel(band.id, "es").length > 0);
-}
+const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);
+assert.ok(spanishGood);
+assert.equal(displayBandLabel(spanishGood, "es"), "Bueno");
+assert.match(indexScalePhrase(spanishGood, "es") ?? "", /más alto es más limpio/);
+assert.equal(displayBandLabel(resolveNeptuneDisplay(70, "caution", indexScale)!, "es"), "Precaución");
+assert.equal(displayBandLabel(resolveNeptuneDisplay(40, "poor", indexScale)!, "es"), "Mala");
 
 const slugBeaches = [
   { code: "A", name: "Hermosa Beach", county: "Los Angeles" },
@@ -265,7 +285,19 @@ const coast = [
 ];
 assert.equal(statewideStatusHeadline(coast), null);
 assert.equal(statewideStatusHeadline(coast, "es"), null);
-assert.equal(statewideStatusHeadline(coast, "en", true), "3 beaches over the limit today");
+assert.equal(statewideStatusHeadline(coast, "en", true), "2 beaches over the limit today");
+assert.equal(
+  statewideStatusHeadline([{ status: "Normal", hasEstimate: true, neptuneBand: "poor" }], "en", true),
+  "1 beach over the limit today"
+);
+assert.equal(
+  statewideStatusHeadline(
+    [{ status: "Normal", hasEstimate: true, neptuneBand: "unhealthy_for_swimming", neptuneDisplay: { countsAsPoor: false } }],
+    "en",
+    true
+  ),
+  "0 beaches over the limit today"
+);
 assert.equal(
   statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true }], "en", true),
   "1 beach over the limit today"

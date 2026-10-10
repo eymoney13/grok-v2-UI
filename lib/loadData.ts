@@ -36,7 +36,15 @@ import {
 import { matchDailyRow, matchLeadRows } from "./stationIdentity.ts";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
-import { mergeNeptuneFields, publishedNeptuneScore, readNeptuneFields } from "./neptuneIndex";
+import {
+  mergeNeptuneFields,
+  readNeptuneFields,
+  resolveNeptuneDisplay,
+  type IndexContext,
+  type IndexScale,
+  type NeptuneDisplay,
+  type NeptuneFields,
+} from "./neptuneIndex";
 import { EMPTY_READING, copyReading, mergeReadings } from "./publishedReading.ts";
 
 interface NowcastRow {
@@ -571,7 +579,6 @@ export async function loadDashboardData(
       archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
       readNeptuneFields(nowRecord)
     );
-    const publishedIndex = publishedNeptuneScore(mergedIndex.index, mergedIndex.band);
     const reading = copyReading(
       mergeReadings(
         lead0
@@ -709,8 +716,14 @@ export async function loadDashboardData(
       calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
       ...reading,
-      neptuneIndex: publishedIndex?.index ?? null,
-      neptuneBand: publishedIndex?.band.id ?? null,
+      ...presentIndex(mergedIndex, {
+        tier: entry.tier,
+        postingStatus: reading.postingStatus,
+        daysSinceSample: days,
+        noRecentSample: parseBool(now.no_recent_sample),
+        staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
+        fallbackUsed: archive?.fallbackUsed ?? null,
+      }, bundle?.indexScale ?? null),
       excRatePct: entry.excRatePct ?? null,
       nSamples: entry.nSamples ?? null,
       pastDays,
@@ -757,6 +770,21 @@ export async function loadDashboardData(
     staleCounties: bundle?.manifest?.staleCounties ?? [],
     checksPassed: bundle?.manifest?.checksPassed ?? null,
     modelVersion: bundle?.manifest?.modelVersion ?? null,
+    indexScale: bundle?.indexScale ?? null,
+  };
+}
+
+function presentIndex(
+  fields: NeptuneFields | null | undefined,
+  context: IndexContext,
+  scale: IndexScale | null
+): { neptuneIndex: number | null; neptuneBand: string | null; neptuneDisplay: NeptuneDisplay | null } {
+  const band = fields?.band ?? null;
+  const neptuneDisplay = resolveNeptuneDisplay(fields?.index, band, scale, context);
+  return {
+    neptuneIndex: neptuneDisplay?.index ?? null,
+    neptuneBand: band,
+    neptuneDisplay,
   };
 }
 
@@ -804,6 +832,16 @@ function unmodeledItem(
 ): BeachListItem {
   const dailyRow = dailyFor(bundle, entry, sharing);
   const lead0 = leadsFor(bundle, entry, sharing).find((row) => row.lead === 0) ?? null;
+  const reading = copyReading(
+    mergeReadings(
+      lead0
+        ? { ...EMPTY_READING, method: lead0.reading.method, confidence: lead0.reading.confidence }
+        : null,
+      dailyRow?.reading,
+      lead0?.reading,
+      archive?.nowcast?.reading
+    )
+  );
   return {
     id: entry.id,
     stationKey: entry.stationKey,
@@ -825,34 +863,23 @@ function unmodeledItem(
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
-    ...unmodeledIndex(lead0?.index, dailyRow?.index, archive),
-    ...copyReading(
-      mergeReadings(
-        lead0
-          ? { ...EMPTY_READING, method: lead0.reading.method, confidence: lead0.reading.confidence }
-          : null,
-        dailyRow?.reading,
-        lead0?.reading,
-        archive?.nowcast?.reading
-      )
+    ...presentIndex(
+      mergeNeptuneFields(
+        lead0?.index,
+        dailyRow?.index,
+        archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
+      ),
+      {
+        tier: entry.tier,
+        postingStatus: reading.postingStatus,
+        daysSinceSample: archive?.lastSampleAgeDays ?? null,
+        noRecentSample: false,
+        staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
+        fallbackUsed: archive?.fallbackUsed ?? null,
+      },
+      bundle?.indexScale ?? null
     ),
-  };
-}
-
-function unmodeledIndex(
-  leadIndex: { index: number | null; band: string | null } | null | undefined,
-  dailyIndex: { index: number | null; band: string | null } | null | undefined,
-  archive: StationArchive | null
-): { neptuneIndex: number | null; neptuneBand: string | null } {
-  const merged = mergeNeptuneFields(
-    leadIndex,
-    dailyIndex,
-    archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
-  );
-  const published = publishedNeptuneScore(merged.index, merged.band);
-  return {
-    neptuneIndex: published?.index ?? null,
-    neptuneBand: published?.band.id ?? null,
+    ...reading,
   };
 }
 

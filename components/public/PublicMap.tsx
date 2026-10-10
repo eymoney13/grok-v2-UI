@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, BASEMAP_SUBDOMAINS, BASEMAP_URL } from "@/lib/basemap";
-import { bandLabel, statusPill, type Lang } from "@/lib/publicCopy";
+import { statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
-import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { displayBandLabel, indexConfidenceNote, indexScalePhrase } from "@/lib/neptuneIndex";
 import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import "leaflet/dist/leaflet.css";
 
@@ -23,10 +23,11 @@ function Fit({ points }: { points: [number, number][] }) {
 }
 
 function modelWords(beach: GlanceBeach, lang: Lang): string {
-  const score = beach.hasEstimate ? publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand) : null;
-  if (score) {
-    const label = bandLabel(score.band.id, lang);
-    return score.index != null ? `${formatNeptuneIndex(score.index)} ${label}` : label;
+  const display = beach.neptuneDisplay;
+  if (display) {
+    return [indexScalePhrase(display, lang), displayBandLabel(display, lang), indexConfidenceNote(display, lang)]
+      .filter((part) => !!part)
+      .join(", ");
   }
   if (beach.hasEstimate && beach.status) return statusPill(beach.status, lang);
   return lang === "es" ? "Sin estimado hoy" : "No estimate today";
@@ -50,8 +51,7 @@ function pinWords(beach: GlanceBeach, lang: Lang): string {
 
 function pinColor(beach: GlanceBeach): string {
   if (officialPosting(copyReading(beach))) return "#142226";
-  const score = beach.hasEstimate ? publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand) : null;
-  if (score) return score.band.color;
+  if (beach.neptuneDisplay) return beach.neptuneDisplay.color;
   if (beach.status === "Normal") return "#3c6435";
   if (beach.status === "Slightly elevated") return "#786016";
   if (beach.status === "Not recommended") return "#a63d36";

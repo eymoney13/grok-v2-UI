@@ -53,7 +53,7 @@ export interface ArchiveRow {
   confidenceFlag: string | null;
   /** Method, confidence level, and official posting. All null when the columns are absent. */
   reading: PublishedReading;
-  /** Published 0–500 score. Null when the column is absent or out of range. */
+  /** Published score. Range checks happen when the bands file is applied. */
   neptuneIndex: number | null;
   /** Published band id from the display config. Null when absent or unknown. */
   neptuneBand: string | null;

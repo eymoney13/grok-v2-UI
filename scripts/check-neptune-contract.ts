@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
+import { readFileSync } from "node:fs";
 import {
   groupArchive,
   parseArchiveRow,
@@ -37,9 +37,13 @@ import {
 } from "../lib/publishedReading.ts";
 import {
   bandForValue,
+  displayBandLabel,
+  indexConfidenceNote,
+  indexScalePhrase,
+  parseIndexBands,
   parseNeptuneBandId,
-  publishedNeptuneScore,
   readNeptuneFields,
+  resolveNeptuneDisplay,
 } from "../lib/neptuneIndex.ts";
 
 const roster = parseRosterJson({
@@ -378,22 +382,80 @@ const indexed = parseArchiveRow({
 assert.ok(indexed);
 assert.equal(indexed.neptuneIndex, 126);
 assert.equal(indexed.neptuneBand, "hazardous");
-const fromNumber = publishedNeptuneScore(indexed.neptuneIndex, indexed.neptuneBand);
-assert.equal(fromNumber?.index, 126);
-assert.equal(fromNumber?.band.id, "caution");
-assert.equal(bandForValue(100)?.id, "moderate");
-assert.equal(bandForValue(101)?.id, "caution");
+
+const sampleScale = parseIndexBands(JSON.parse(readFileSync("data/neptune-v2/config/neptune_index_bands.json", "utf8")));
+assert.ok(sampleScale);
+assert.equal(sampleScale.scaleMin, 0);
+assert.equal(sampleScale.scaleMax, 100);
+assert.equal(sampleScale.higherIsBetter, true);
+assert.equal(sampleScale.bands.find((band) => band.id === "good")?.min, 85);
+assert.equal(sampleScale.bands.find((band) => band.id === "caution")?.min, 65);
+assert.equal(sampleScale.bands.find((band) => band.id === "caution")?.max, 84);
+assert.equal(sampleScale.bands.find((band) => band.id === "poor")?.max, 64);
+
+const oldScore = resolveNeptuneDisplay(indexed.neptuneIndex, indexed.neptuneBand, sampleScale);
+assert.equal(oldScore?.index, null);
+assert.equal(oldScore?.bandId, "hazardous");
+assert.equal(oldScore?.label, "Hazardous");
+
+const alt = parseIndexBands({
+  scale_min: 0,
+  scale_max: 100,
+  bands: [
+    { id: "good", label: "Good", min: 80, max: 100 },
+    { id: "caution", label: "Caution", min: 50, max: 79 },
+    { id: "poor", label: "Poor", min: 0, max: 49 },
+  ],
+  tiers: {
+    limited_data: [
+      { id: "good", label: "Good", min: 95, max: 100 },
+      { id: "poor", label: "Poor", min: 0, max: 94 },
+    ],
+  },
+});
+assert.ok(alt);
+assert.equal(bandForValue(82, alt.bands)?.id, "good");
+assert.equal(bandForValue(60, alt.bands)?.id, "caution");
+assert.equal(resolveNeptuneDisplay(90, null, alt, { tier: "limited_data" })?.bandId, "poor");
+assert.equal(resolveNeptuneDisplay(90, null, alt, { tier: "model_pool" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(90, "poor", alt)?.bandId, "poor");
+assert.equal(resolveNeptuneDisplay(90, "poor", alt)?.index, 90);
+assert.equal(resolveNeptuneDisplay(92, null, null)?.bandId, null);
+assert.equal(resolveNeptuneDisplay(92, null, null)?.index, 92);
+assert.match(indexScalePhrase(resolveNeptuneDisplay(92, null, null)!, "en") ?? "", /higher is cleaner/);
+assert.equal(resolveNeptuneDisplay(null, null, alt), null);
+assert.equal(resolveNeptuneDisplay(null, null, alt, { postingStatus: "closure" }), null);
+const forced = resolveNeptuneDisplay(90, "good", alt, { postingStatus: "warning" });
+assert.equal(forced?.bandId, "poor");
+assert.equal(forced?.forcedByPosting, true);
+assert.equal(forced?.countsAsPoor, false);
+assert.equal(resolveNeptuneDisplay(90, "good", alt, { postingStatus: "advisory" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(90, "good", alt, { postingStatus: "open" })?.bandId, "good");
 assert.equal(parseNeptuneBandId("Unhealthy for swimming"), "unhealthy_for_swimming");
-const bandOnly = publishedNeptuneScore(null, parseNeptuneBandId("Unhealthy for swimming"));
+const bandOnly = resolveNeptuneDisplay(null, parseNeptuneBandId("Unhealthy for swimming"), alt);
 assert.equal(bandOnly?.index, null);
-assert.equal(bandOnly?.band.id, "unhealthy_for_swimming");
-assert.equal(publishedNeptuneScore(900, "good")?.index, null);
-assert.equal(publishedNeptuneScore(900, "good")?.band.id, "good");
-assert.equal(publishedNeptuneScore(900, "not-a-band"), null);
-assert.equal(publishedNeptuneScore(null, null), null);
+assert.equal(bandOnly?.bandId, "unhealthy_for_swimming");
+assert.equal(bandOnly?.label, "Unhealthy for Swimming");
+assert.equal(resolveNeptuneDisplay(900, "good", alt)?.index, null);
+assert.equal(resolveNeptuneDisplay(900, "good", alt)?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(900, "not-a-band", alt)?.bandId, "not_a_band");
+assert.equal(resolveNeptuneDisplay(null, null, alt), null);
 assert.deepEqual(readNeptuneFields({ probability: 0.4 }), { index: null, band: null });
-assert.equal(NEPTUNE_INDEX.limitBandId, "caution");
-assert.equal(NEPTUNE_INDEX.bands.find((band) => band.id === "caution")?.min, 101);
+const lowered = resolveNeptuneDisplay(90, "good", alt, { daysSinceSample: 12 });
+assert.equal(lowered?.lowered, true);
+assert.match(indexConfidenceNote(lowered!, "en") ?? "", /last lab test 12 days ago/);
+assert.match(indexConfidenceNote(lowered!, "es") ?? "", /hace 12 días/);
+const both = resolveNeptuneDisplay(90, "good", alt, { daysSinceSample: 12, fallbackUsed: true });
+assert.match(indexConfidenceNote(both!, "en") ?? "", /12 days ago/);
+assert.match(indexConfidenceNote(both!, "en") ?? "", /fallback/);
+assert.equal(resolveNeptuneDisplay(90, "good", alt, { daysSinceSample: 2 })?.lowered, false);
+assert.equal(displayBandLabel(resolveNeptuneDisplay(90, "good", alt)!, "es"), "Bueno");
+assert.equal(displayBandLabel(resolveNeptuneDisplay(90, "caution", alt)!, "es"), "Precaución");
+assert.equal(displayBandLabel(resolveNeptuneDisplay(20, "poor", alt)!, "es"), "Mala");
+const byTier = parseIndexBands({ by_tier: { model_pool: [{ id: "poor", min: 0, max: 40 }, { id: "good", min: 41, max: 100 }] } });
+assert.equal(byTier?.tiers.model_pool?.[0]?.id, "poor");
+assert.equal(parseIndexBands({}), null);
+assert.equal(parseIndexBands({ bands: [] }), null);
 
 function contrast(hexA: string, hexB: string): number {
   const lum = (hex: string) => {
@@ -408,10 +470,16 @@ function contrast(hexA: string, hexB: string): number {
   const b = lum(hexB);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
-for (const band of NEPTUNE_INDEX.bands) {
-  assert.ok(contrast(band.color, band.textColor) >= 4.5, `${band.id} badge contrast`);
-  assert.ok(contrast(band.surface, band.surfaceText) >= 4.5, `${band.id} card contrast`);
+for (const bandId of ["good", "caution", "poor"] as const) {
+  const shown = resolveNeptuneDisplay(bandId === "poor" ? 10 : bandId === "caution" ? 60 : 90, bandId, alt);
+  assert.ok(shown);
+  assert.ok(contrast(shown.color, shown.textColor) >= 4.5, `${bandId} badge contrast`);
+  assert.ok(contrast(shown.surface, shown.surfaceText) >= 4.5, `${bandId} card contrast`);
 }
+const grey = resolveNeptuneDisplay(90, "good", alt, { fallbackUsed: true });
+assert.ok(grey);
+assert.ok(contrast(grey.color, grey.textColor) >= 4.5, "lowered badge contrast");
+assert.match(indexConfidenceNote(grey, "en") ?? "", /fallback/);
 
 assert.equal(parseLeadMaturity("go_live"), "go_live");
 assert.equal(parseLeadMaturity("Go-Live"), "go_live");

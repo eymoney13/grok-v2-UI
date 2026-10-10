@@ -76,7 +76,7 @@ export default async function LocationPage({
     config.slug,
     config.newsFilterTerms
   );
-  const [{ beaches: allBeaches, unmodeled, predictionDate, generatedAt, dataSource, staleCounties, checksPassed, modelVersion }, news, entitled] = await Promise.all([
+  const [{ beaches: allBeaches, unmodeled, predictionDate, generatedAt, dataSource, staleCounties, checksPassed, modelVersion, indexScale }, news, entitled] = await Promise.all([
     loadDashboardData(config),
     newsEnabled
       ? fetchNewsAlerts(getNewsFeedUrls(), newsFilterTerms)
@@ -127,6 +127,7 @@ export default async function LocationPage({
         newsEnabled={newsEnabled}
         advisory={config.advisory ?? DEFAULT_ADVISORY}
         run={{ source: dataSource, staleCounties, checksPassed, modelVersion }}
+        indexScale={indexScale}
         initialView={query.view === "list" ? "list" : "map"}
         initialRegion={regionQuery}
       />

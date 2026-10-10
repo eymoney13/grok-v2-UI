@@ -308,25 +308,37 @@
   font-style: italic;
 }
 
+.indexStack {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
 .indexChip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   width: fit-content;
+  max-width: 18rem;
   min-height: 32px;
-  padding: 4px 10px 4px 4px;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 0.85rem;
   font-weight: 700;
 }
 
-.level {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
+.indexChipLowered {
+  background: #d5dadd;
+  color: #1c2428;
+}
+
+.indexNote {
+  display: block;
+  max-width: 18rem;
+  color: #173a3c;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .section {

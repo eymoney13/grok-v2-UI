@@ -1,3 +1,4 @@
+import type { NeptuneDisplay, IndexScale } from "./neptuneIndex.ts";
 import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./publishedReading.ts";
 
 export interface LocationConfig {
@@ -746,10 +747,15 @@ export interface BeachData {
   postingDate: string | null;
   /** True only when the rules path flagged recent rain. */
   rainAdvisory: boolean | null;
-  /** Published Neptune Index, 0–500. Null when the file did not include one. */
+  /**
+   * Published Neptune Index on the 0–100 scale. Null when the file omitted it
+   * or the number sits outside the active scale. This app does not calculate it.
+   */
   neptuneIndex: number | null;
-  /** Band id for a published index or a published band name. Null when absent. */
+  /** Band word from the file. Not replaced by a cutoff. Null when the cell was empty. */
   neptuneBand: string | null;
+  /** Server-resolved badge. Null when both index fields were empty. */
+  neptuneDisplay: NeptuneDisplay | null;
   /** County staleness limit, in days, when the config file names one. */
   staleAfterDays: number | null;
   // Long-run descriptive stats from the backend's roster file: what share of
@@ -825,6 +831,7 @@ export interface BeachListItem {
   fallbackUsed: boolean | null;
   neptuneIndex: number | null;
   neptuneBand: string | null;
+  neptuneDisplay: NeptuneDisplay | null;
   method: EstimateMethod | null;
   confidence: ConfidenceLevel | null;
   postingStatus: PostingStatus | null;
@@ -858,6 +865,7 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     fallbackUsed: beach.fallbackUsed,
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
+    neptuneDisplay: beach.neptuneDisplay,
     method: beach.method,
     confidence: beach.confidence,
     postingStatus: beach.postingStatus,
@@ -883,6 +891,8 @@ export interface DashboardData {
    * yet, which the card renders as no run time rather than a guessed one.
    */
   generatedAt: string | null;
+  /** Band table from the active v2 root. Null when that file is absent. */
+  indexScale: IndexScale | null;
 }
 
 export function thresholdFor(

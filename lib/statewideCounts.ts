@@ -1,6 +1,4 @@
-import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
 import type { Status } from "./data.ts";
-import { publishedNeptuneScore } from "./neptuneIndex.ts";
 import type { Lang } from "./publicCopy.ts";
 
 /**
@@ -12,26 +10,24 @@ import type { Lang } from "./publicCopy.ts";
  * count, and a county's beach count are inventory, not this total.
  *
  * Official county postings stay on each beach. They are not added in here.
+ * A warning that forces the index band to Poor does not count unless the
+ * published band itself is poor, or the estimate is Not recommended.
  */
 export const SHOW_STATEWIDE_STATUS_COUNTS = false;
 
 export interface StatusCountable {
   status?: Status | null;
   hasEstimate?: boolean;
-  neptuneIndex?: number | null;
   neptuneBand?: string | null;
-}
-
-function limitLevel(): number {
-  return NEPTUNE_INDEX.bands.find((band) => band.id === NEPTUNE_INDEX.limitBandId)?.level ?? 3;
+  neptuneDisplay?: { countsAsPoor?: boolean } | null;
 }
 
 /** One beach on the over-limit side of a published estimate. Not a posting. */
 export function beachCountsAsOverLimit(beach: StatusCountable): boolean {
   if (beach.hasEstimate === false) return false;
   if (beach.status === "Not recommended") return true;
-  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
-  return score != null && score.band.level >= limitLevel();
+  if (beach.neptuneDisplay?.countsAsPoor) return true;
+  return beach.neptuneBand === "poor";
 }
 
 /**

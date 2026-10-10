@@ -1,4 +1,3 @@
-import type { NeptuneBandId } from "../config/neptune-index.ts";
 import { EPA_MPN_THRESHOLD, type Status } from "./data.ts";
 
 export type Lang = "en" | "es";
@@ -131,35 +130,6 @@ const STATUS_DETAIL: Record<Lang, Record<Status, string>> = {
   },
 };
 
-export const BAND_LABEL: Record<Lang, Record<NeptuneBandId, string>> = {
-  en: {
-    good: "Good",
-    moderate: "Moderate",
-    caution: "Caution",
-    unhealthy_for_swimming: "Unhealthy for swimming",
-    unhealthy: "Unhealthy",
-    hazardous: "Hazardous",
-  },
-  es: {
-    good: "Bueno",
-    moderate: "Moderado",
-    caution: "Precaución",
-    unhealthy_for_swimming: "No saludable para nadar",
-    unhealthy: "No saludable",
-    hazardous: "Peligroso",
-  },
-};
-
-/** Spanish swim guidance for the public page. English stays in config/neptune-index.ts. */
-export const BAND_GUIDANCE_ES: Record<NeptuneBandId, string> = {
-  good: "Un número más bajo es un mejor día. Con este puntaje, nadar se ve favorable. Los avisos publicados en la playa siguen primero.",
-  moderate: "La mayoría de las personas pueden nadar. Enjuágate después. Quien se enferma con más facilidad puede preferir un baño más corto.",
-  caution: "Esta es la banda naranja. Empieza en el límite estatal para bacterias de playa. Los niños y quien se enferma con más facilidad deben quedarse fuera. Los demás deberían pensarlo dos veces.",
-  unhealthy_for_swimming: "Quédate fuera del agua. Esta banda ya pasó el límite estatal.",
-  unhealthy: "Quédate fuera del agua. Un puntaje en esta banda significa más probabilidad de enfermarse por el contacto con el agua.",
-  hazardous: "Quédate fuera del agua. Es lo más alto de la escala.",
-};
-
 export function statusPill(status: Status, lang: Lang): string {
   return PILL[lang][status];
 }
@@ -170,8 +140,4 @@ export function statusPhrase(status: Status, lang: Lang): string {
 
 export function statusDetail(status: Status, lang: Lang): string {
   return STATUS_DETAIL[lang][status];
-}
-
-export function bandLabel(id: NeptuneBandId, lang: Lang): string {
-  return BAND_LABEL[lang][id];
 }

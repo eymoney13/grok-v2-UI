@@ -33,6 +33,7 @@ import {
   type StalenessTable,
   type StationArchive,
 } from "./neptuneContract";
+import { parseIndexBands, type IndexScale } from "./neptuneIndex.ts";
 import type { PublishedReading } from "./publishedReading.ts";
 
 /**
@@ -57,6 +58,8 @@ export interface V2Bundle {
   /** True when the archive file's header includes `agency`. The map key is then code plus agency. */
   archiveAgencyColumn: boolean;
   staleness: StalenessTable | null;
+  /** Band table from this root's `config/neptune_index_bands.json`. Null when that file is absent. */
+  indexScale: IndexScale | null;
   regions: RegionConfig | null;
   manifest: RunManifest | null;
   /** Null means the v2 tree has no file and the caller should use the published CSV. */
@@ -92,6 +95,7 @@ const EMPTY_BUNDLE: V2Bundle = {
   archive: new Map(),
   archiveAgencyColumn: false,
   staleness: null,
+  indexScale: null,
   regions: null,
   manifest: null,
   nowcast: null,
@@ -256,6 +260,10 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
   const staleText = stalePath ? await readText(stalePath) : null;
   const staleness = staleText ? parseStaleness(JSON.parse(staleText) as unknown) : null;
 
+  const bandsPath = path.join(root, "config", "neptune_index_bands.json");
+  const bandsText = await readText(bandsPath);
+  const indexScale = bandsText ? parseIndexBands(JSON.parse(bandsText) as unknown) : null;
+
   const manifestPath = await firstExisting([path.join(root, "outputs", "run_manifest.json")]);
   const manifestText = manifestPath ? await readText(manifestPath) : null;
   const manifest = manifestText ? parseManifest(JSON.parse(manifestText) as unknown) : null;
@@ -275,6 +283,7 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     archive,
     archiveAgencyColumn,
     staleness,
+    indexScale,
     regions,
     manifest,
     nowcast,
@@ -289,6 +298,11 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     dailyGeneratedAt: daily.file.generatedAt,
     dailyLeads: daily.leads,
   };
+}
+
+/** Band table from the same v2 root as the roster. Another tree's file is not used. */
+export async function loadNeptuneIndexScale(): Promise<IndexScale | null> {
+  return (await loadV2Bundle()).indexScale;
 }
 
 /**

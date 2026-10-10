@@ -117,7 +117,7 @@ body {
   font-weight: 650;
 }
 
-/* Neptune Index. The word and the level number travel with the color. */
+/* Neptune Index. The number and the band word travel with the color. */
 .nb-overview-dot--index {
   width: 80px;
   height: 36px;
@@ -137,27 +137,29 @@ body {
   font-weight: 650;
 }
 
+.nb-index-stack {
+  display: block;
+}
 .nb-index-badge {
   display: inline-grid;
-  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  max-width: 11rem;
+  max-width: 18rem;
   padding: 6px 8px;
   border-radius: 6px;
   line-height: 1.2;
   text-align: left;
 }
-.nb-index-badge-level {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border: 2px solid currentColor;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+.nb-index-badge--lowered {
+  background: #d5dadd;
+  color: #1c2428;
+}
+.nb-index-note {
+  display: block;
+  margin-top: 6px;
+  color: #173a3c;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 .nb-index-badge-copy {
   display: grid;
@@ -177,10 +179,10 @@ body {
   margin-top: 18px;
   padding: 10px 14px;
 }
-.nb-index-badge--hero .nb-index-badge-level {
-  width: 2rem;
-  height: 2rem;
-  font-size: 16px;
+.nb-index-direction {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 650;
 }
 .nb-index-badge--hero .nb-index-badge-copy strong {
   font-size: clamp(28px, 5vw, 44px);

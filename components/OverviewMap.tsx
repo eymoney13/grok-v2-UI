@@ -19,6 +19,7 @@ export type MapBeach = {
   hasEstimate?: boolean;
   neptuneIndex?: number | null;
   neptuneBand?: string | null;
+  neptuneDisplay?: NeptuneDisplay | null;
   method?: PublishedReading["method"];
   confidence?: PublishedReading["confidence"];
   postingStatus?: PostingStatus | null;
@@ -32,7 +33,7 @@ import {
   BASEMAP_SUBDOMAINS,
   BASEMAP_URL,
 } from "@/lib/basemap";
-import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, publishedNeptuneScore } from "@/lib/neptuneIndex";
+import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
 import { copyReading, officialPosting, postingLabel, postingPinText, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 
 function colorFor(status: Status) {
@@ -562,10 +563,10 @@ function NearbyLocation({ beaches }: { beaches: MapBeach[] }) {
   </div>;
 }
 
-function indexPin(score: NonNullable<ReturnType<typeof publishedNeptuneScore>>): L.DivIcon {
+function indexPin(display: NeptuneDisplay): L.DivIcon {
   return L.divIcon({
     className: "nb-overview-icon",
-    html: indexPinHtml(score),
+    html: indexPinHtml(display),
     iconSize: INDEX_PIN_SIZE,
     iconAnchor: [INDEX_PIN_SIZE[0] / 2, INDEX_PIN_SIZE[1] / 2],
   });
@@ -596,8 +597,7 @@ function officialPin(label: string): L.DivIcon {
 function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
   const posting = officialPosting(copyReading(beach));
   if (posting) return officialPin(postingPinText(posting));
-  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
-  if (score) return indexPin(score);
+  if (beach.neptuneDisplay) return indexPin(beach.neptuneDisplay);
   if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict);
   return limitedPin();
 }
@@ -608,8 +608,7 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
     const source = posting.source ? `, source ${posting.source}` : "";
     return `${beach.name}, ${posting.kind}, ${postingLabel(posting)}${source}`;
   }
-  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
-  if (score) return `${beach.name}, ${neptuneIndexName(score)}`;
+  if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
   const phrase = statusPhrase?.(beach.status);
   return phrase ? `${beach.name}, ${phrase}` : beach.name;
@@ -741,7 +740,7 @@ export default function OverviewMap({
         labelMinZoom={labelMinZoom}
         beaches={beaches}
         dotHalf={
-          beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand))
+          beaches.some((beach) => beach.neptuneDisplay)
             ? { x: INDEX_PIN_SIZE[0] / 2, y: INDEX_PIN_SIZE[1] / 2 }
             : binaryVerdict
               ? { x: PLAIN_DOT[0] / 2, y: PLAIN_DOT[1] / 2 }

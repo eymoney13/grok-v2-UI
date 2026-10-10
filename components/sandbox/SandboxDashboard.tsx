@@ -11,7 +11,7 @@ import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Statu
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
-import { publishedNeptuneScore } from "@/lib/neptuneIndex";
+import type { IndexScale } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
@@ -51,6 +51,7 @@ export default function SandboxDashboard({
   newsEnabled,
   advisory,
   run,
+  indexScale = null,
   initialView = "map",
   initialRegion = "",
 }: {
@@ -69,6 +70,7 @@ export default function SandboxDashboard({
   newsEnabled: boolean;
   advisory: { label: string; href: string };
   run: BoardRun;
+  indexScale?: IndexScale | null;
   initialView?: "list" | "map" | "news";
   initialRegion?: string;
 }) {
@@ -294,11 +296,11 @@ export default function SandboxDashboard({
                                   const reading = copyReading(beach);
                                   const posting = officialPosting(reading);
                                   const open = openPostingWords(reading);
-                                  const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+                                  const score = beach.neptuneDisplay;
                                   const confidence = confidenceWords(beach.confidence);
                                   const method = methodShort(beach.method);
                                   const estimate = score ? (
-                                    <NeptuneIndexBadge score={score} />
+                                    <NeptuneIndexBadge display={score} />
                                   ) : beach.hasEstimate && beach.status ? (
                                     <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
                                       <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>
@@ -349,19 +351,19 @@ export default function SandboxDashboard({
                 <Link href="/california/request-beach">Request your beach <ArrowRight size={16} aria-hidden="true" /></Link>
               </div>
             )}
-            {beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand)) && (
+            {beaches.some((beach) => beach.neptuneDisplay) && (
               <div className={s.indexLegend}>
                 <h3>Neptune Index</h3>
-                <NeptuneIndexScale compact />
-                <p className={s.legendNote}>The number and the band name are both on the pin. Color repeats that band. Beaches without a published index stay on Under, Near, and Over the limit.</p>
+                <NeptuneIndexScale scale={indexScale} compact />
+                <p className={s.legendNote}>The number and the band name are both on the pin.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on Under, Near, and Over the limit.</p>
               </div>
             )}
-            {beaches.some((beach) => beach.hasEstimate && !publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand)) && (
+            {beaches.some((beach) => beach.hasEstimate && !beach.neptuneDisplay) && (
               <div className={s.legend} aria-label="Status key">{(["Normal", "Slightly elevated", "Not recommended"] as const).map((status) => <span key={status} className={bandClass(status)}><i className={s.dot} />{statusReading(status).pill}</span>)}</div>
             )}
             <p className={s.legendNote}>
-              {beaches.some((beach) => publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand))
-                ? "A Neptune Index is a 0–500 score from the model file. "
+              {beaches.some((beach) => beach.neptuneDisplay)
+                ? `A Neptune Index is a 0–${indexScale?.scaleMax ?? 100} score from the model file.${indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} `
                 : "Under limit, near limit, and over limit compare today’s estimate with the 104 MPN/100 mL enterococcus standard. On the map, the same three readings are labeled Low, Moderate, and High. "}
               <NeptuneIndexExplainerLink />. Pins group together until you zoom in.
             </p>

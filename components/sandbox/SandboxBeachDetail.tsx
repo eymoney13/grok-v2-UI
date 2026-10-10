@@ -21,7 +21,6 @@ import {
   statusReading,
   tierReading,
 } from "@/lib/waterStatus";
-import { publishedNeptuneScore } from "@/lib/neptuneIndex";
 import {
   confidenceWords,
   copyReading,
@@ -34,7 +33,7 @@ import {
   unknownPostingWords,
   type PublishedReading,
 } from "@/lib/publishedReading";
-import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
+import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
 import LabHistory, { type LabPoint } from "../LabHistory";
 import WhyPrediction from "../WhyPrediction";
 import ForecastAccuracy from "../ForecastAccuracy";
@@ -170,7 +169,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneIndex?: number | null; neptuneBand?: string | null }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"] }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -180,7 +179,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
 }) {
   const today = buildWindowCells(beach).find((cell) => cell.type === "today")!.day;
   const reading = statusReading(today.status);
-  const indexScore = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
+  const indexScore = beach.neptuneDisplay;
   const readingFields = copyReading(beach);
   const posting = officialPosting(readingFields);
   const forecasts = beach.forecast.filter((day) => day.date > beach.predictionDate).slice(0, 3);
@@ -212,18 +211,18 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     {indexScore ? (
       <section
         className={s.predictionHero}
-        style={{ background: indexScore.band.surface, color: indexScore.band.surfaceText }}
+        style={{ background: indexScore.surface, color: indexScore.surfaceText }}
         aria-label="Today’s Neptune Index"
       >
         <div className={s.predictionHeader}>
           <p className={s.eyebrow}>{posting ? "Our estimate" : "Neptune Index"}</p>
           <span>{dateLabel(today.date)}</span>
         </div>
-        <NeptuneIndexBadge score={indexScore} size="hero" />
-        <p className={s.predictionExplanation}>{indexScore.band.guidance}</p>
-        <NeptuneIndexScale value={indexScore.index} compact />
+        <NeptuneIndexBadge display={indexScore} size="hero" />
+        {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
+        <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
         <p className={s.predictionExplanation}>
-          The number comes from the model file. This page does not calculate it. <NeptuneIndexExplainerLink />.{" "}
+          The number comes from the model file. This page does not calculate it.{indexScore.higherIsBetter ? " A higher number is cleaner." : ""} <NeptuneIndexExplainerLink />.{" "}
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
         </p>
       </section>
@@ -297,8 +296,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}
     {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
-              const neighborScore = publishedNeptuneScore(neighbor.neptuneIndex, neighbor.neptuneBand);
-              if (neighborScore) return <NeptuneIndexBadge score={neighborScore} />;
+              if (neighbor.neptuneDisplay) return <NeptuneIndexBadge display={neighbor.neptuneDisplay} />;
               if (neighbor.hasEstimate !== false && neighbor.status) return <span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span>;
               return <span className={s.noEstimate}>No estimate</span>;
             })()}<ArrowRight size={16} aria-hidden="true" /></button></li>)}</ul></section>}
