@@ -13,7 +13,7 @@ Open [http://localhost:3000](http://localhost:3000). That redirects to `/califor
 
 `npm run build` compiles the production app. `node scripts/check-neptune-contract.ts` (Node 22, with type stripping) checks the parsers.
 
-No deployment, and no production database. Auth, billing, and email alerts stay off unless you add your own local keys. The board still renders without them.
+No deployment, and no production database. Auth, billing, and email alerts stay off unless you add your own local keys. The board still renders without them. PostHog is skipped when `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST` are unset. Maps use OpenStreetMap tiles unless `NEXT_PUBLIC_CARTO_API_KEY` is set.
 
 ## Where the data comes from
 

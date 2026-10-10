@@ -6,8 +6,7 @@
 // Clerk is OPTIONAL by design. The boards are anonymous — a reader checking
 // whether the water is clean has never needed an account and still does not —
 // so an unconfigured Clerk must leave the site exactly as it was rather than
-// taking it down, the way a missing PostHog key currently does. Accounts exist
-// only for Pro, and only Pro asks for one.
+// taking it down. Accounts exist only for Pro, and only Pro asks for one.
 
 export function isClerkConfigured(): boolean {
   return Boolean(
