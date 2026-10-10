@@ -1,4 +1,4 @@
-import type { ConfidenceLevel, EstimateMethod } from "./publishedReading.ts";
+import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./publishedReading.ts";
 
 export interface LocationConfig {
   slug: string;
@@ -725,10 +725,12 @@ export interface BeachData {
   /** high, medium, or low. A number is never stored here. */
   confidence: ConfidenceLevel | null;
   /** Official county closure or advisory. Blank means there is no posting. */
-  postingStatus: string | null;
+  postingStatus: PostingStatus | null;
   postingSource: string | null;
-  /** Resolved label used only when a posting was published. */
+  /** Resolved label used only when a closure, warning, or advisory was published. */
   finalStatus: string | null;
+  /** Day the county check applies to. Null when the file did not give one. */
+  postingDate: string | null;
   /** True only when the rules path flagged recent rain. */
   rainAdvisory: boolean | null;
   /** Published Neptune Index, 0–500. Null when the file did not include one. */
@@ -809,9 +811,10 @@ export interface BeachListItem {
   neptuneBand: string | null;
   method: EstimateMethod | null;
   confidence: ConfidenceLevel | null;
-  postingStatus: string | null;
+  postingStatus: PostingStatus | null;
   postingSource: string | null;
   finalStatus: string | null;
+  postingDate: string | null;
   rainAdvisory: boolean | null;
 }
 
@@ -842,6 +845,7 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     postingStatus: beach.postingStatus,
     postingSource: beach.postingSource,
     finalStatus: beach.finalStatus,
+    postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
   };
 }

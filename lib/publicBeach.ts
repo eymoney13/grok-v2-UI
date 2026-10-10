@@ -1,6 +1,6 @@
 import type { ForecastHorizon } from "./forecastDisplay.ts";
 import type { RosterTier, Status } from "./data.ts";
-import type { ConfidenceLevel, EstimateMethod } from "./publishedReading.ts";
+import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./publishedReading.ts";
 
 /** One published day of the experimental outlook. Status words only — no probability. */
 export interface OutlookDay {
@@ -36,9 +36,10 @@ export interface PublicBeach {
   fallbackUsed: boolean | null;
   method: EstimateMethod | null;
   confidence: ConfidenceLevel | null;
-  postingStatus: string | null;
+  postingStatus: PostingStatus | null;
   postingSource: string | null;
   finalStatus: string | null;
+  postingDate: string | null;
   rainAdvisory: boolean | null;
 }
 
@@ -64,6 +65,7 @@ export type GlanceBeach = Pick<
   | "postingStatus"
   | "postingSource"
   | "finalStatus"
+  | "postingDate"
   | "rainAdvisory"
 >;
 
@@ -88,6 +90,7 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     postingStatus: beach.postingStatus,
     postingSource: beach.postingSource,
     finalStatus: beach.finalStatus,
+    postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
   };
 }

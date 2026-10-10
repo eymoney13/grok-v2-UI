@@ -26,8 +26,12 @@ import {
   confidenceWords,
   copyReading,
   methodWords,
+  kindTitle,
   officialPosting,
+  openPostingWords,
+  postingLabel,
   rainAdvisoryWords,
+  unknownPostingWords,
   type PublishedReading,
 } from "@/lib/publishedReading";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
@@ -50,13 +54,18 @@ export function OfficialBanner({ reading }: { reading: PublishedReading }) {
   const posting = officialPosting(reading);
   if (!posting) return null;
   return (
-    <section className={s.officialHero} aria-label="Official posting">
-      <p className={s.eyebrow}>Official posting</p>
-      <h2>{posting.label}</h2>
+    <section className={s.officialHero} aria-label={kindTitle(posting.kind)}>
+      <p className={s.eyebrow}>{kindTitle(posting.kind)}</p>
+      <h2>{postingLabel(posting)}</h2>
       {posting.source && <p>Source: {posting.source}</p>}
-      {posting.posted !== posting.label && <p>County posting: {posting.posted}</p>}
     </section>
   );
+}
+
+export function PostingAside({ reading }: { reading: PublishedReading }) {
+  const text = openPostingWords(reading) ?? unknownPostingWords(reading);
+  if (!text) return null;
+  return <p className={s.postingQuiet}>{text}</p>;
 }
 
 export function ReadingNotes({ reading }: { reading: PublishedReading }) {
@@ -180,6 +189,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
       </div>
     </section>
     )}
+    <PostingAside reading={readingFields} />
 
     {(tested || limited || beach.tier === "limited_data" || beach.lastSampleDate || beach.samplingFrequency || methodWords(beach.method) || confidenceWords(beach.confidence) || rainAdvisoryWords(readingFields)) && (
       <div className={s.sampleFacts}>

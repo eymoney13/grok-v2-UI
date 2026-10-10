@@ -107,6 +107,9 @@ function Beach({
           <p className={confidenceClass(summary.confidence.level)}>{summary.confidence.text}</p>
         )}
         {summary.rainAdvisory && <p>{summary.rainAdvisory}</p>}
+        {summary.postingNote && beach.postingStatus === "unknown" && (
+          <p className={styles.postingQuiet}>{summary.postingNote}</p>
+        )}
         {summary.lastTested && <p>{summary.lastTested}</p>}
         {summary.limitedLab && <p>{summary.limitedLab}</p>}
         {summary.tierNote && <p>{summary.tierNote}</p>}

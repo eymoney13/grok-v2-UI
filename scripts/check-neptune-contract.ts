@@ -20,9 +20,13 @@ import {
   mergeReadings,
   methodWords,
   officialPosting,
+  openPostingWords,
   parseMethod,
+  parsePostingStatus,
   parsePublishedReading,
+  postingLabel,
   rainAdvisoryWords,
+  unknownPostingWords,
 } from "../lib/publishedReading.ts";
 import {
   bandForValue,
@@ -117,45 +121,82 @@ assert.equal(methodWords("rules"), "Based on last lab test + rain rule.");
 assert.match(confidenceWords("low")?.text ?? "", /less certain/);
 assert.doesNotMatch(confidenceWords("high")?.text ?? "", /less certain/);
 
+assert.equal(parsePostingStatus("closure"), "closure");
+assert.equal(parsePostingStatus("Closed"), "closure");
+assert.equal(parsePostingStatus("WARNING"), "warning");
+assert.equal(parsePostingStatus("advisory"), "advisory");
+assert.equal(parsePostingStatus("open"), "open");
+assert.equal(parsePostingStatus("unknown"), "unknown");
+assert.equal(parsePostingStatus("safe"), null);
+assert.equal(parsePostingStatus(""), null);
+
 const closed = officialPosting(
   parsePublishedReading({
-    posting_status: "Closed",
+    posting_status: "closure",
     posting_source: "Orange County",
     final_status: "Beach closed",
   })
 );
-assert.equal(closed?.label, "Beach closed");
-assert.equal(closed?.posted, "Closed");
+assert.equal(closed?.kind, "closure");
+assert.equal(closed?.detail, "Beach closed");
+assert.equal(closed ? postingLabel(closed) : null, "Beach closed");
 assert.equal(closed?.source, "Orange County");
 assert.equal(officialPosting(parsePublishedReading({ final_status: "Over limit" })), null);
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "  " })), null);
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "unknown", final_status: "Safe" })), null);
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "open", final_status: "Safe" })), null);
+assert.match(unknownPostingWords(parsePublishedReading({ posting_status: "unknown" })) ?? "", /No official posting data for this beach/);
+assert.doesNotMatch(unknownPostingWords(parsePublishedReading({ posting_status: "unknown" })) ?? "", /safe/i);
+assert.equal(unknownPostingWords(parsePublishedReading({})), null);
+const openReading = parsePublishedReading({
+  posting_status: "open",
+  posting_source: "Ventura County",
+  generated_at: "2026-10-09T18:00:00Z",
+  final_status: "Safe",
+});
+assert.equal(openReading.postingStatus, "open");
+assert.equal(openReading.postingDate, "2026-10-09");
+const openWords = openPostingWords(openReading) ?? "";
+assert.match(openWords, /No active county postings today/);
+assert.match(openWords, /Ventura County/);
+assert.match(openWords, /October 9, 2026/);
+assert.doesNotMatch(openWords, /safe/i);
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "warning" }))?.kind, "warning");
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "advisory" }))?.kind, "advisory");
 assert.ok(rainAdvisoryWords(parsePublishedReading({ method: "rules", rain_advisory: true })));
 assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "rules", rain_advisory: false })), null);
 assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "model", recent_rain: true })), null);
 assert.equal(rainAdvisoryWords(parsePublishedReading({ method: "rules" })), null);
 
 const merged = mergeReadings(
-  parsePublishedReading({ method: "rules", rain_advisory: false, posting_status: "Advisory" }),
+  parsePublishedReading({ method: "rules", rain_advisory: false, posting_status: "advisory" }),
   parsePublishedReading({ method: "model", rain_advisory: true, confidence: "high", posting_source: "LA County" })
 );
 assert.equal(merged.method, "rules");
 assert.equal(merged.rainAdvisory, false);
 assert.equal(merged.confidence, "high");
-assert.equal(merged.postingStatus, "Advisory");
+assert.equal(merged.postingStatus, "advisory");
 assert.equal(merged.postingSource, "LA County");
 
 const daily = parseDailyStatus({
   generated_at: "2026-10-09T18:00:00Z",
   stations: [
     { station_code: "DHS114", method: "model", confidence: "low" },
-    { station_code: "0", method: "pooled model", posting_status: "Advisory", posting_source: "OC Health" },
-    { station_code: "DHS114", posting_status: "Closed", posting_source: "LA County" },
+    { station_code: "0", method: "pooled model", posting_status: "advisory", posting_source: "OC Health" },
+    { station_code: "DHS114", posting_status: "closure", posting_source: "LA County" },
   ],
 });
 assert.equal(daily.generatedAt, "2026-10-09T18:00:00.000Z");
-assert.equal(daily.readings.get("DHS114")?.postingStatus, "Closed");
+assert.equal(daily.readings.get("DHS114")?.postingStatus, "closure");
 assert.equal(daily.readings.get("DHS114")?.method, null);
 assert.equal(daily.readings.get("0")?.method, "pooled_model");
+assert.equal(daily.readings.get("0")?.postingStatus, "advisory");
+const ventura = parseDailyStatus({
+  generated_at: "2026-10-10T15:00:00Z",
+  stations: [{ station_code: "V1", posting_status: "open", posting_source: "Ventura County" }],
+});
+assert.equal(ventura.readings.get("V1")?.postingStatus, "open");
+assert.equal(ventura.readings.get("V1")?.postingDate, "2026-10-10");
 assert.equal(parseDailyStatus({}).readings.size, 0);
 assert.equal(parseDailyStatusRows([]).readings.size, 0);
 assert.equal(latestDatedStatusName(["notes.txt", "2026-10-01.csv", "2026-10-09.json", "2026-10-08.csv"]), "2026-10-09.json");

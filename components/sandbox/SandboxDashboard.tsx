@@ -11,7 +11,7 @@ import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Statu
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import { publishedNeptuneScore } from "@/lib/neptuneIndex";
-import { confidenceWords, copyReading, methodShort, officialPosting } from "@/lib/publishedReading";
+import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
@@ -288,7 +288,9 @@ export default function SandboxDashboard({
                                   {beach.tier === "limited_data" && <span className={s.sampleMeta}>Outside the model pool</span>}
                                 </span>
                                 {(() => {
-                                  const posting = officialPosting(copyReading(beach));
+                                  const reading = copyReading(beach);
+                                  const posting = officialPosting(reading);
+                                  const open = openPostingWords(reading);
                                   const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
                                   const confidence = confidenceWords(beach.confidence);
                                   const method = methodShort(beach.method);
@@ -305,12 +307,13 @@ export default function SandboxDashboard({
                                     <span className={s.readingStack}>
                                       {posting && (
                                         <span className={s.officialList}>
-                                          <span>Official posting</span>
-                                          <strong>{posting.label}</strong>
+                                          <span>{kindTitle(posting.kind)}</span>
+                                          <strong>{postingLabel(posting)}</strong>
                                           {posting.source && <small>Source: {posting.source}</small>}
                                         </span>
                                       )}
                                       <span className={posting ? s.estimateSecondary : undefined}>{estimate}</span>
+                                      {open && <span className={s.postingQuiet}>{open}</span>}
                                       {confidence && (
                                         <span className={confidence.level === "low" ? s.confidenceLowList : confidence.level === "medium" ? s.confidenceMediumList : s.confidenceHighList}>
                                           {confidence.level === "high" ? "High confidence" : confidence.level === "medium" ? "Medium confidence" : "Low confidence"}

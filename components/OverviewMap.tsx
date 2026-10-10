@@ -19,7 +19,7 @@ export type MapBeach = {
   neptuneBand?: string | null;
   method?: PublishedReading["method"];
   confidence?: PublishedReading["confidence"];
-  postingStatus?: string | null;
+  postingStatus?: PostingStatus | null;
   postingSource?: string | null;
   finalStatus?: string | null;
   rainAdvisory?: boolean | null;
@@ -31,7 +31,7 @@ import {
   BASEMAP_URL,
 } from "@/lib/basemap";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, publishedNeptuneScore } from "@/lib/neptuneIndex";
-import { copyReading, officialPosting, type PublishedReading } from "@/lib/publishedReading";
+import { copyReading, officialPosting, postingLabel, postingPinText, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 
 function colorFor(status: Status) {
   if (status === "Not recommended") return "#cc3333";
@@ -580,7 +580,7 @@ function limitedPin(): L.DivIcon {
 
 function officialPin(label: string): L.DivIcon {
   const raw = label.trim();
-  const text = raw.length > 0 && raw.length <= 14 ? raw : "Posted";
+  const text = raw.length > 0 && raw.length <= 14 ? raw : "Closure";
   const w = text.length <= 8 ? 64 : Math.min(132, 18 + text.length * 7);
   const h = 22;
   return L.divIcon({
@@ -593,7 +593,7 @@ function officialPin(label: string): L.DivIcon {
 
 function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
   const posting = officialPosting(copyReading(beach));
-  if (posting) return officialPin(posting.label);
+  if (posting) return officialPin(postingPinText(posting));
   const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
   if (score) return indexPin(score);
   if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict);
@@ -604,7 +604,7 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
   const posting = officialPosting(copyReading(beach));
   if (posting) {
     const source = posting.source ? `, source ${posting.source}` : "";
-    return `${beach.name}, official posting ${posting.label}${source}`;
+    return `${beach.name}, ${posting.kind}, ${postingLabel(posting)}${source}`;
   }
   const score = publishedNeptuneScore(beach.neptuneIndex, beach.neptuneBand);
   if (score) return `${beach.name}, ${neptuneIndexName(score)}`;

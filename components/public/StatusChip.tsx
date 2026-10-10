@@ -3,7 +3,7 @@
 import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
 import { copy, statusPill, bandLabel, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
-import { copyReading, officialPosting } from "@/lib/publishedReading";
+import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import styles from "./public.module.css";
 
 const TONE = {
@@ -28,28 +28,39 @@ export function StatusChip({
     | "postingStatus"
     | "postingSource"
     | "finalStatus"
+    | "postingDate"
     | "rainAdvisory"
   >;
   lang: Lang;
 }) {
-  const posting = officialPosting(copyReading(beach));
+  const reading = copyReading(beach);
+  const posting = officialPosting(reading);
   const estimate = <EstimateChip beach={beach} lang={lang} />;
-  if (!posting) return estimate;
+  if (posting) {
+    return (
+      <span className={styles.officialStack}>
+        <span className={styles.officialKicker}>
+          <span className={styles.officialTag}>{kindTitle(posting.kind, lang)}</span>
+          <strong>{postingLabel(posting, lang)}</strong>
+          {posting.source && (
+            <span className={styles.officialSource}>
+              {lang === "es" ? `Fuente: ${posting.source}` : `Source: ${posting.source}`}
+            </span>
+          )}
+        </span>
+        <span className={styles.secondaryEstimate}>
+          <span className={styles.estimateLabel}>{lang === "es" ? "Nuestro estimado" : "Our estimate"}</span>
+          {estimate}
+        </span>
+      </span>
+    );
+  }
+  const open = openPostingWords(reading, lang);
+  if (!open) return estimate;
   return (
-    <span className={styles.officialStack}>
-      <span className={styles.officialKicker}>
-        <span className={styles.officialTag}>{lang === "es" ? "Aviso oficial" : "Official posting"}</span>
-        <strong>{posting.label}</strong>
-        {posting.source && (
-          <span className={styles.officialSource}>
-            {lang === "es" ? `Fuente: ${posting.source}` : `Source: ${posting.source}`}
-          </span>
-        )}
-      </span>
-      <span className={styles.secondaryEstimate}>
-        <span className={styles.estimateLabel}>{lang === "es" ? "Nuestro estimado" : "Our estimate"}</span>
-        {estimate}
-      </span>
+    <span className={styles.estimateStack}>
+      {estimate}
+      <span className={styles.postingQuiet}>{open}</span>
     </span>
   );
 }

@@ -26,6 +26,7 @@ const base: SummaryFacts = {
   postingStatus: null,
   postingSource: null,
   finalStatus: null,
+  postingDate: null,
   rainAdvisory: null,
 };
 
@@ -84,16 +85,17 @@ const posted = dailySummary(
     ...base,
     method: "rules",
     confidence: "low",
-    postingStatus: "Closed",
+    postingStatus: "closure",
     postingSource: "Orange County",
     finalStatus: "Beach closed",
     rainAdvisory: true,
   },
   "en"
 );
-assert.match(posted.status, /Official posting: Beach closed/);
+assert.match(posted.status, /County closure: Beach closed/);
 assert.match(posted.status, /Source: Orange County/);
 assert.match(posted.status, /Our estimate:/);
+assert.equal(posted.postingNote, null);
 assert.match(posted.method ?? "", /last lab test \+ rain rule/);
 assert.match(posted.confidence?.text ?? "", /less certain/);
 assert.match(posted.rainAdvisory ?? "", /Rain advisory/);
@@ -105,6 +107,34 @@ assert.equal(echoed.confidence?.level, "high");
 assert.doesNotMatch(echoed.confidence?.text ?? "", /less certain/);
 assert.equal(dailySummary({ ...base, method: "model", rainAdvisory: true }, "en").rainAdvisory, null);
 assert.equal(dailySummary({ ...base, method: "rules", rainAdvisory: false }, "en").rainAdvisory, null);
+
+const unknownPosting = dailySummary({ ...base, postingStatus: "unknown", finalStatus: "Safe" }, "en");
+assert.doesNotMatch(unknownPosting.status, /County closure|Official posting|Safe/);
+assert.match(unknownPosting.postingNote ?? "", /No official posting data for this beach/);
+assert.doesNotMatch(unknownPosting.postingNote ?? "", /safe/i);
+assert.equal(unknownPosting.postingNote?.includes("Safe"), false);
+
+const opened = dailySummary(
+  {
+    ...base,
+    postingStatus: "open",
+    postingSource: "Ventura County",
+    postingDate: "2026-10-09",
+    finalStatus: "Safe",
+  },
+  "en"
+);
+assert.match(opened.status, /under the/);
+assert.doesNotMatch(opened.status, /County closure|Official posting|\bSafe\b/);
+assert.match(opened.postingNote ?? "", /No active county postings today/);
+assert.match(opened.postingNote ?? "", /Ventura County/);
+assert.match(opened.postingNote ?? "", /October 9, 2026/);
+assert.doesNotMatch(opened.postingNote ?? "", /safe/i);
+
+const warning = dailySummary({ ...base, postingStatus: "warning", postingSource: "Ventura County" }, "en");
+assert.match(warning.status, /County warning: Warning/);
+assert.match(warning.status, /Source: Ventura County/);
+assert.equal(warning.postingNote, null);
 
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /40 MPN/);
 assert.match(dailySummary({ ...base, lastResultMpn: 40 }, "en").recentResult ?? "", /under the 104/);

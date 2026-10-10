@@ -6,7 +6,7 @@ import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, BASEMAP_SUBDOMAINS, BASEMAP_URL 
 import { bandLabel, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { formatNeptuneIndex, publishedNeptuneScore } from "@/lib/neptuneIndex";
-import { copyReading, officialPosting } from "@/lib/publishedReading";
+import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
 import "leaflet/dist/leaflet.css";
 
 function Fit({ points }: { points: [number, number][] }) {
@@ -33,13 +33,19 @@ function modelWords(beach: GlanceBeach, lang: Lang): string {
 }
 
 function pinWords(beach: GlanceBeach, lang: Lang): string {
-  const posting = officialPosting(copyReading(beach));
+  const reading = copyReading(beach);
+  const posting = officialPosting(reading);
   const model = modelWords(beach, lang);
-  if (!posting) return model;
-  const source = posting.source ? ` (${posting.source})` : "";
-  return lang === "es"
-    ? `Aviso oficial: ${posting.label}${source}. Nuestro estimado: ${model}`
-    : `Official posting: ${posting.label}${source}. Our estimate: ${model}`;
+  if (posting) {
+    const source = posting.source ? ` (${posting.source})` : "";
+    const title = kindTitle(posting.kind, lang);
+    const label = postingLabel(posting, lang);
+    return lang === "es"
+      ? `${title}: ${label}${source}. Nuestro estimado: ${model}`
+      : `${title}: ${label}${source}. Our estimate: ${model}`;
+  }
+  const open = openPostingWords(reading, lang);
+  return open ? `${model}. ${open}` : model;
 }
 
 function pinColor(beach: GlanceBeach): string {

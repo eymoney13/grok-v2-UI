@@ -9,7 +9,7 @@ import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
 import { assignSlugs } from "@/lib/beachSlug";
 import { copyReading, officialPosting } from "@/lib/publishedReading";
-import { OfficialBanner, ReadingNotes } from "./SandboxBeachDetail";
+import { OfficialBanner, PostingAside, ReadingNotes } from "./SandboxBeachDetail";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
 import SandboxBeachDetail from "./SandboxBeachDetail";
@@ -93,6 +93,7 @@ export default function CaliforniaBeachPage({
         ) : (
           <div className={s.detail}>
             <OfficialBanner reading={copyReading(listItem)} />
+            <PostingAside reading={copyReading(listItem)} />
             <section className={s.empty} aria-label={posted ? "Our estimate" : "No estimate today"}>
               <h2>{posted ? "Our estimate" : "No estimate today"}</h2>
               <p>

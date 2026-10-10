@@ -20,9 +20,12 @@ import {
   methodWords,
   officialPosting,
   officialSummaryLead,
+  openPostingWords,
   rainAdvisoryWords,
+  unknownPostingWords,
   type ConfidenceLevel,
   type EstimateMethod,
+  type PostingStatus,
 } from "./publishedReading.ts";
 import { rainDepth, rainState, rainTotalMm } from "./rain.ts";
 import {
@@ -50,9 +53,10 @@ export interface SummaryFacts {
   fallbackUsed: boolean | null;
   method: EstimateMethod | null;
   confidence: ConfidenceLevel | null;
-  postingStatus: string | null;
+  postingStatus: PostingStatus | null;
   postingSource: string | null;
   finalStatus: string | null;
+  postingDate: string | null;
   rainAdvisory: boolean | null;
 }
 
@@ -70,6 +74,8 @@ export interface DailySummary {
   confidence: { level: ConfidenceLevel; text: string } | null;
   /** Rules-path rain note. Separate from the weather-file rain sentence. */
   rainAdvisory: string | null;
+  /** Open or unknown county feed. Never a stand-in for a safe water reading. */
+  postingNote: string | null;
 }
 
 const EXPERIMENTAL_ES =
@@ -113,6 +119,7 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
     outlook: outlookSentence(facts, lang),
     rain: rainSentence(facts, lang),
     rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
+    postingNote: openPostingWords(copyReading(facts), lang) ?? unknownPostingWords(copyReading(facts), lang),
     method: methodWords(facts.method, lang),
     confidence: confidenceWords(facts.confidence, lang),
     recentResult: recentSentence(facts.lastResultMpn, lang),
