@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
-import { assignSlugs } from "../lib/beachSlug.ts";
+import { assignSlugs, resolveSlugMatch, slugifyName } from "../lib/beachSlug.ts";
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
 import { bandLabel, statusDetail, BAND_GUIDANCE_ES } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
@@ -178,18 +178,38 @@ for (const band of NEPTUNE_INDEX.bands) {
   assert.ok(bandLabel(band.id, "es").length > 0);
 }
 
-const slugs = assignSlugs([
-  { code: "A", name: "Hermosa Beach" },
-  { code: "B", name: "Hermosa Beach" },
-  { code: "0", name: "Huntington State Beach" },
-  { code: "X", name: "!!" },
-  { code: "CSD_S8", name: "San Diego — Ocean Beach" },
-]);
-assert.equal(slugs.get("0"), "huntington-state-beach");
-assert.notEqual(slugs.get("A"), slugs.get("B"));
-assert.match(slugs.get("X") ?? "", /^beach-/);
-assert.equal(new Set(slugs.values()).size, slugs.size);
-for (const slug of slugs.values()) assert.match(slug, /^[a-z0-9-]+$/);
+const slugBeaches = [
+  { code: "A", name: "Hermosa Beach", county: "Los Angeles" },
+  { code: "B", name: "Hermosa Beach", county: "Los Angeles" },
+  { code: "0", name: "Huntington State Beach", county: "Orange" },
+  { code: "0", name: "Another Beach", county: "San Diego" },
+  { code: "X", name: "!!", county: null },
+  { code: "CSD_S8", name: "San Diego — Ocean Beach", county: "San Diego" },
+];
+const slugs = assignSlugs(slugBeaches);
+assert.equal(slugs[2], "huntington-state-beach-orange-0");
+assert.equal(slugs[3], "another-beach-san-diego-0");
+assert.notEqual(slugs[0], slugs[1]);
+assert.match(slugs[0] ?? "", /hermosa-beach-los-angeles-a$/);
+assert.match(slugs[4] ?? "", /^beach-/);
+assert.equal(new Set(slugs).size, slugs.length);
+for (const slug of slugs) {
+  assert.match(slug, /^[a-z0-9-]+$/);
+  assert.notEqual(slug, "0");
+}
+const withAgency = assignSlugs(
+  [
+    { code: "0", name: "North", county: "Orange", agency: "County Health" },
+    { code: "0", name: "South", county: "Orange", agency: "Heal the Bay" },
+  ],
+  true
+);
+assert.deepEqual(withAgency, ["0-county-health", "0-heal-the-bay"]);
+const catalog = slugBeaches.map((beach, index) => ({ ...beach, slug: slugs[index]! }));
+assert.equal(resolveSlugMatch(catalog, "huntington-state-beach")?.slug, "huntington-state-beach-orange-0");
+assert.equal(resolveSlugMatch(catalog, "0"), null);
+assert.equal(resolveSlugMatch(catalog, "CSD_S8")?.code, "CSD_S8");
+assert.equal(resolveSlugMatch(catalog, slugifyName("San Diego — Ocean Beach"))?.code, "CSD_S8");
 
 const spanish = dailySummary({ ...base, outlook: named, lastResultMpn: 40, rainTodayMm: 0, rainPrior3dMm: 0 }, "es");
 assert.match(spanish.outlook, /sábado/i);

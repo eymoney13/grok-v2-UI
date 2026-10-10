@@ -119,18 +119,18 @@ export default function SandboxDashboard({
   const filtersOn = !!(normalizedQuery || countyFilter || regionFilter || statusFilter || tierFilter);
   const offerLine = lookAheadOfferLine(alertsEnabled);
 
-  const openBeach = (code: string) => {
-    const beach = beaches.find((item) => item.code === code);
+  const openBeach = (id: string) => {
+    const beach = beaches.find((item) => item.id === id);
     if (beach) {
       posthog.capture("beach_viewed", {
         board_location: "California",
-        beach_id: beach.code,
+        beach_id: beach.id,
         beach_name: beach.name,
         region: beach.region ?? beach.county ?? "california",
         entry_point: view,
       });
     }
-    router.push(`/california/beach/${encodeURIComponent(code)}?from=${view}`);
+    router.push(`/california/beach/${encodeURIComponent(beach?.id ?? id)}?from=${view}`);
   };
   const switchView = (next: typeof view) => {
     setView(next);
@@ -148,7 +148,7 @@ export default function SandboxDashboard({
     <CaliforniaAlertSignup
       ref={alertSignupRef}
       key={view}
-      beaches={beaches.map((beach) => ({ code: beach.code, name: beach.name }))}
+      beaches={beaches.map((beach) => ({ id: beach.id, code: beach.code, name: beach.name }))}
       pro={entitled}
       onSaved={() => {}}
       source={`california_${view}`}
@@ -280,8 +280,8 @@ export default function SandboxDashboard({
                         {shown.map((beach) => {
                           const freshness = labFreshnessLine(beach.daysSinceSample, beach.noRecentSample, beach.staleAfterDays);
                           return (
-                            <li key={beach.code}>
-                              <button type="button" onClick={() => openBeach(beach.code)}>
+                            <li key={beach.id}>
+                              <button type="button" onClick={() => openBeach(beach.id)}>
                                 <span className={s.beachIdentity}>
                                   <span className={s.beachName}>{beach.name}</span>
                                   {freshness && <span className={s.sampleMeta}>{freshness}</span>}
@@ -371,7 +371,7 @@ export default function SandboxDashboard({
         {view !== "map" && alertSignup}
         {!entitled && <SandboxProOffer checkoutReady={checkoutReady} alertsEnabled={alertsEnabled} ctaLocation={"california_bottom" as CtaLocation} pageContext={view} />}
         {entitled && alertsEnabled && view !== "news" && (
-          <SandboxYourNeptune location="california" beaches={beaches.map((beach) => ({ code: beach.code, name: beach.name }))} />
+          <SandboxYourNeptune location="california" beaches={beaches.map((beach) => ({ id: beach.id, code: beach.code, name: beach.name }))} />
         )}
       </div>
       <div className={s.faq}>{faq}</div>

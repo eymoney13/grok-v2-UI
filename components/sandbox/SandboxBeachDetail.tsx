@@ -112,7 +112,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneIndex?: number | null; neptuneBand?: string | null }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneIndex?: number | null; neptuneBand?: string | null }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -145,8 +145,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     onProMoment?.();
   };
   const nearby = Number.isFinite(beach.latitude) && Number.isFinite(beach.longitude)
-    ? beaches.filter((candidate) => candidate.code !== beach.code && Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude))
-      .sort((a, b) => distanceScore(beach, a) - distanceScore(beach, b) || a.code.localeCompare(b.code)).slice(0, 3)
+    ? beaches.filter((candidate) => candidate.id !== beach.id && Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude))
+      .sort((a, b) => distanceScore(beach, a) - distanceScore(beach, b) || a.id.localeCompare(b.id)).slice(0, 3)
     : [];
 
   return <div className={s.detail}>
@@ -263,7 +263,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}
-    {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.code}><button type="button" onClick={() => onSelect(neighbor.code)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
+    {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
               const neighborScore = publishedNeptuneScore(neighbor.neptuneIndex, neighbor.neptuneBand);
               if (neighborScore) return <NeptuneIndexBadge score={neighborScore} />;
               if (neighbor.hasEstimate !== false && neighbor.status) return <span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span>;

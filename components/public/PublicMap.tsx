@@ -90,7 +90,7 @@ export default function PublicMap({
       )}
       {beaches.map((beach) => (
         <CircleMarker
-          key={beach.code}
+          key={beach.slug}
           center={[beach.latitude, beach.longitude]}
           radius={9}
           pathOptions={{ color: "#fff", weight: 2, fillColor: pinColor(beach), fillOpacity: 1 }}

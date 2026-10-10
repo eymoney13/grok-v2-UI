@@ -1,5 +1,6 @@
 export interface BeachLocation {
   code: string;
+  id?: string;
   name: string;
   latitude: number;
   longitude: number;
@@ -30,7 +31,8 @@ export function nearestBeachNeighbors<T extends BeachLocation>(beach: T, beaches
   };
 
   for (const candidate of beaches) {
-    if (candidate.code === beach.code || !hasCoordinates(candidate)) continue;
+    const sameBeach = beach.id && candidate.id ? candidate.id === beach.id : candidate.code === beach.code;
+    if (sameBeach || !hasCoordinates(candidate)) continue;
     if (candidate.latitude > beach.latitude && closer(candidate, north)) north = candidate;
     if (candidate.latitude < beach.latitude && closer(candidate, south)) south = candidate;
   }

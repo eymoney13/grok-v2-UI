@@ -178,7 +178,7 @@ function Home({
               const miles = here && hasCoordinates(beach) ? milesBetween(here, beach) : null;
               const tested = glanceLine(beach, lang);
               return (
-                <li key={beach.code}>
+                <li key={beach.slug}>
                   <Link className={styles.card} href={`/beach/${beach.slug}`}>
                     <span className={styles.name}>{beach.name}</span>
                     <span className={styles.meta}>

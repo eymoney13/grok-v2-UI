@@ -4,11 +4,15 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import Papa from "papaparse";
 import {
+  emptyDailyStatus,
   groupArchive,
+  hasAgencyColumn,
+  jsonHasAgencyColumn,
   latestDatedStatusName,
   parseArchiveRow,
   parseDailyStatus,
   parseDailyStatusRows,
+  type DailyJoinedRow,
   type DailyStatusFile,
   parseManifest,
   parseRegions,
@@ -40,7 +44,11 @@ export interface V2Bundle {
   available: boolean;
   root: string | null;
   roster: RosterStation[];
+  /** True when the roster file's header includes `agency`, even if some cells are blank. */
+  rosterAgencyColumn: boolean;
   archive: Map<string, StationArchive>;
+  /** True when the archive file's header includes `agency`. The map key is then code plus agency. */
+  archiveAgencyColumn: boolean;
   staleness: StalenessTable | null;
   regions: RegionConfig | null;
   manifest: RunManifest | null;
@@ -57,6 +65,9 @@ export interface V2Bundle {
   daily: Map<string, PublishedReading>;
   /** `neptune_index` and `neptune_band` from that same daily file. Empty cells are null. */
   dailyIndex: Map<string, DailyIndexFields>;
+  /** Every kept daily row, including codes that belong to more than one beach. */
+  dailyRows: DailyJoinedRow[];
+  dailyAgencyColumn: boolean;
   /** Clock from that daily file. Used after the manifest and before the nowcast column. */
   dailyGeneratedAt: string | null;
 }
@@ -65,7 +76,9 @@ const EMPTY_BUNDLE: V2Bundle = {
   available: false,
   root: null,
   roster: [],
+  rosterAgencyColumn: false,
   archive: new Map(),
+  archiveAgencyColumn: false,
   staleness: null,
   regions: null,
   manifest: null,
@@ -76,6 +89,8 @@ const EMPTY_BUNDLE: V2Bundle = {
   thresholds: null,
   daily: new Map(),
   dailyIndex: new Map(),
+  dailyRows: [],
+  dailyAgencyColumn: false,
   dailyGeneratedAt: null,
 };
 
@@ -202,20 +217,27 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
   ].filter((item): item is string => !!item);
   const rosterPath = await firstExisting(rosterCandidates);
   let roster: RosterStation[] = [];
+  let rosterAgencyColumn = false;
   if (rosterPath?.endsWith(".json")) {
     const text = await readText(rosterPath);
-    roster = text ? parseRosterJson(JSON.parse(text) as unknown) : [];
+    if (text) {
+      const parsed = JSON.parse(text) as unknown;
+      rosterAgencyColumn = jsonHasAgencyColumn(parsed);
+      roster = parseRosterJson(parsed);
+    }
   } else if (rosterPath) {
-    roster = parseRosterRows(await readCsvFile(rosterPath));
+    const rows = await readCsvFile(rosterPath);
+    rosterAgencyColumn = hasAgencyColumn(rows);
+    roster = parseRosterRows(rows);
   }
 
   const archivePath = await firstExisting([
     path.join(root, "outputs", "forecast_archive", "forecasts.csv"),
   ]);
-  const archiveRows = archivePath
-    ? (await readCsvFile(archivePath)).map(parseArchiveRow).filter((row) => row != null)
-    : [];
-  const archive = groupArchive(archiveRows);
+  const archiveRaw = archivePath ? await readCsvFile(archivePath) : [];
+  const archiveAgencyColumn = hasAgencyColumn(archiveRaw);
+  const archiveRows = archiveRaw.map(parseArchiveRow).filter((row) => row != null);
+  const archive = groupArchive(archiveRows, archiveAgencyColumn);
 
   const stalePath = await firstExisting([path.join(root, "config", "staleness_thresholds.json")]);
   const staleText = stalePath ? await readText(stalePath) : null;
@@ -236,7 +258,9 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     available: roster.length > 0,
     root,
     roster,
+    rosterAgencyColumn,
     archive,
+    archiveAgencyColumn,
     staleness,
     regions,
     manifest,
@@ -247,6 +271,8 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     thresholds,
     daily: daily.readings,
     dailyIndex: daily.indexes,
+    dailyRows: daily.rows,
+    dailyAgencyColumn: daily.agencyColumn,
     dailyGeneratedAt: daily.generatedAt,
   };
 }
@@ -256,11 +282,7 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
  * when no current file exists. A current file that parses to no stations still
  * wins, so an empty publish does not resurrect yesterday's history.
  */
-async function loadDailyStatus(root: string): Promise<{
-  readings: Map<string, PublishedReading>;
-  indexes: Map<string, DailyIndexFields>;
-  generatedAt: string | null;
-}> {
+async function loadDailyStatus(root: string): Promise<DailyStatusFile> {
   const current = await firstExisting([
     path.join(root, "outputs", "daily", "current.csv"),
     path.join(root, "outputs", "daily", "current.json"),
@@ -269,14 +291,14 @@ async function loadDailyStatus(root: string): Promise<{
   ]);
   if (current) return readDailyFile(current);
   const history = await latestDailyHistory(root);
-  if (!history) return { readings: new Map(), indexes: new Map(), generatedAt: null };
+  if (!history) return emptyDailyStatus();
   return readDailyFile(history);
 }
 
 async function readDailyFile(filePath: string): Promise<DailyStatusFile> {
   if (filePath.endsWith(".json")) {
     const text = await readText(filePath);
-    if (text == null) return { readings: new Map(), indexes: new Map(), generatedAt: null };
+    if (text == null) return emptyDailyStatus();
     return parseDailyStatus(JSON.parse(text) as unknown);
   }
   return parseDailyStatusRows(await readCsvFile(filePath));

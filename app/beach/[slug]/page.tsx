@@ -58,7 +58,7 @@ export default async function BeachPage({ params }: { params: Promise<{ slug: st
   if (beach.slug !== slug) redirect(`/beach/${beach.slug}`);
   const catalog = await loadPublicCatalog();
   const nearby = hasCoordinates(beach)
-    ? nearest(beach, catalog.beaches.filter(hasCoordinates), 5, beach.code).map(toGlance)
+    ? nearest(beach, catalog.beaches.filter(hasCoordinates), 5, undefined, beach.slug).map(toGlance)
     : [];
   const advisory = beach.county?.toLowerCase() === "orange" ? ORANGE_ADVISORY : LA_ADVISORY;
   return (

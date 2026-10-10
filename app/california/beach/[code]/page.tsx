@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { resolveSlugMatch } from "@/lib/beachSlug";
 import AccountControl from "@/components/AccountControl";
 import CaliforniaBeachPage from "@/components/sandbox/CaliforniaBeachPage";
 import { getLocation, toBeachListItem } from "@/lib/data";
@@ -25,8 +26,16 @@ export async function generateMetadata({
   params: Promise<{ code: string }>;
 }): Promise<Metadata> {
   const code = decodeURIComponent((await params).code);
+  const config = getLocation("california");
+  const data = config ? await loadDashboardData(config) : null;
+  const match = data
+    ? resolveSlugMatch(
+        [...data.beaches, ...data.unmodeled].map((beach) => ({ slug: beach.id, code: beach.code, name: beach.name })),
+        code
+      )
+    : null;
   return {
-    title: `${code} water quality`,
+    title: `${match?.name ?? "Beach"} water quality`,
     description: "Today’s enterococcus estimate, the latest lab tests, and the experimental look-ahead.",
   };
 }
@@ -52,14 +61,17 @@ export default async function BeachPage({
     features,
     publicTodayInsights: true,
   });
-  const beach = beaches.find((item) => item.code === code) ?? null;
-  const listItem = beach
-    ? toBeachListItem(beach)
-    : data.unmodeled.find((item) => item.code === code) ?? null;
+  const catalog = [...beaches.map(toBeachListItem), ...data.unmodeled];
+  const listItem = resolveSlugMatch(
+    catalog.map((item) => ({ ...item, slug: item.id })),
+    code
+  );
   if (!listItem) notFound();
+  if (code !== listItem.id) redirect(`/california/beach/${encodeURIComponent(listItem.id)}`);
+  const beach = beaches.find((item) => item.id === listItem.id) ?? null;
   const { isPaymentFirstEnabled } = await import("@/lib/purchase");
-  const neighbors = [...beaches.map(toBeachListItem), ...data.unmodeled]
-    .filter((item) => item.code !== code && Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && Number.isFinite(listItem.latitude))
+  const neighbors = catalog
+    .filter((item) => item.id !== listItem.id && Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && Number.isFinite(listItem.latitude))
     .sort((a, b) => distance(listItem, a) - distance(listItem, b))
     .slice(0, 8);
   const advisory = listItem.county?.toLowerCase() === "orange" ? ORANGE_ADVISORY : config.advisory ?? DEFAULT_ADVISORY;

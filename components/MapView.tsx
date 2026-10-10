@@ -96,7 +96,7 @@ export default function MapView({
         const isSelected = b.code === selected?.code;
         return (
           <CircleMarker
-            key={b.code}
+            key={b.id}
             center={[b.latitude, b.longitude]}
             radius={isSelected ? 11 : 7}
             pathOptions={{

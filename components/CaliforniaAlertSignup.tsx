@@ -9,7 +9,7 @@ import styles from "./CaliforniaAlertSignup.module.css";
 export interface CaliforniaAlertSignupHandle { open: () => void }
 
 export default function CaliforniaAlertSignup({ beaches, beach, pro, source, onSaved, ref }: {
-  beaches: {code:string;name:string}[]; beach?:string; pro:boolean; source:string; onSaved?:()=>void;
+  beaches: {id:string;code:string;name:string}[]; beach?:string; pro:boolean; source:string; onSaved?:()=>void;
   ref?: Ref<CaliforniaAlertSignupHandle>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -58,7 +58,7 @@ export default function CaliforniaAlertSignup({ beaches, beach, pro, source, onS
       {!done && <form className={styles.form} onSubmit={event => {event.preventDefault();submit();}}>
         {!pro && <label>Email address<input className="ph-no-capture" type="email" required autoComplete="email" value={email} disabled={pending || verified || !!challenge} onChange={event=>setEmail(event.target.value)} /></label>}
         <label>Beach<select required value={selected} disabled={pending} onChange={event=>{setSelected(event.target.value);track("alert_beach_selected",event.target.value);}}>
-          <option value="">Select a beach</option>{beaches.map(b=><option key={b.code} value={b.code}>{b.name}</option>)}
+          <option value="">Select a beach</option>{beaches.map(b=><option key={b.id} value={b.code}>{b.name}</option>)}
         </select></label>
         {!pro && challenge && !verified && <><label>Verification code<input className="ph-no-capture" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={event=>setCode(event.target.value)} /></label>
           <button type="button" disabled={pending} onClick={()=>{setChallenge(undefined);setCode("");setMessage("");}}>Use another email or request a new code</button></>}

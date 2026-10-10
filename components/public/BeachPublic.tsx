@@ -129,7 +129,7 @@ function Beach({
         <button className={styles.secondary} type="button" onClick={copyLink}>
           {copied ? t.copied : t.copyLink}
         </button>
-        <Link className={styles.link} href={`/california/beach/${encodeURIComponent(beach.code)}`}>
+        <Link className={styles.link} href={`/california/beach/${encodeURIComponent(beach.slug)}`}>
           {t.fullBoard}
         </Link>
         <a className={styles.link} href={advisory.href} target="_blank" rel="noopener noreferrer">
@@ -141,7 +141,7 @@ function Beach({
           <h2>{t.nearby}</h2>
           <ul className={styles.list}>
             {nearby.map((item) => (
-              <li key={item.code}>
+              <li key={item.slug}>
                 <Link className={styles.card} href={`/beach/${item.slug}`}>
                   <span className={styles.name}>{item.name}</span>
                   {item.county && <span className={styles.meta}>{item.county}</span>}

@@ -16,6 +16,8 @@ export interface RosterStation {
   lat: number | null;
   lon: number | null;
   county: string | null;
+  /** Set when the roster file has an `agency` column. Blank cells stay null. */
+  agency: string | null;
   lastSampleDate: string | null;
   samplingFrequency: string | null;
   tier: RosterTier | null;
@@ -46,6 +48,8 @@ export interface ArchiveRow {
   neptuneIndex: number | null;
   /** Published band id from the display config. Null when absent or unknown. */
   neptuneBand: string | null;
+  /** Set when the archive file has an `agency` column. */
+  agency: string | null;
 }
 
 export interface StationArchive {
@@ -231,10 +235,28 @@ export function parseRosterRecord(row: Record<string, unknown>): RosterStation |
     lat: asNumber(first(row, ["lat", "latitude", "Latitude"])),
     lon: asNumber(first(row, ["lon", "lng", "longitude", "Longitude"])),
     county: normalizeCounty(first(row, ["county", "County"])),
+    agency: agencyFromRow(row),
     lastSampleDate: asDateString(first(row, ["last_sample_date", "lastSampleDate"])),
     samplingFrequency: textOrNull(first(row, ["sampling_frequency", "samplingFrequency"])),
     tier: asTier(first(row, ["tier", "Tier"])),
   };
+}
+
+/** True when any row carries an `agency` header, including a blank cell. */
+export function hasAgencyColumn(rows: Record<string, unknown>[]): boolean {
+  return rows.some((row) => Object.keys(row).some((key) => key.toLowerCase() === "agency"));
+}
+
+export function jsonHasAgencyColumn(data: unknown): boolean {
+  return hasAgencyColumn(rowsFromJson(data));
+}
+
+export function agencyFromRow(row: Record<string, unknown>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (key.toLowerCase() !== "agency") continue;
+    return textOrNull(value);
+  }
+  return null;
 }
 
 function rowsFromJson(data: unknown): Record<string, unknown>[] {
@@ -281,15 +303,19 @@ export function parseArchiveRow(row: Record<string, unknown>): ArchiveRow | null
     reading: extra.reading,
     neptuneIndex: indexFields.index,
     neptuneBand: indexFields.band,
+    agency: agencyFromRow(row),
   };
 }
 
-export function groupArchive(rows: ArchiveRow[]): Map<string, StationArchive> {
+export function groupArchive(rows: ArchiveRow[], agencyColumn = false): Map<string, StationArchive> {
   const byStation = new Map<string, ArchiveRow[]>();
   for (const row of rows) {
-    const list = byStation.get(row.stationCode) ?? [];
+    const key = agencyColumn
+      ? `${row.stationCode}\0${(row.agency ?? "").trim().toLowerCase()}`
+      : row.stationCode;
+    const list = byStation.get(key) ?? [];
     list.push(row);
-    byStation.set(row.stationCode, list);
+    byStation.set(key, list);
   }
   const out = new Map<string, StationArchive>();
   for (const [code, list] of byStation) {
@@ -423,42 +449,108 @@ export interface DailyIndexFields {
   band: string | null;
 }
 
+/** One kept daily row. Repeated codes stay separate when agency or name and county differ. */
+export interface DailyJoinedRow {
+  code: string;
+  agency: string | null;
+  name: string | null;
+  county: string | null;
+  reading: PublishedReading;
+  index: DailyIndexFields;
+}
+
 export interface DailyStatusFile {
+  /**
+   * Reading for a station code that collapsed to one identity. Undefined when
+   * that code belongs to more than one beach in the file.
+   */
   readings: Map<string, PublishedReading>;
   /** Neptune Index columns on the same daily row. Empty cells stay null. */
   indexes: Map<string, DailyIndexFields>;
+  /** Last row of each distinct beach. Order follows the first time that beach appeared. */
+  rows: DailyJoinedRow[];
+  agencyColumn: boolean;
+  /** Station codes that appear on more than one raw row, before identity collapse. */
+  duplicateCodes: string[];
   generatedAt: string | null;
 }
 
 const DAILY_STATION_KEYS = ["station_code", "stationCode", "StationCode", "station", "code"];
+const DAILY_NAME_KEYS = ["name", "station_name", "StationName", "beach_name", "beach"];
+const DAILY_COUNTY_KEYS = ["county", "County"];
 const DAILY_LIST_KEYS = ["stations", "beaches", "readings", "records", "status"];
 const DATED_STATUS_FILE = /^(\d{4}-\d{2}-\d{2})\.(csv|json)$/;
 
-function readingsFromRows(
-  rows: Record<string, unknown>[],
-  generatedAt: string | null
-): { readings: Map<string, PublishedReading>; indexes: Map<string, DailyIndexFields> } {
-  const readings = new Map<string, PublishedReading>();
-  const indexes = new Map<string, DailyIndexFields>();
+export function emptyDailyStatus(generatedAt: string | null = null): DailyStatusFile {
+  return {
+    readings: new Map(),
+    indexes: new Map(),
+    rows: [],
+    agencyColumn: false,
+    duplicateCodes: [],
+    generatedAt,
+  };
+}
+
+function dailyIdentityKey(row: DailyJoinedRow, agencyColumn: boolean): string {
+  if (agencyColumn) return `${row.code}\0${(row.agency ?? "").trim().toLowerCase()}`;
+  if (row.name || row.county) {
+    return `${row.code}\0${(row.name ?? "").trim().toLowerCase()}\0${(row.county ?? "").trim().toLowerCase()}`;
+  }
+  return row.code;
+}
+
+function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string | null): Omit<DailyStatusFile, "generatedAt"> {
+  const agencyColumn = hasAgencyColumn(rows);
+  const rawCount = new Map<string, number>();
+  const byIdentity = new Map<string, DailyJoinedRow>();
+  const order: string[] = [];
   for (const row of rows) {
     const code = stationCode(first(row, DAILY_STATION_KEYS));
     if (!code) continue;
-    readings.set(code, withPostingFileDate(parsePublishedReading(row), generatedAt));
-    indexes.set(code, readNeptuneFields(row));
+    rawCount.set(code, (rawCount.get(code) ?? 0) + 1);
+    const joined: DailyJoinedRow = {
+      code,
+      agency: agencyColumn ? agencyFromRow(row) : null,
+      name: textOrNull(first(row, DAILY_NAME_KEYS)),
+      county: normalizeCounty(first(row, DAILY_COUNTY_KEYS)),
+      reading: withPostingFileDate(parsePublishedReading(row), generatedAt),
+      index: readNeptuneFields(row),
+    };
+    const key = dailyIdentityKey(joined, agencyColumn);
+    if (!byIdentity.has(key)) order.push(key);
+    byIdentity.set(key, joined);
   }
-  return { readings, indexes };
+  const kept = order.map((key) => byIdentity.get(key)!);
+  const identities = new Map<string, number>();
+  for (const row of kept) identities.set(row.code, (identities.get(row.code) ?? 0) + 1);
+  const readings = new Map<string, PublishedReading>();
+  const indexes = new Map<string, DailyIndexFields>();
+  for (const row of kept) {
+    if (identities.get(row.code) !== 1) continue;
+    readings.set(row.code, row.reading);
+    indexes.set(row.code, row.index);
+  }
+  return {
+    readings,
+    indexes,
+    rows: kept,
+    agencyColumn,
+    duplicateCodes: [...rawCount.entries()].filter(([, count]) => count > 1).map(([code]) => code),
+  };
 }
 
 /**
  * One current daily file, or one dated history file.
- * The last row for a station replaces earlier rows in that same file.
- * An empty payload is an empty map. It does not mean "ignore this file."
+ * The last row for one beach replaces earlier rows of that same beach.
+ * A repeated station code is kept when agency, or name and county, differs.
+ * An empty payload is an empty file. It does not mean "ignore this file."
  */
 export function parseDailyStatus(data: unknown): DailyStatusFile {
   if (Array.isArray(data)) {
     return { ...readingsFromRows(data.filter(isObj), null), generatedAt: null };
   }
-  if (!isObj(data)) return { readings: new Map(), indexes: new Map(), generatedAt: null };
+  if (!isObj(data)) return emptyDailyStatus();
   const generatedAt = asTimestamp(first(data, GENERATED_KEYS));
   for (const key of DAILY_LIST_KEYS) {
     const value = data[key];
@@ -466,15 +558,10 @@ export function parseDailyStatus(data: unknown): DailyStatusFile {
       return { ...readingsFromRows(value.filter(isObj), generatedAt), generatedAt };
     }
   }
-  const code = stationCode(first(data, DAILY_STATION_KEYS));
-  if (code) {
-    return {
-      readings: new Map([[code, withPostingFileDate(parsePublishedReading(data), generatedAt)]]),
-      indexes: new Map([[code, readNeptuneFields(data)]]),
-      generatedAt,
-    };
+  if (stationCode(first(data, DAILY_STATION_KEYS))) {
+    return { ...readingsFromRows([data], generatedAt), generatedAt };
   }
-  return { readings: new Map(), indexes: new Map(), generatedAt };
+  return emptyDailyStatus(generatedAt);
 }
 
 export function parseDailyStatusRows(rows: Record<string, unknown>[]): DailyStatusFile {

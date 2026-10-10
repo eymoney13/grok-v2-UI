@@ -24,35 +24,67 @@ export function slugifyCode(code: string): string {
   return slug || "station";
 }
 
-/**
- * One slug per station. A repeated beach name keeps both pages by appending
- * the station code. The code is also the fallback when a name does not
- * slugify to anything usable.
- */
-export function assignSlugs(beaches: { code: string; name: string }[]): Map<string, string> {
-  const bases = beaches.map((beach) => {
-    const fromName = slugifyName(beach.name);
-    return {
-      code: beach.code,
-      base: fromName.length >= 2 ? fromName : `beach-${slugifyCode(beach.code)}`,
-    };
-  });
-  const counts = new Map<string, number>();
-  for (const item of bases) counts.set(item.base, (counts.get(item.base) ?? 0) + 1);
+export interface SlugBeach {
+  code: string;
+  name: string;
+  county?: string | null;
+  agency?: string | null;
+}
 
+/**
+ * Path segment for one beach. A station code is not an address: the same code
+ * is used by more than one agency. When the file has an agency column and this
+ * beach names an agency, the slug is the code plus that agency. Otherwise it
+ * is the name, the county, and the code.
+ */
+export function beachSlugBase(beach: SlugBeach, agencyColumn: boolean): string {
+  const code = slugifyCode(beach.code);
+  if (agencyColumn && beach.agency?.trim()) {
+    const agency = slugifyName(beach.agency);
+    if (agency) return `${code}-${agency}`;
+  }
+  const name = slugifyName(beach.name);
+  const county = slugifyName(beach.county ?? "");
+  if (!name && !county) return `beach-${code}`;
+  return [name, county, code].filter((part) => part.length > 0).join("-");
+}
+
+/** One slug per beach, in the same order as the input. A collision gets `-2`, `-3`, and so on. */
+export function assignSlugs(beaches: SlugBeach[], agencyColumn = false): string[] {
   const used = new Set<string>();
-  const out = new Map<string, string>();
-  for (const item of bases) {
-    const withCode = counts.get(item.base)! > 1 ? `${item.base}-${slugifyCode(item.code)}` : item.base;
-    let candidate = withCode.replace(/-+$/g, "").slice(0, 96).replace(/-+$/g, "") || `beach-${slugifyCode(item.code)}`;
-    if (used.has(candidate)) candidate = `${candidate}-${slugifyCode(item.code)}`;
+  return beaches.map((beach) => {
+    const base = beachSlugBase(beach, agencyColumn).replace(/-+$/g, "").slice(0, 96).replace(/-+$/g, "") || "beach";
+    let candidate = base;
     let n = 2;
     while (used.has(candidate)) {
-      candidate = `${withCode}-${n}`;
+      const suffix = `-${n}`;
+      candidate = `${base.slice(0, Math.max(1, 96 - suffix.length)).replace(/-+$/g, "")}${suffix}`;
       n += 1;
     }
     used.add(candidate);
-    out.set(item.code, candidate);
-  }
-  return out;
+    return candidate;
+  });
+}
+
+export interface SlugIdentity {
+  slug: string;
+  code: string;
+  name: string;
+}
+
+/**
+ * Canonical slug, then a name-only slug when exactly one beach still uses that
+ * older path, then a station code when exactly one beach has it. A repeated
+ * code does not resolve.
+ */
+export function resolveSlugMatch<T extends SlugIdentity>(beaches: T[], requested: string): T | null {
+  const exact = beaches.find((beach) => beach.slug === requested);
+  if (exact) return exact;
+  const legacy = beaches.filter((beach) => slugifyName(beach.name) === requested && requested.length > 0);
+  if (legacy.length === 1) return legacy[0]!;
+  const exactCode = beaches.filter((beach) => beach.code === requested);
+  if (exactCode.length === 1) return exactCode[0]!;
+  const folded = beaches.filter((beach) => beach.code.toLowerCase() === requested.toLowerCase());
+  if (folded.length === 1) return folded[0]!;
+  return null;
 }

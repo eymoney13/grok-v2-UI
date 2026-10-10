@@ -8,6 +8,8 @@ import { STATUS_BAND, VERDICT_AS_STATUS, type Status, type Verdict } from "@/lib
 
 /** Fields the overview map actually reads. List rows and full beach records both fit. */
 export type MapBeach = {
+  /** Page path and marker identity. Not the station code. */
+  id: string;
   code: string;
   name: string;
   latitude: number;
@@ -198,7 +200,7 @@ const CANDIDATE_DIRECTIONS: Array<[number, number]> = [
 const CANDIDATE_RINGS = [1, 1.6, 2.2, 3];
 
 export interface LabelPlacement {
-  code: string;
+  id: string;
   text: string;
   /** Offset of the label's top-left from the dot, in container pixels. */
   dx: number;
@@ -301,7 +303,7 @@ function placeLabels(
       // bookkeeping, so it cannot displace anything that is actually in view.
       const w = textWidth(text, m) + m.padX * 2 + LABEL_BORDER;
       out.push({
-        code: beach.code,
+        id: beach.id,
         text,
         dx: -(dotHalf.x + 6 + w),
         dy: -m.h / 2,
@@ -326,7 +328,7 @@ function placeLabels(
     // This only reorders the search. The greedy pass is otherwise unchanged, so
     // packing cannot come out worse than it would have — unlike reserving old
     // positions up front, which starves later labels and forces overlaps.
-    const prev = previous.get(beach.code);
+    const prev = previous.get(beach.id);
     const candidates: Array<[number, number]> = [];
     if (prev) candidates.push([prev.ring, prev.dir]);
     for (let r = 0; r < CANDIDATE_RINGS.length; r++) {
@@ -374,7 +376,7 @@ function placeLabels(
     }
 
     out.push({
-      code: beach.code,
+      id: beach.id,
       text,
       dx: best.dx,
       dy: best.dy,
@@ -414,7 +416,7 @@ function BeachLabels({
     const next = map.getZoom() >= labelMinZoom
       ? placeLabels(map, beaches, dotHalf, previous.current)
       : [];
-    previous.current = new Map(next.map((p) => [p.code, { dir: p.dir, ring: p.ring }]));
+    previous.current = new Map(next.map((p) => [p.id, { dir: p.dir, ring: p.ring }]));
     setPlacements(next);
   }, [map, beaches, dotHalf, labelMinZoom]);
 
@@ -449,14 +451,14 @@ function BeachLabels({
   }, [map, recompute]);
 
   const byCode = useMemo(
-    () => new Map(beaches.map((b) => [b.code, b])),
+    () => new Map(beaches.map((b) => [b.id, b])),
     [beaches]
   );
 
   return (
     <>
       {placements.map((p) => {
-        const beach = byCode.get(p.code);
+        const beach = byCode.get(p.id);
         if (!beach) return null;
         const h = p.m.h;
         // A connector for labels pushed past the first ring, so a reader can
@@ -477,10 +479,10 @@ function BeachLabels({
         });
         return (
           <Marker
-            key={`label-${p.code}`}
+            key={`label-${p.id}`}
             position={[beach.latitude, beach.longitude]}
             icon={icon}
-            eventHandlers={{ click: () => onSelect(p.code) }}
+            eventHandlers={{ click: () => onSelect(p.id) }}
             keyboard={false}
           />
         );
@@ -651,7 +653,7 @@ function ClusteredPins({
           alt: name,
           keyboard: true,
         });
-        marker.on("click", () => onSelectRef.current(beach.code));
+        marker.on("click", () => onSelectRef.current(beach.id));
         group.addLayer(marker);
       }
       map.addLayer(group);
@@ -721,10 +723,10 @@ export default function OverviewMap({
           const accessibleName = pinName(b, statusPhrase);
           return (
             <Marker
-              key={b.code}
+              key={b.id}
               position={[b.latitude, b.longitude]}
               icon={pinIcon(b, binaryVerdict)}
-              eventHandlers={{ click: () => onSelect(b.code) }}
+              eventHandlers={{ click: () => onSelect(b.id) }}
               keyboard
               title={accessibleName}
               alt={accessibleName}

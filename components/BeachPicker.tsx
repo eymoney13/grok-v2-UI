@@ -180,7 +180,7 @@ export default function BeachPicker({
           role="listbox"
           tabIndex={-1}
           aria-label="Beaches"
-          aria-activedescendant={`beach-option-${beaches[cursor]?.code}`}
+          aria-activedescendant={`beach-option-${beaches[cursor]?.id}`}
           onKeyDown={onListKeyDown}
           // Right-aligned and above everything: the control sits at the right
           // of its row, and the map below it is a Leaflet container with its own
@@ -192,8 +192,8 @@ export default function BeachPicker({
             const selected = b.code === activeCode;
             return (
               <li
-                key={b.code}
-                id={`beach-option-${b.code}`}
+                key={b.id}
+                id={`beach-option-${b.id}`}
                 role="option"
                 aria-selected={selected}
                 onClick={() => choose(b.code)}

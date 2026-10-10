@@ -7,7 +7,6 @@ import { ArrowLeft, Waves } from "lucide-react";
 import type { BeachData, BeachListItem } from "@/lib/data";
 import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
-import { assignSlugs } from "@/lib/beachSlug";
 import { copyReading, officialPosting } from "@/lib/publishedReading";
 import { OfficialBanner, PostingAside, ReadingNotes } from "./SandboxBeachDetail";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
@@ -53,7 +52,7 @@ export default function CaliforniaBeachPage({
   const tested = lastTestedLabel(listItem.daysSinceSample);
   const posted = officialPosting(copyReading(listItem));
   const limited = hasLimitedLabData(listItem.daysSinceSample, listItem.noRecentSample, listItem.staleAfterDays);
-  const shareSlug = assignSlugs([listItem, ...choices].map((beach) => ({ code: beach.code, name: beach.name }))).get(listItem.code);
+  const shareSlug = listItem.id;
   return (
     <main className={s.root}>
       <header className={s.header}>
@@ -66,12 +65,12 @@ export default function CaliforniaBeachPage({
           <label>
             <span className={s.srOnly}>Choose a beach</span>
             <select
-              value={listItem.code}
+              value={listItem.id}
               onChange={(event) => router.push(`/california/beach/${encodeURIComponent(event.target.value)}?from=${backTo}`)}
             >
-              {[listItem, ...choices.filter((choice) => choice.code !== listItem.code)]
+              {[listItem, ...choices.filter((choice) => choice.id !== listItem.id)]
                 .sort((a, b) => a.name.localeCompare(b.name))
-                .map((choice) => <option key={choice.code} value={choice.code}>{choice.name}</option>)}
+                .map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
             </select>
           </label>
         </div>

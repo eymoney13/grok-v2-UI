@@ -15,6 +15,7 @@ import {
   parseDailyStatusRows,
   textFlag,
 } from "../lib/neptuneContract.ts";
+import { matchDailyRow } from "../lib/stationIdentity.ts";
 import {
   confidenceWords,
   mergeReadings,
@@ -228,6 +229,74 @@ assert.equal(liveRow.indexes.get("BDP12")?.band, null);
 const dailyIndex = parseDailyStatusRows([{ station_code: "X1", neptune_index: 42, neptune_band: "good" }]);
 assert.equal(dailyIndex.indexes.get("X1")?.index, 42);
 assert.equal(dailyIndex.indexes.get("X1")?.band, "good");
+assert.equal(parseDailyStatus({}).rows.length, 0);
+assert.equal(parseDailyStatus({}).agencyColumn, false);
+assert.deepEqual(parseDailyStatus({}).duplicateCodes, []);
+
+const splitAgency = parseDailyStatusRows([
+  { station_code: "0", agency: "County A", posting_status: "warning" },
+  { station_code: "0", agency: "County B", posting_status: "open" },
+  { station_code: "0", agency: "County A", posting_status: "advisory" },
+]);
+assert.equal(splitAgency.agencyColumn, true);
+assert.deepEqual(splitAgency.duplicateCodes, ["0"]);
+assert.equal(splitAgency.readings.get("0"), undefined);
+assert.equal(splitAgency.rows.length, 2);
+assert.equal(
+  matchDailyRow(splitAgency.rows, { code: "0", name: "North", county: "Orange", agency: "County A" }, true, 2)?.reading.postingStatus,
+  "advisory"
+);
+assert.equal(
+  matchDailyRow(splitAgency.rows, { code: "0", name: "South", county: "San Diego", agency: "County B" }, true, 2)?.reading.postingStatus,
+  "open"
+);
+
+const splitName = parseDailyStatusRows([
+  { station_code: "0", name: "Huntington State Beach", county: "Orange", posting_status: "warning" },
+  { station_code: "0", name: "Silver Strand", county: "San Diego", posting_status: "open" },
+]);
+assert.equal(splitName.agencyColumn, false);
+assert.equal(splitName.readings.get("0"), undefined);
+assert.equal(splitName.rows.length, 2);
+assert.equal(
+  matchDailyRow(splitName.rows, { code: "0", name: "Huntington State Beach", county: "Orange", agency: null }, false, 2)?.reading.postingStatus,
+  "warning"
+);
+assert.equal(
+  matchDailyRow(splitName.rows, { code: "0", name: "Silver Strand", county: "San Diego", agency: null }, false, 2)?.reading.postingStatus,
+  "open"
+);
+
+const repeatedBare = parseDailyStatusRows([
+  { station_code: "0", posting_status: "warning" },
+  { station_code: "0", posting_status: "open" },
+]);
+assert.equal(repeatedBare.rows.length, 1);
+assert.equal(repeatedBare.readings.get("0")?.postingStatus, "open");
+assert.equal(
+  matchDailyRow(repeatedBare.rows, { code: "0", name: "Only", county: "Orange", agency: null }, false, 2),
+  null
+);
+assert.equal(
+  matchDailyRow(repeatedBare.rows, { code: "0", name: "Only", county: "Orange", agency: null }, false, 1)?.reading.postingStatus,
+  "open"
+);
+
+const agencyRoster = parseRosterJson([{ station_code: "0", name: "North Beach", agency: "County Health", county: "Orange" }]);
+assert.equal(agencyRoster[0]?.agency, "County Health");
+assert.equal(agencyRoster[0]?.stationCode, "0");
+assert.equal(parseRosterJson([{ station_code: "1", name: "South Beach" }])[0]?.agency, null);
+
+const splitArchive = groupArchive(
+  [
+    parseArchiveRow({ station_code: "0", agency: "A", lead_days: 0, probability: 0.1, forecast_date: "2026-10-09", target_date: "2026-10-09" })!,
+    parseArchiveRow({ station_code: "0", agency: "B", lead_days: 0, probability: 0.9, forecast_date: "2026-10-09", target_date: "2026-10-09" })!,
+  ],
+  true
+);
+assert.equal(splitArchive.size, 2);
+assert.equal(splitArchive.get("0\0a")?.nowcast?.probability, 0.1);
+assert.equal(splitArchive.get("0\0b")?.nowcast?.probability, 0.9);
 assert.equal(latestDatedStatusName(["notes.txt", "2026-10-01.csv", "2026-10-09.json", "2026-10-08.csv"]), "2026-10-09.json");
 assert.equal(latestDatedStatusName(["readme.md"]), null);
 

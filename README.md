@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). That is the public “Beaches near me” screen: browser location, or a search by name, with no account. Each beach has a page at `/beach/<slug>`. The full coast board stays at `/california`.
+Open [http://localhost:3000](http://localhost:3000). That is the public “Beaches near me” screen: browser location, or a search by name, with no account. Each beach has a page at `/beach/<slug>`. The slug is the beach name, county, and station code, or the station code plus agency when that column is in the file. A station code alone is not the address, because the same code is used by more than one agency. The full coast board stays at `/california`.
 
 `npm run build` compiles the production app. `node scripts/check-neptune-contract.ts` (Node 22, with type stripping) checks the parsers.
 
@@ -36,7 +36,7 @@ node scripts/build-v2-sample.mjs
 - Under / Near / Over the limit, from the same cutoffs as the legend. A published Neptune Index (0–500, six bands) replaces that reading on the map, the list, and the beach page. The scale is at `/california/neptune-index`. Bands live in `config/neptune-index.ts`. Absent index fields keep Under / Near / Over, and the board does not invent a score.
 - Day 1–3 forecasts in an Experimental panel (`FORECAST_HORIZON_MODE` and `FORECAST_HIDDEN_STATIONS` in `lib/forecastDisplay.ts`).
 - Search, plus county, region, status, and roster filters. Region appears when the regions file names any.
-- A clustered map, and a beach page at `/california/beach/<station>` with today’s status, the last test, lab results against the limit, and the experimental forecast.
+- A clustered map, and a beach page at `/california/beach/<slug>` with today’s status, the last test, lab results against the limit, and the experimental forecast. The slug is the same one used on the public beach page.
 - A phone-first home at `/` that lists the nearest beaches after the browser shares a location, and a search when it does not. The map on that screen loads only after “Show these on a map.”
 - A shareable `/beach/<slug>` page. Its summary states today’s status, the last lab test when a sample age was published, and the experimental outlook. Rain and the latest lab result appear only when those fields are in the file. A blank rain field is not described as a dry day. Locked or missing forecast days are not given a direction.
 - Installable PWA basics: a web manifest and a service worker that always asks the network, so a saved page is not reused as today’s reading. English and Spanish on the public home and beach page. Beach names stay as published.

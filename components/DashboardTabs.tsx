@@ -104,13 +104,14 @@ export default function DashboardTabs({
   };
 
   const selectBeach = (
-    code: string,
+    token: string,
     entryPoint: "list" | "map" | "picker" | "tab" | "neighbor",
     scroll = false
   ) => {
+    const beach = beaches.find((b) => b.id === token) ?? beaches.find((b) => b.code === token);
+    const code = beach?.code ?? token;
     setActiveCode(code);
     if (scroll) scrollToTop();
-    const beach = beaches.find((b) => b.code === code);
     if (posthogConfigured && beach) {
       // entry_point, not source: `source` is the first-touch acquisition
       // channel registered for every event in instrumentation-client.ts.
@@ -199,7 +200,7 @@ export default function DashboardTabs({
                 !mapActive && !newsActive && !listActive && b.code === active.code;
               return (
                 <button
-                  key={b.code}
+                  key={b.id}
                   type="button"
                   onClick={() => selectBeach(b.code, "tab")}
                   aria-current={isActive ? "page" : undefined}

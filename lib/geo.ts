@@ -20,16 +20,22 @@ export function milesBetween(a: LatLon, b: LatLon): number {
   return 2 * 3958.8 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-export function nearest<T extends LatLon & { code: string }>(
+export function nearest<T extends LatLon & { code: string; slug?: string; id?: string }>(
   origin: LatLon,
   beaches: T[],
   limit: number,
-  excludeCode?: string
+  excludeCode?: string,
+  excludeId?: string
 ): T[] {
   return beaches
-    .filter((beach) => beach.code !== excludeCode && hasCoordinates(beach))
+    .filter((beach) => {
+      if (!hasCoordinates(beach)) return false;
+      const identity = beach.slug ?? beach.id;
+      if (excludeId) return identity !== excludeId;
+      return beach.code !== excludeCode;
+    })
     .map((beach) => ({ beach, miles: milesBetween(origin, beach) }))
-    .sort((a, b) => a.miles - b.miles || a.beach.code.localeCompare(b.beach.code))
+    .sort((a, b) => a.miles - b.miles || (a.beach.slug ?? a.beach.id ?? a.beach.code).localeCompare(b.beach.slug ?? b.beach.id ?? b.beach.code))
     .slice(0, limit)
     .map((item) => item.beach);
 }

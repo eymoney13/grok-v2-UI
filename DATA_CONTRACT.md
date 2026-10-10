@@ -24,13 +24,14 @@ These paths and columns were confirmed from `project-neptune-v2` main (PR #1). T
 
 | Field | Use |
 | --- | --- |
-| `station_code` | Station id. The code `0` is Huntington State Beach and is kept as text. |
+| `station_code` | Station code, kept as text (`0` stays `"0"`). It is not unique across agencies. When this file has an `agency` column, the beach is that code plus `agency`. Otherwise the public path and the list key are the beach name, county, and code. |
 | `name` | Beach name shown on the board. |
 | `lat`, `lon` | Map position. |
 | `county` | County filter and grouping. A trailing “County” is ignored when matching. |
 | `last_sample_date` | Date of the last lab sample, `YYYY-MM-DD`. |
 | `sampling_frequency` | Shown only when the file has a value. |
 | `tier` | `model_pool` or `limited_data`. |
+| `agency` | Optional. Present only when the file has that column. A blank cell stays blank. With the column present, a repeated `station_code` is a different beach when the agency differs. |
 
 JSON may be a bare array or an object with `stations`, `beaches`, `roster`, or `records`.
 
@@ -40,7 +41,7 @@ In the sample, `tier` is `model_pool` for every station that has a published now
 
 | Field | Use |
 | --- | --- |
-| `station_code` | Join key. |
+| `station_code` | Join key, together with `agency` when that column is present. A repeated code with no agency is not applied to every roster beach that shares it. |
 | `forecast_date` | Day the forecast was issued. The latest date wins. |
 | `target_date` | Day the estimate is for. |
 | `lead_days` | `0` is the same-day nowcast. `1`–`3` are the experimental look-ahead. |
@@ -83,11 +84,11 @@ These keep the published column layout (factors, conditions, insight, lab result
 
 ## Live daily file
 
-Confirmed on `project-neptune-v2` main, PR #6, commit `b60b5cd`. That publish covered 678 stations. The board does not hardcode that count.
+Confirmed on `project-neptune-v2` main, PR #6, commit `b60b5cd`. That publish covered 678 stations. The board does not hardcode that count. This environment still cannot open that repository, so this note does not state how many `station_code` values repeat in `current.csv`. The parser keeps a repeated code as more than one beach when the row distinguishes it.
 
 | Path | Use |
 | --- | --- |
-| `outputs/daily/current.csv` | Primary daily file. `outputs/daily/current.json` is accepted with the same fields. One row per station. The last row for a station wins. |
+| `outputs/daily/current.csv` | Primary daily file. `outputs/daily/current.json` is accepted with the same fields. `station_code` can repeat. When an `agency` column is present, rows that share a code and differ by agency stay separate, and the last row wins only for that same code and agency. Without that column, a name or county on the row does the same job. A repeated code with none of those fields is not copied onto every roster beach that shares the code. Identical repeats of one beach still let the last row win. |
 | A dated file in the same directory, `outputs/daily/YYYY-MM-DD.csv` or `.json` | History. Used only when no current file exists. The newest date wins. |
 | Older names, only if none of the above exist: `daily_status.csv`, `daily_status.json` (same folders as the wide CSVs), then the newest dated file in `outputs/daily/history`, `outputs/daily_status`, or `outputs/status_history` | Fallback for an earlier layout. |
 
@@ -97,6 +98,9 @@ Columns named for this file:
 
 | Field | Use |
 | --- | --- |
+| `station_code` | Same text code as the roster. Not a global id. | 
+| `agency` | Optional. Read only when the header includes `agency`. Blank stays blank. | 
+| `name`, `county` | Optional on this file. When `agency` is absent, they keep two rows with the same `station_code` apart. | 
 | `generated_at` | “Last updated,” after `outputs/run_manifest.json` and before a `generated_at` column on the wide nowcast. |
 | `posting_status` | `closure`, `warning`, `advisory`, `open`, or `unknown`. Also accepts `closed` for a closure. Any other word is ignored. |
 | `posting_source` | Credited on a closure, warning, advisory, or open check. Blank stays blank. |

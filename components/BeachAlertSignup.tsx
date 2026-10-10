@@ -12,6 +12,7 @@ const posthogConfigured = Boolean(
 );
 
 export interface AlertBeach {
+  id?: string;
   code: string;
   name: string;
 }
@@ -332,7 +333,7 @@ export default function BeachAlertSignup({
 
                   <ul className="mt-3 space-y-1">
                     {beaches.map((beach) => (
-                      <li key={beach.code}>
+                      <li key={beach.id ?? `${beach.name}-${beach.code}`}>
                         <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-gray-50">
                           <input
                             type="checkbox"

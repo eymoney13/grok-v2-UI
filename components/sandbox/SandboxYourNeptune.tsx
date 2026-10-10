@@ -21,7 +21,7 @@ export default function SandboxYourNeptune({
   beaches,
 }: {
   location: string;
-  beaches: { code: string; name: string }[];
+  beaches: { id: string; code: string; name: string }[];
 }) {
   const [stations, setStations] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export default function SandboxYourNeptune({
         <>
           <ul className={s.alertList}>
             {subscribed.map((b) => (
-              <li key={b.code}>
+              <li key={b.id}>
                 <div>
                   <p className={s.alertBeach}>{b.name}</p>
                   <p className={s.alertSub}>Elevated bacteria alerts</p>
@@ -120,7 +120,7 @@ export default function SandboxYourNeptune({
               </div>
               <ul>
                 {available.map((b) => (
-                  <li key={b.code}>
+                  <li key={b.id}>
                     <label>
                       <input
                         type="checkbox"

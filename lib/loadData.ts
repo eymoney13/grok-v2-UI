@@ -1,5 +1,6 @@
 import { isCoveredStation } from "./californiaCoverage";
 import "server-only";
+import { assignSlugs } from "./beachSlug.ts";
 import {
   computeAccuracy,
   dataSlugFor,
@@ -24,11 +25,14 @@ import {
 } from "./data";
 import { loadV2Bundle, readPublishedCsv, readPublishedJson, type V2Bundle } from "./neptuneAdapter";
 import {
+  agencyFromRow,
+  hasAgencyColumn,
   optionalModelFields,
   regionForCounty,
   staleLimitDays,
   type StationArchive,
 } from "./neptuneContract";
+import { matchDailyRow } from "./stationIdentity.ts";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
 import { mergeNeptuneFields, publishedNeptuneScore, readNeptuneFields } from "./neptuneIndex";
@@ -136,8 +140,11 @@ interface RosterFile {
 // Coordinates are optional: the CA boards leave them undefined and fall back to
 // the nowcast's own Latitude/Longitude columns.
 interface RosterEntry {
+  /** Shareable path and React key. Never the station code by itself. */
+  id: string;
   code: string;
   name: string;
+  agency: string | null;
   /**
    * The name to use in a sentence. Differs from `name` only where the roster
    * appends something purely to disambiguate a tab label.
@@ -164,54 +171,81 @@ const blankRosterFields = {
   tier: null,
   samplingFrequency: null,
   lastSampleDate: null,
+  agency: null,
 } as const;
 
+type RosterDraft = Omit<RosterEntry, "id">;
+
+function stampIds(entries: RosterDraft[], agencyColumn: boolean): RosterEntry[] {
+  const slugs = assignSlugs(
+    entries.map((entry) => ({
+      code: entry.code,
+      name: entry.name,
+      county: entry.county,
+      agency: entry.agency,
+    })),
+    agencyColumn
+  );
+  return entries.map((entry, index) => ({ ...entry, id: slugs[index]! }));
+}
+
 async function resolveRoster(config: LocationConfig, bundle: V2Bundle | null): Promise<RosterEntry[]> {
+  const agencyColumn = !!(bundle?.rosterAgencyColumn || bundle?.dailyAgencyColumn);
   if (config.useStatewideRoster && bundle?.available) {
     const regions = bundle.regions?.regions ?? [];
-    return bundle.roster.map((station) => ({
-      code: station.stationCode,
-      name: station.name,
-      proseName: station.name,
-      latitude: station.lat ?? undefined,
-      longitude: station.lon ?? undefined,
-      county: station.county,
-      region: regionForCounty(station.county, regions),
-      tier: station.tier,
-      samplingFrequency: station.samplingFrequency,
-      lastSampleDate: station.lastSampleDate,
-    }));
+    return stampIds(
+      bundle.roster.map((station) => ({
+        code: station.stationCode,
+        name: station.name,
+        proseName: station.name,
+        latitude: station.lat ?? undefined,
+        longitude: station.lon ?? undefined,
+        county: station.county,
+        agency: station.agency,
+        region: regionForCounty(station.county, regions),
+        tier: station.tier,
+        samplingFrequency: station.samplingFrequency,
+        lastSampleDate: station.lastSampleDate,
+      })),
+      agencyColumn
+    );
   }
   if (config.rosterFile) {
     const roster = await readJsonOptional<RosterFile>(
       dataSlugFor(config),
       config.rosterFile
     );
-    return (roster?.beaches ?? [])
-      .filter((b) => b?.primary_station)
-      .map((b) => ({
-        code: String(b.primary_station),
-        // Town disambiguates the several "Town Beach"-style names in the roster.
-        name: b.town ? `${b.name} - ${b.town}` : b.name,
-        // Prose drops it again: "Carson Beach is expected to..." reads better
-        // than "Carson Beach - South Boston is expected to...", and the card
-        // the sentence sits on is already titled with the town.
-        proseName: b.name,
-        latitude: Number(b.lat),
-        longitude: Number(b.lon),
-        excRatePct: numOrUndefined(b.exc_rate_pct),
-        nSamples: numOrUndefined(b.n_samples),
-        ...blankRosterFields,
-      }));
+    return stampIds(
+      (roster?.beaches ?? [])
+        .filter((b) => b?.primary_station)
+        .map((b) => ({
+          code: String(b.primary_station),
+          // Town disambiguates the several "Town Beach"-style names in the roster.
+          name: b.town ? `${b.name} - ${b.town}` : b.name,
+          // Prose drops it again: "Carson Beach is expected to..." reads better
+          // than "Carson Beach - South Boston is expected to...", and the card
+          // the sentence sits on is already titled with the town.
+          proseName: b.name,
+          latitude: Number(b.lat),
+          longitude: Number(b.lon),
+          excRatePct: numOrUndefined(b.exc_rate_pct),
+          nSamples: numOrUndefined(b.n_samples),
+          ...blankRosterFields,
+        })),
+      false
+    );
   }
   // A configured roster has no appended disambiguator to drop. Its names carry
   // the street or landmark that tells two stations at one beach apart
   // ("Hermosa Beach - 26th St" vs "Hermosa Beach - Herondo St"), so prose needs
   // every word of them.
-  return config.stations.map((code) => {
-    const name = config.beachNames[code] ?? code;
-    return { code, name, proseName: name, ...blankRosterFields };
-  });
+  return stampIds(
+    config.stations.map((code) => {
+      const name = config.beachNames[code] ?? code;
+      return { code, name, proseName: name, ...blankRosterFields };
+    }),
+    false
+  );
 }
 
 async function loadThresholds(slug: string): Promise<Record<string, number>> {
@@ -434,6 +468,7 @@ export async function loadDashboardData(
       : loadThresholds(data),
   ]);
 
+  const accuracyAgency = hasAgencyColumn(accuracyRows as unknown as Record<string, unknown>[]);
   // Group the lab samples by station, chronological (oldest → newest), so each
   // beach scores its own forecast-vs-lab accuracy from its own history.
   const accuracyByCode = new Map<string, RawAccuracySample[]>();
@@ -443,37 +478,32 @@ export async function loadDashboardData(
     const excProbability = Number(row.exc_probability);
     const labMpn = Number(row.actual_mpn);
     if (Number.isNaN(excProbability) || Number.isNaN(labMpn)) continue;
-    const list = accuracyByCode.get(code) ?? [];
+    const key = stationIdentityKey(code, row, accuracyAgency);
+    const list = accuracyByCode.get(key) ?? [];
     list.push({ date: String(row.date), excProbability, labMpn });
-    accuracyByCode.set(code, list);
+    accuracyByCode.set(key, list);
   }
   for (const list of accuracyByCode.values()) {
     list.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  const nowcastByCode = new Map<string, NowcastRow>();
-  for (const row of nowcastRows) {
-    const code = stationKey(row?.StationCode);
-    if (code !== null) nowcastByCode.set(code, row);
-  }
-  const forecastByCode = new Map<string, ForecastRow>();
-  for (const row of forecastRows) {
-    const code = stationKey(row?.StationCode);
-    if (code !== null) forecastByCode.set(code, row);
-  }
-  const historyByCode = new Map<string, ForecastRow>();
-  for (const row of historyRows) {
-    const code = stationKey(row?.StationCode);
-    if (code !== null) historyByCode.set(code, row);
-  }
+  const codeCounts = new Map<string, number>();
+  for (const entry of roster) codeCounts.set(entry.code, (codeCounts.get(entry.code) ?? 0) + 1);
+  const nowcastAgency = hasAgencyColumn(nowcastRows as unknown as Record<string, unknown>[]);
+  const forecastAgency = hasAgencyColumn(forecastRows as unknown as Record<string, unknown>[]);
+  const historyAgency = hasAgencyColumn(historyRows as unknown as Record<string, unknown>[]);
+  const nowcastByCode = indexByStation(nowcastRows, nowcastAgency);
+  const forecastByCode = indexByStation(forecastRows, forecastAgency);
+  const historyByCode = indexByStation(historyRows, historyAgency);
 
   const beaches: BeachData[] = [];
   const unmodeled: BeachListItem[] = [];
   for (const entry of roster) {
     const code = entry.code;
-    const archive = usingV2 ? bundle?.archive.get(code) ?? null : null;
+    const sharing = codeCounts.get(code) ?? 1;
+    const archive = usingV2 ? archiveFor(bundle, entry, sharing) : null;
     const archivedNow = archive?.nowcast ?? null;
-    let now = nowcastByCode.get(code);
+    let now = takeStation(nowcastByCode, entry, nowcastAgency, sharing);
     if ((!now || !now.prediction_date) && archivedNow?.probability != null) {
       now = {
         StationCode: code,
@@ -488,7 +518,7 @@ export async function loadDashboardData(
       };
     }
     if (!now || !now.prediction_date) {
-      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle));
+      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
       continue;
     }
 
@@ -527,19 +557,20 @@ export async function loadDashboardData(
     const conditions = buildConditions(now);
     const nowRecord = now as unknown as Record<string, unknown>;
     const wideOptional = optionalModelFields(nowRecord);
+    const dailyRow = dailyFor(bundle, entry, sharing);
     const mergedIndex = mergeNeptuneFields(
-      bundle?.dailyIndex.get(code),
+      dailyRow?.index,
       archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
       readNeptuneFields(nowRecord)
     );
     const publishedIndex = publishedNeptuneScore(mergedIndex.index, mergedIndex.band);
     const reading = copyReading(
-      mergeReadings(bundle?.daily.get(code), archivedNow?.reading, wideOptional.reading)
+      mergeReadings(dailyRow?.reading, archivedNow?.reading, wideOptional.reading)
     );
 
     const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
 
-    const fcRow = forecastByCode.get(code);
+    const fcRow = takeStation(forecastByCode, entry, forecastAgency, sharing);
     const forecast: ForecastDay[] = [];
     if (fcRow) {
       for (const i of [1, 2, 3] as const) {
@@ -593,7 +624,7 @@ export async function loadDashboardData(
 
     // history_3day.csv shape mirrors forecast_3day.csv, where day1 = most recent past day.
     // We re-sort ascending so the array reads past → present left-to-right.
-    const histRow = historyByCode.get(code);
+    const histRow = takeStation(historyByCode, entry, historyAgency, sharing);
     const pastDays: ForecastDay[] = [];
     if (histRow) {
       for (const i of [1, 2, 3] as const) {
@@ -629,6 +660,7 @@ export async function loadDashboardData(
     }
 
     beaches.push({
+      id: entry.id,
       code,
       name: entry.name,
       proseName: entry.proseName,
@@ -659,9 +691,12 @@ export async function loadDashboardData(
       nSamples: entry.nSamples ?? null,
       pastDays,
       forecast,
-      accuracy: computeAccuracy(accuracyByCode.get(code) ?? [], threshold),
+      accuracy: computeAccuracy(accuracySamples(accuracyByCode, entry, accuracyAgency, sharing), threshold),
       labHistory: options?.includeLabHistory
-        ? (accuracyByCode.get(code) ?? []).map((sample) => ({ date: sample.date, labMpn: sample.labMpn }))
+        ? accuracySamples(accuracyByCode, entry, accuracyAgency, sharing).map((sample) => ({
+            date: sample.date,
+            labMpn: sample.labMpn,
+          }))
         : undefined,
     });
   }
@@ -740,9 +775,12 @@ function rosterFacts(
 function unmodeledItem(
   entry: RosterEntry,
   archive: StationArchive | null,
-  bundle: V2Bundle | null
+  bundle: V2Bundle | null,
+  sharing: number
 ): BeachListItem {
+  const dailyRow = dailyFor(bundle, entry, sharing);
   return {
+    id: entry.id,
     code: entry.code,
     name: entry.name,
     proseName: entry.proseName,
@@ -761,18 +799,17 @@ function unmodeledItem(
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
-    ...unmodeledIndex(entry.code, archive, bundle),
-    ...copyReading(mergeReadings(bundle?.daily.get(entry.code), archive?.nowcast?.reading)),
+    ...unmodeledIndex(dailyRow?.index, archive),
+    ...copyReading(mergeReadings(dailyRow?.reading, archive?.nowcast?.reading)),
   };
 }
 
 function unmodeledIndex(
-  code: string,
-  archive: StationArchive | null,
-  bundle: V2Bundle | null
+  dailyIndex: { index: number | null; band: string | null } | null | undefined,
+  archive: StationArchive | null
 ): { neptuneIndex: number | null; neptuneBand: string | null } {
   const merged = mergeNeptuneFields(
-    bundle?.dailyIndex.get(code),
+    dailyIndex,
     archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
   );
   const published = publishedNeptuneScore(merged.index, merged.band);
@@ -780,6 +817,62 @@ function unmodeledIndex(
     neptuneIndex: published?.index ?? null,
     neptuneBand: published?.band.id ?? null,
   };
+}
+
+function stationIdentityKey(code: string, row: object, agencyColumn: boolean): string {
+  if (!agencyColumn) return code;
+  return `${code}\0${(agencyFromRow(row as Record<string, unknown>) ?? "").trim().toLowerCase()}`;
+}
+
+function indexByStation<T extends { StationCode?: unknown }>(rows: T[], agencyColumn: boolean): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    const code = stationKey(row?.StationCode);
+    if (code === null) continue;
+    map.set(stationIdentityKey(code, row, agencyColumn), row);
+  }
+  return map;
+}
+
+function takeStation<T>(
+  map: Map<string, T>,
+  entry: RosterEntry,
+  agencyColumn: boolean,
+  sharing: number
+): T | undefined {
+  if (agencyColumn) return map.get(`${entry.code}\0${(entry.agency ?? "").trim().toLowerCase()}`);
+  if (sharing > 1) return undefined;
+  return map.get(entry.code);
+}
+
+function archiveFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number): StationArchive | null {
+  if (!bundle) return null;
+  if (bundle.archiveAgencyColumn) {
+    return bundle.archive.get(`${entry.code}\0${(entry.agency ?? "").trim().toLowerCase()}`) ?? null;
+  }
+  if (sharing > 1) return null;
+  return bundle.archive.get(entry.code) ?? null;
+}
+
+function dailyFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) {
+  if (!bundle) return null;
+  return matchDailyRow(
+    bundle.dailyRows,
+    { code: entry.code, name: entry.name, county: entry.county, agency: entry.agency },
+    bundle.dailyAgencyColumn,
+    sharing
+  );
+}
+
+function accuracySamples(
+  byStation: Map<string, RawAccuracySample[]>,
+  entry: RosterEntry,
+  agencyColumn: boolean,
+  sharing: number
+): RawAccuracySample[] {
+  if (!agencyColumn && sharing > 1) return [];
+  const key = agencyColumn ? `${entry.code}\0${(entry.agency ?? "").trim().toLowerCase()}` : entry.code;
+  return byStation.get(key) ?? [];
 }
 
 // The station codes a location currently renders — the same roster

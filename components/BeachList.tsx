@@ -90,7 +90,7 @@ export default function BeachList({
             verdict ?? `${pctText}, ${STATUS_LABEL[beach.status]}`;
 
           return (
-            <li key={beach.code}>
+            <li key={beach.id}>
               {/* The whole row is the target, not just the name: a reader aiming
                   at a beach should not have to hit the text exactly.
 

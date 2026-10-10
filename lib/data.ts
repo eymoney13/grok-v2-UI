@@ -679,6 +679,8 @@ export interface ForecastDay {
 }
 
 export interface BeachData {
+  /** Shareable path and React key. Not the station code: that code is not unique. */
+  id: string;
   code: string;
   name: string;
   /**
@@ -789,6 +791,8 @@ export type RosterTier = "model_pool" | "limited_data";
 
 /** What the list and the map need. The detail page loads the rest. */
 export interface BeachListItem {
+  /** Shareable path and React key. Not the station code: that code is not unique. */
+  id: string;
   code: string;
   name: string;
   proseName: string;
@@ -820,6 +824,7 @@ export interface BeachListItem {
 
 export function toBeachListItem(beach: BeachData): BeachListItem {
   return {
+    id: beach.id,
     code: beach.code,
     name: beach.name,
     proseName: beach.proseName,
