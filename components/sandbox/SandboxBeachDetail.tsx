@@ -26,11 +26,10 @@ import {
   confidenceWords,
   copyReading,
   methodWords,
-  kindTitle,
+  postingHeadline,
   officialPosting,
   showsUnknownCall,
   openPostingWords,
-  postingLabel,
   rainAdvisoryWords,
   unknownPostingWords,
   type PublishedReading,
@@ -113,10 +112,11 @@ function ForecastLookAhead({
 export function OfficialBanner({ reading }: { reading: PublishedReading }) {
   const posting = officialPosting(reading);
   if (!posting) return null;
+  const headline = postingHeadline(posting);
   return (
-    <section className={s.officialHero} aria-label={kindTitle(posting.kind)}>
-      <p className={s.eyebrow}>{kindTitle(posting.kind)}</p>
-      <h2>{postingLabel(posting)}</h2>
+    <section className={s.officialHero} aria-label={headline.title}>
+      {headline.detail && <p className={s.eyebrow}>{headline.title}</p>}
+      <h2>{headline.detail ?? headline.title}</h2>
       {posting.source && <p>Source: {posting.source}</p>}
     </section>
   );

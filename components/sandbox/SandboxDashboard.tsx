@@ -12,7 +12,7 @@ import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { IndexScale } from "@/lib/neptuneIndex";
-import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
+import { confidenceWords, copyReading, methodShort, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
@@ -297,6 +297,7 @@ export default function SandboxDashboard({
                                 {(() => {
                                   const reading = copyReading(beach);
                                   const posting = officialPosting(reading);
+                                  const headline = posting ? postingHeadline(posting) : null;
                                   const open = openPostingWords(reading);
                                   const score = beach.neptuneDisplay;
                                   const confidence = confidenceWords(beach.confidence);
@@ -314,11 +315,11 @@ export default function SandboxDashboard({
                                   );
                                   return (
                                     <span className={s.readingStack}>
-                                      {posting && (
+                                      {headline && (
                                         <span className={s.officialList}>
-                                          <span>{kindTitle(posting.kind)}</span>
-                                          <strong>{postingLabel(posting)}</strong>
-                                          {posting.source && <small>Source: {posting.source}</small>}
+                                          <span>{headline.title}</span>
+                                          {headline.detail && <strong>{headline.detail}</strong>}
+                                          {posting?.source && <small>Source: {posting.source}</small>}
                                         </span>
                                       )}
                                       <span className={posting ? s.estimateSecondary : undefined}>{estimate}</span>

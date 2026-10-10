@@ -218,6 +218,17 @@ export function postingLabel(posting: OfficialPosting, lang: ReadingLang = "en")
   return posting.detail ?? kindLabel(posting.kind, lang);
 }
 
+/** Title, and the county’s own words only when they are not the same word again. */
+export function postingHeadline(
+  posting: OfficialPosting,
+  lang: ReadingLang = "en"
+): { title: string; detail: string | null } {
+  const title = kindTitle(posting.kind, lang);
+  const label = postingLabel(posting, lang);
+  if (title.trim().toLowerCase() === label.trim().toLowerCase()) return { title, detail: null };
+  return { title, detail: label };
+}
+
 /** Short pin text. A long county label falls back to the kind name, never to "safe". */
 export function postingPinText(posting: OfficialPosting): string {
   const label = postingLabel(posting, "en");
@@ -340,9 +351,8 @@ export function officialSummaryLead(posting: OfficialPosting, modelSentence: str
       ? ` Fuente: ${posting.source}.`
       : ` Source: ${posting.source}.`
     : "";
-  const label = postingLabel(posting, lang);
-  const title = kindTitle(posting.kind, lang);
-  const head = title.trim().toLowerCase() === label.trim().toLowerCase() ? `${title}.` : `${title}: ${label}.`;
+  const { title, detail } = postingHeadline(posting, lang);
+  const head = detail ? `${title}: ${detail}.` : `${title}.`;
   return lang === "es"
     ? `${head}${source} Nuestro estimado: ${modelSentence}`
     : `${head}${source} Our estimate: ${modelSentence}`;

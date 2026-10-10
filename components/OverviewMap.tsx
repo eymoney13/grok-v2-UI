@@ -36,7 +36,7 @@ import {
 } from "@/lib/basemap";
 import { hasMapCoordinates } from "@/lib/geo";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
-import { copyReading, kindTitle, officialPosting, postingLabel, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
+import { copyReading, officialPosting, postingHeadline, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 import { POSTING_LABEL } from "@/lib/readerLabels";
 import { unknownCallPhrase } from "@/lib/publicCopy";
 
@@ -612,9 +612,8 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
   const posting = officialPosting(copyReading(beach));
   if (posting) {
     const source = posting.source ? `, source ${posting.source}` : "";
-    const title = kindTitle(posting.kind);
-    const label = postingLabel(posting);
-    const words = title.toLowerCase() === label.toLowerCase() ? title : `${title}: ${label}`;
+    const headline = postingHeadline(posting);
+    const words = headline.detail ? `${headline.title}: ${headline.detail}` : headline.title;
     return `${beach.name}, ${words}${source}`;
   }
   if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;

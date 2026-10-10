@@ -6,7 +6,7 @@ import {
 } from "@/lib/neptuneIndex";
 import { copy, statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
-import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
+import { copyReading, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
 import styles from "./public.module.css";
 
 const TONE = {
@@ -40,11 +40,12 @@ export function StatusChip({
   const posting = officialPosting(reading);
   const estimate = <EstimateChip beach={beach} lang={lang} />;
   if (posting) {
+    const headline = postingHeadline(posting, lang);
     return (
       <span className={styles.officialStack}>
         <span className={styles.officialKicker}>
-          <span className={styles.officialTag}>{kindTitle(posting.kind, lang)}</span>
-          <strong>{postingLabel(posting, lang)}</strong>
+          <span className={styles.officialTag}>{headline.title}</span>
+          {headline.detail && <strong>{headline.detail}</strong>}
           {posting.source && (
             <span className={styles.officialSource}>
               {lang === "es" ? `Fuente: ${posting.source}` : `Source: ${posting.source}`}

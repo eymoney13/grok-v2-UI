@@ -7,7 +7,7 @@ import { hasMapCoordinates } from "@/lib/geo";
 import { statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { indexLead } from "@/lib/neptuneIndex";
-import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
+import { copyReading, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
 import "leaflet/dist/leaflet.css";
 
 function Fit({ points }: { points: [number, number][] }) {
@@ -37,11 +37,11 @@ function pinWords(beach: GlanceBeach, lang: Lang): string {
   const model = modelWords(beach, lang);
   if (posting) {
     const source = posting.source ? ` (${posting.source})` : "";
-    const title = kindTitle(posting.kind, lang);
-    const label = postingLabel(posting, lang);
+    const headline = postingHeadline(posting, lang);
+    const words = headline.detail ? `${headline.title}: ${headline.detail}` : headline.title;
     return lang === "es"
-      ? `${title}: ${label}${source}. Nuestro estimado: ${model}`
-      : `${title}: ${label}${source}. Our estimate: ${model}`;
+      ? `${words}${source}. Nuestro estimado: ${model}`
+      : `${words}${source}. Our estimate: ${model}`;
   }
   const open = openPostingWords(reading, lang);
   return open ? `${model}. ${open}` : model;
