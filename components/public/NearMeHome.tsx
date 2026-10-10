@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { glanceLine } from "@/lib/dailySummary";
-import { hasCoordinates, milesBetween, nearest } from "@/lib/geo";
+import { hasMapCoordinates, milesBetween, nearest } from "@/lib/geo";
 import { copy, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
@@ -111,12 +111,12 @@ function Home({
         .sort((a, b) => a.rank - b.rank || a.beach.name.localeCompare(b.beach.name));
       return ranked.map((item) => item.beach);
     }
-    if (mode === "near" && here) return nearest(here, beaches.filter(hasCoordinates), NEAR_COUNT);
+    if (mode === "near" && here) return nearest(here, beaches.filter(hasMapCoordinates), NEAR_COUNT);
     return [];
   }, [beaches, here, mode, query]);
 
   const visible = results.slice(0, mode === "search" ? SEARCH_COUNT : NEAR_COUNT);
-  const closestMiles = here && visible[0] && hasCoordinates(visible[0]) ? milesBetween(here, visible[0]) : null;
+  const closestMiles = here && visible[0] && hasMapCoordinates(visible[0]) ? milesBetween(here, visible[0]) : null;
   const coastCount = statewideStatusHeadline(beaches, lang);
 
   return (
@@ -178,7 +178,7 @@ function Home({
           )}
           <ul className={styles.list}>
             {visible.map((beach) => {
-              const miles = here && hasCoordinates(beach) ? milesBetween(here, beach) : null;
+              const miles = here && hasMapCoordinates(beach) ? milesBetween(here, beach) : null;
               const tested = glanceLine(beach, lang);
               return (
                 <li key={beach.slug}>
@@ -201,7 +201,7 @@ function Home({
           {showMap && (
             <>
               <div className={styles.mapWrap}>
-                <PublicMap beaches={visible.filter(hasCoordinates)} user={here} youLabel={t.you} lang={lang} />
+                <PublicMap beaches={visible.filter(hasMapCoordinates)} user={here} youLabel={t.you} lang={lang} />
               </div>
               <p className={styles.legend}>
                 <span><i className={styles.swatch} style={{ background: "#3c6435" }} /> {statusPill("Normal", lang)}</span>

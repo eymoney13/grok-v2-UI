@@ -34,6 +34,7 @@ import {
   BASEMAP_SUBDOMAINS,
   BASEMAP_URL,
 } from "@/lib/basemap";
+import { hasMapCoordinates } from "@/lib/geo";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
 import { copyReading, officialPosting, postingLabel, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
@@ -508,9 +509,10 @@ function escapeHtml(text: string): string {
 function FitAll({ beaches }: { beaches: MapBeach[] }) {
   const map = useMap();
   useEffect(() => {
-    if (beaches.length === 0) return;
+    const mapped = beaches.filter(hasMapCoordinates);
+    if (mapped.length === 0) return;
     const bounds = L.latLngBounds(
-      beaches.map((b) => [b.latitude, b.longitude] as [number, number])
+      mapped.map((b) => [b.latitude, b.longitude] as [number, number])
     );
     map.fitBounds(bounds, { padding: [56, 56], maxZoom: 14 });
   }, [beaches, map]);
@@ -524,7 +526,7 @@ function NearbyLocation({ beaches }: { beaches: MapBeach[] }) {
   const [busy, setBusy] = useState(false);
   const focus = useCallback((latitude: number, longitude: number) => {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
-    const nearest = beaches.filter(b => Number.isFinite(b.latitude) && Number.isFinite(b.longitude))
+    const nearest = beaches.filter(hasMapCoordinates)
       .map(b => ({ beach: b, distance: map.distance([latitude, longitude], [b.latitude, b.longitude]) }))
       .sort((a, b) => a.distance - b.distance).slice(0, 3);
     if (!nearest.length || nearest[0].distance > 300000) return false;
@@ -648,7 +650,7 @@ function ClusteredPins({
         removeOutsideVisibleBounds: true,
       });
       for (const beach of beaches) {
-        if (!Number.isFinite(beach.latitude) || !Number.isFinite(beach.longitude)) continue;
+        if (!hasMapCoordinates(beach)) continue;
         const name = pinName(beach, statusPhrase);
         const marker = L.marker([beach.latitude, beach.longitude], {
           icon: pinIcon(beach, binaryVerdict),
@@ -690,12 +692,13 @@ export default function OverviewMap({
   cluster?: boolean;
   onSelect: (code: string) => void;
 }) {
+  const mapped = useMemo(() => beaches.filter(hasMapCoordinates), [beaches]);
   const center = useMemo<[number, number]>(() => {
-    if (beaches.length === 0) return fallbackCenter;
-    const avgLat = beaches.reduce((s, b) => s + b.latitude, 0) / beaches.length;
-    const avgLon = beaches.reduce((s, b) => s + b.longitude, 0) / beaches.length;
+    if (mapped.length === 0) return fallbackCenter;
+    const avgLat = mapped.reduce((s, b) => s + b.latitude, 0) / mapped.length;
+    const avgLon = mapped.reduce((s, b) => s + b.longitude, 0) / mapped.length;
     return [avgLat, avgLon];
-  }, [beaches, fallbackCenter]);
+  }, [mapped, fallbackCenter]);
 
   return (
     <MapContainer
@@ -710,17 +713,17 @@ export default function OverviewMap({
         subdomains={BASEMAP_SUBDOMAINS}
         maxZoom={BASEMAP_MAX_ZOOM}
       />
-      <FitAll beaches={beaches} />
-      {locateNearby && <NearbyLocation beaches={beaches} />}
+      <FitAll beaches={mapped} />
+      {locateNearby && <NearbyLocation beaches={mapped} />}
       {cluster ? (
         <ClusteredPins
-          beaches={beaches}
+          beaches={mapped}
           binaryVerdict={binaryVerdict}
           statusPhrase={statusPhrase}
           onSelect={onSelect}
         />
       ) : (
-        beaches.map((b) => {
+        mapped.map((b) => {
           const posted = officialPosting(copyReading(b));
           if (!b.status && !posted && !b.neptuneDisplay && !showsUnknownCall(b)) return null;
           const accessibleName = pinName(b, statusPhrase);
@@ -742,9 +745,9 @@ export default function OverviewMap({
           they stack above them. */}
       <BeachLabels
         labelMinZoom={labelMinZoom}
-        beaches={beaches}
+        beaches={mapped}
         dotHalf={
-          beaches.some((beach) => beach.neptuneDisplay)
+          mapped.some((beach) => beach.neptuneDisplay)
             ? { x: INDEX_PIN_SIZE[0] / 2, y: INDEX_PIN_SIZE[1] / 2 }
             : binaryVerdict
               ? { x: PLAIN_DOT[0] / 2, y: PLAIN_DOT[1] / 2 }

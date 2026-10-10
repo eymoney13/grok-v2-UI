@@ -10,6 +10,7 @@ import { isClerkConfigured } from "@/lib/clerkConfig";
 import { isStripeConfigured } from "@/lib/subscription";
 import { redactForEntitlement } from "@/lib/paywall";
 import { featuresFor } from "@/lib/features";
+import { hasMapCoordinates } from "@/lib/geo";
 import { calendarDay, lastUpdatedDisplay } from "@/lib/waterStatus";
 
 export const dynamic = "force-dynamic";
@@ -75,10 +76,12 @@ export default async function BeachPage({
   if (code !== listItem.id) redirect(`/california/beach/${encodeURIComponent(listItem.id)}`);
   const beach = beaches.find((item) => item.id === listItem.id) ?? null;
   const { isPaymentFirstEnabled } = await import("@/lib/purchase");
-  const neighbors = catalog
-    .filter((item) => item.id !== listItem.id && Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && Number.isFinite(listItem.latitude))
-    .sort((a, b) => distance(listItem, a) - distance(listItem, b))
-    .slice(0, 8);
+  const neighbors = hasMapCoordinates(listItem)
+    ? catalog
+        .filter((item) => item.id !== listItem.id && hasMapCoordinates(item))
+        .sort((a, b) => distance(listItem, a) - distance(listItem, b))
+        .slice(0, 8)
+    : [];
   const advisory = listItem.county?.toLowerCase() === "orange" ? ORANGE_ADVISORY : config.advisory ?? DEFAULT_ADVISORY;
   return (
     <CaliforniaBeachPage

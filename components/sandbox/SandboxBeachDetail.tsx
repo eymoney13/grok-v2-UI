@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import posthog from "posthog-js";
 import { ArrowRight, ArrowUpRight, Lock } from "lucide-react";
 import { formatMonthDayYear, RISK_TIERS, riskTier, type BeachData, type ForecastDay, type Status } from "@/lib/data";
+import { hasMapCoordinates } from "@/lib/geo";
 import { buildWindowCells } from "@/lib/window";
 import { beachProperties, type LockedFeature } from "@/lib/analytics";
 import {
@@ -204,8 +205,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     });
     onProMoment?.();
   };
-  const nearby = Number.isFinite(beach.latitude) && Number.isFinite(beach.longitude)
-    ? beaches.filter((candidate) => candidate.id !== beach.id && Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude))
+  const nearby = hasMapCoordinates(beach)
+    ? beaches.filter((candidate) => candidate.id !== beach.id && hasMapCoordinates(candidate))
       .sort((a, b) => distanceScore(beach, a) - distanceScore(beach, b) || a.id.localeCompare(b.id)).slice(0, 3)
     : [];
 

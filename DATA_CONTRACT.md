@@ -27,7 +27,7 @@ These paths and columns were confirmed from `project-neptune-v2` main (PR #1). T
 | `station_code` | Station code, kept as text (`0` stays `"0"`). It is not unique across agencies. | 
 | `station_key` | Optional unique id, format `agency\|station_code` (v2 main `8b92e31`, PR #7). When the cell is filled, the path is the beach-name slug, `--`, then the key with the pipe replaced: `huntington-state-beach--orange-county~0` for `Orange County\|0`. The `~` is the pipe. The link has no raw `\|`. That encoded key still opens the beach if the name prefix is old or missing, and the page redirects to the current slug. A blank cell falls back to `station_code` plus `agency` when that column exists, and otherwise to the beach name, county, and code. |
 | `name` | Beach name shown on the board. |
-| `lat`, `lon` | Map position. |
+| `lat`, `lon` | Map position. A finite point outside a rough California box (32.2–42.2°N, 124.6–114.0°W) stays on the beach and in search. It is not drawn, not used for near-me distance, and is logged when the board data loads and when this sample is rebuilt. A blank coordinate is not that case. |
 | `county` | County filter and grouping. A trailing “County” is ignored when matching. |
 | `last_sample_date` | Date of the last lab sample, `YYYY-MM-DD`. |
 | `sampling_frequency` | Shown only when the file has a value. |

@@ -6,6 +6,8 @@ import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/st
 import { displayBandLabel, indexScalePhrase, parseIndexBands, resolveNeptuneDisplay } from "../lib/neptuneIndex.ts";
 import { statusDetail } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
+import { nearestBeachNeighbors } from "../lib/beachNeighbors.ts";
+import { coordinatesOutsideCalifornia, hasMapCoordinates, nearest } from "../lib/geo.ts";
 
 const base: SummaryFacts = {
   hasEstimate: true,
@@ -397,6 +399,50 @@ assert.match(mixedSummary.outlook, /still being tested/);
 assert.equal(
   dailySummary({ ...base, outlook: [{ date: "2026-10-10", status: "Normal" }] }, "en").outlookLabel,
   "Experimental"
+);
+
+const hermosa = { latitude: 33.87, longitude: -118.41 };
+const placeholder = { latitude: -88, longitude: -88 };
+const blank = { latitude: Number.NaN, longitude: Number.NaN };
+assert.equal(hasMapCoordinates(hermosa), true);
+assert.equal(coordinatesOutsideCalifornia(hermosa), false);
+assert.equal(hasMapCoordinates(placeholder), false);
+assert.equal(coordinatesOutsideCalifornia(placeholder), true);
+assert.equal(hasMapCoordinates({ latitude: 0, longitude: 0 }), false);
+assert.equal(coordinatesOutsideCalifornia({ latitude: 0, longitude: 0 }), true);
+assert.equal(coordinatesOutsideCalifornia({ latitude: 34, longitude: 118 }), true);
+assert.equal(hasMapCoordinates({ latitude: 32.2, longitude: -114 }), true);
+assert.equal(coordinatesOutsideCalifornia(blank), false);
+assert.equal(hasMapCoordinates(blank), false);
+assert.deepEqual(
+  nearest(
+    { latitude: 34, longitude: -118.5 },
+    [
+      { code: "placeholder", latitude: -88, longitude: -88 },
+      { code: "near", latitude: 33.9, longitude: -118.4 },
+      { code: "blank", latitude: Number.NaN, longitude: Number.NaN },
+      { code: "north", latitude: 36.6, longitude: -121.9 },
+    ],
+    5
+  ).map((beach) => beach.code),
+  ["near", "north"]
+);
+const neighbors = nearestBeachNeighbors(
+  { code: "here", name: "Here", latitude: 34, longitude: -118.4 },
+  [
+    { code: "south-real", name: "South", latitude: 33.5, longitude: -118.2 },
+    { code: "placeholder", name: "Placeholder", latitude: -88, longitude: -88 },
+    { code: "north-real", name: "North", latitude: 34.4, longitude: -119.7 },
+  ]
+);
+assert.equal(neighbors.south?.code, "south-real");
+assert.equal(neighbors.north?.code, "north-real");
+assert.deepEqual(
+  nearestBeachNeighbors(
+    { code: "placeholder", name: "Placeholder", latitude: -88, longitude: -88 },
+    [{ code: "south-real", name: "South", latitude: 33.5, longitude: -118.2 }]
+  ),
+  { north: undefined, south: undefined }
 );
 
 console.log("public page checks passed");

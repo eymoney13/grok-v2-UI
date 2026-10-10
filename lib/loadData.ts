@@ -1,4 +1,5 @@
 import { isCoveredStation } from "./californiaCoverage";
+import { logStationsOutsideCalifornia } from "./geo";
 import "server-only";
 import { assignSlugs } from "./beachSlug.ts";
 import {
@@ -793,6 +794,8 @@ export async function loadDashboardData(
   const visible = usingV2
     ? beaches
     : beaches.filter((beach) => isCoveredStation(config.slug, beach.code));
+  const listed = usingV2 ? [...visible, ...unmodeled] : visible;
+  logStationsOutsideCalifornia(listed);
 
   return {
     beaches: visible,

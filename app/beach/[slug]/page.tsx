@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import BeachPublic from "@/components/public/BeachPublic";
 import { LanguageProvider } from "@/components/public/Language";
 import { dailySummary } from "@/lib/dailySummary";
-import { hasCoordinates, nearest } from "@/lib/geo";
+import { hasMapCoordinates, nearest } from "@/lib/geo";
 import { loadPublicCatalog, resolvePublicBeach } from "@/lib/publicCatalog";
 import { toGlance } from "@/lib/publicBeach";
 
@@ -57,8 +57,8 @@ export default async function BeachPage({ params }: { params: Promise<{ slug: st
   if (!beach) notFound();
   if (beach.slug !== slug) redirect(`/beach/${beach.slug}`);
   const catalog = await loadPublicCatalog();
-  const nearby = hasCoordinates(beach)
-    ? nearest(beach, catalog.beaches.filter(hasCoordinates), 5, undefined, beach.slug).map(toGlance)
+  const nearby = hasMapCoordinates(beach)
+    ? nearest(beach, catalog.beaches, 5, undefined, beach.slug).map(toGlance)
     : [];
   const advisory = beach.county?.toLowerCase() === "orange" ? ORANGE_ADVISORY : LA_ADVISORY;
   return (

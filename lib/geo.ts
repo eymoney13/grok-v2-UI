@@ -1,3 +1,7 @@
+import { CALIFORNIA_BOX, isInCaliforniaBox, outsideCaliforniaLine } from "./californiaBox.mjs";
+
+export { CALIFORNIA_BOX };
+
 export interface LatLon {
   latitude: number;
   longitude: number;
@@ -5,6 +9,31 @@ export interface LatLon {
 
 export function hasCoordinates(place: LatLon): boolean {
   return Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+}
+
+/** Finite coordinates inside the rough California box. Safe to draw and to sort by distance. */
+export function hasMapCoordinates(place: LatLon): boolean {
+  return isInCaliforniaBox(place.latitude, place.longitude);
+}
+
+/** Finite coordinates outside the box. Blank or non-numeric positions are not placeholders. */
+export function coordinatesOutsideCalifornia(place: LatLon): boolean {
+  return hasCoordinates(place) && !hasMapCoordinates(place);
+}
+
+const loggedOutsideCalifornia = new Set<string>();
+
+/** Name each finite out-of-box station once per process, for the dev server and `next build`. */
+export function logStationsOutsideCalifornia(
+  stations: Array<{ name: string; code: string; latitude: number; longitude: number }>
+): void {
+  for (const station of stations) {
+    if (!coordinatesOutsideCalifornia(station)) continue;
+    const key = `${station.name}\0${station.code}\0${station.latitude}\0${station.longitude}`;
+    if (loggedOutsideCalifornia.has(key)) continue;
+    loggedOutsideCalifornia.add(key);
+    console.log(outsideCaliforniaLine(station));
+  }
 }
 
 /** Great-circle distance in miles. */
@@ -29,7 +58,7 @@ export function nearest<T extends LatLon & { code: string; slug?: string; id?: s
 ): T[] {
   return beaches
     .filter((beach) => {
-      if (!hasCoordinates(beach)) return false;
+      if (!hasMapCoordinates(beach)) return false;
       const identity = beach.slug ?? beach.id;
       if (excludeId) return identity !== excludeId;
       return beach.code !== excludeCode;

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import { BASEMAP_ATTRIBUTION, BASEMAP_MAX_ZOOM, BASEMAP_SUBDOMAINS, BASEMAP_URL } from "@/lib/basemap";
+import { hasMapCoordinates } from "@/lib/geo";
 import { statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { indexLead } from "@/lib/neptuneIndex";
@@ -68,9 +69,8 @@ export default function PublicMap({
   youLabel: string;
   lang: Lang;
 }) {
-  const points: [number, number][] = beaches
-    .filter((beach) => Number.isFinite(beach.latitude) && Number.isFinite(beach.longitude))
-    .map((beach) => [beach.latitude, beach.longitude]);
+  const mapped = beaches.filter(hasMapCoordinates);
+  const points: [number, number][] = mapped.map((beach) => [beach.latitude, beach.longitude]);
   if (user) points.push([user.latitude, user.longitude]);
   if (points.length === 0) return null;
   return (
@@ -87,7 +87,7 @@ export default function PublicMap({
           <Popup>{youLabel}</Popup>
         </CircleMarker>
       )}
-      {beaches.map((beach) => (
+      {mapped.map((beach) => (
         <CircleMarker
           key={beach.slug}
           center={[beach.latitude, beach.longitude]}

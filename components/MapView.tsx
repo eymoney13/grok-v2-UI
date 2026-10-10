@@ -17,6 +17,7 @@ import {
   BASEMAP_SUBDOMAINS,
   BASEMAP_URL,
 } from "@/lib/basemap";
+import { hasMapCoordinates } from "@/lib/geo";
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: () => string })._getIconUrl;
 
@@ -68,16 +69,16 @@ export default function MapView({
   hidePercent: boolean;
   binaryVerdict: boolean;
 }) {
+  const mapped = useMemo(() => beaches.filter(hasMapCoordinates), [beaches]);
   const selected = beaches.find((b) => b.code === selectedCode) ?? beaches[0];
+  const selectedOnMap = selected && hasMapCoordinates(selected) ? selected : null;
   const center = useMemo<[number, number]>(() => {
-    if (selected) return [selected.latitude, selected.longitude];
-    if (beaches.length === 0) return fallbackCenter;
-    const avgLat =
-      beaches.reduce((s, b) => s + b.latitude, 0) / beaches.length;
-    const avgLon =
-      beaches.reduce((s, b) => s + b.longitude, 0) / beaches.length;
+    if (selectedOnMap) return [selectedOnMap.latitude, selectedOnMap.longitude];
+    if (mapped.length === 0) return fallbackCenter;
+    const avgLat = mapped.reduce((s, b) => s + b.latitude, 0) / mapped.length;
+    const avgLon = mapped.reduce((s, b) => s + b.longitude, 0) / mapped.length;
     return [avgLat, avgLon];
-  }, [beaches, selected, fallbackCenter]);
+  }, [mapped, selectedOnMap, fallbackCenter]);
 
   return (
     <MapContainer
@@ -92,8 +93,8 @@ export default function MapView({
         subdomains={BASEMAP_SUBDOMAINS}
         maxZoom={BASEMAP_MAX_ZOOM}
       />
-      {selected && <PanTo lat={selected.latitude} lon={selected.longitude} />}
-      {beaches.map((b) => {
+      {selectedOnMap && <PanTo lat={selectedOnMap.latitude} lon={selectedOnMap.longitude} />}
+      {mapped.map((b) => {
         const { label, color } = readingFor(b, binaryVerdict);
         const pct = Math.round(b.probability * 100);
         const isSelected = b.code === selected?.code;

@@ -12,6 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Papa from "papaparse";
+import { isInCaliforniaBox, outsideCaliforniaLine } from "../lib/californiaBox.mjs";
 
 const root = process.cwd();
 const source = path.join(root, "public", "data", "southbay");
@@ -196,3 +197,15 @@ for (const name of ["nowcast_latest.csv", "forecast_3day.csv", "history_3day.csv
   fs.copyFileSync(path.join(source, name), path.join(dest, "outputs", name));
 }
 console.log(`Wrote ${stations.length} roster stations and ${archive.length} archive rows.`);
+for (const station of stations) {
+  if (station.lat === "" || station.lon === "" || station.lat == null || station.lon == null) continue;
+  const latitude = Number(station.lat);
+  const longitude = Number(station.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || isInCaliforniaBox(latitude, longitude)) continue;
+  console.log(outsideCaliforniaLine({
+    name: station.name,
+    code: station.station_code,
+    latitude,
+    longitude,
+  }));
+}

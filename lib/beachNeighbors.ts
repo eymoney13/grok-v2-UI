@@ -1,14 +1,11 @@
+import { hasMapCoordinates } from "./geo.ts";
+
 export interface BeachLocation {
   code: string;
   id?: string;
   name: string;
   latitude: number;
   longitude: number;
-}
-
-function hasCoordinates(beach: BeachLocation) {
-  return Number.isFinite(beach.latitude) && Math.abs(beach.latitude) <= 90
-    && Number.isFinite(beach.longitude) && Math.abs(beach.longitude) <= 180;
 }
 
 // Haversine score is monotonic with distance; no conversion to miles needed.
@@ -22,7 +19,7 @@ function distanceScore(a: BeachLocation, b: BeachLocation) {
 export function nearestBeachNeighbors<T extends BeachLocation>(beach: T, beaches: T[]) {
   let north: T | undefined;
   let south: T | undefined;
-  if (!hasCoordinates(beach)) return { north, south };
+  if (!hasMapCoordinates(beach)) return { north, south };
 
   const closer = (candidate: T, current: T | undefined) => {
     if (!current) return true;
@@ -32,7 +29,7 @@ export function nearestBeachNeighbors<T extends BeachLocation>(beach: T, beaches
 
   for (const candidate of beaches) {
     const sameBeach = beach.id && candidate.id ? candidate.id === beach.id : candidate.code === beach.code;
-    if (sameBeach || !hasCoordinates(candidate)) continue;
+    if (sameBeach || !hasMapCoordinates(candidate)) continue;
     if (candidate.latitude > beach.latitude && closer(candidate, north)) north = candidate;
     if (candidate.latitude < beach.latitude && closer(candidate, south)) south = candidate;
   }
