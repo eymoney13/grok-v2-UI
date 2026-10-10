@@ -68,6 +68,7 @@ export default function SandboxMenu({ account }: { account?: ReactNode }) {
         </div>
         <nav className={s.drawerNav} aria-label="About Neptune">
           <p className={s.navLabel}>About Neptune</p>
+          <Link href="/" onClick={close}>Beaches near me</Link>
           {/* No slice: the array is the whole nav now. It was sliced to 3
               when a fourth entry needed its own "Transparency" heading. */}
           {sandboxLinks.map((link) => <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined} onClick={close}>{link.label}<ArrowUpRight size={17} aria-hidden="true" /></Link>)}

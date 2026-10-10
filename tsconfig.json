@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scripts/check-neptune-contract.ts"]
+  "exclude": ["node_modules", "scripts/check-neptune-contract.ts", "scripts/check-public-pages.ts"]
 }

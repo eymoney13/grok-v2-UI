@@ -7,6 +7,7 @@ import { ArrowLeft, Waves } from "lucide-react";
 import type { BeachData, BeachListItem } from "@/lib/data";
 import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
+import { assignSlugs } from "@/lib/beachSlug";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
 import SandboxBeachDetail from "./SandboxBeachDetail";
@@ -49,6 +50,7 @@ export default function CaliforniaBeachPage({
   const router = useRouter();
   const tested = lastTestedLabel(listItem.daysSinceSample);
   const limited = hasLimitedLabData(listItem.daysSinceSample, listItem.noRecentSample, listItem.staleAfterDays);
+  const shareSlug = assignSlugs([listItem, ...choices].map((beach) => ({ code: beach.code, name: beach.name }))).get(listItem.code);
   return (
     <main className={s.root}>
       <header className={s.header}>
@@ -71,6 +73,7 @@ export default function CaliforniaBeachPage({
           </label>
         </div>
         <h1 className={s.beachHeading}>{listItem.name}</h1>
+        {shareSlug && <p className={s.supporting}><Link href={`/beach/${shareSlug}`}>Shareable page</Link></p>}
         {listItem.county && <p className={s.supporting}>{[listItem.county, listItem.region].filter(Boolean).join(" · ")}</p>}
         <p className={s.dateline}><span>Last updated</span> <strong>{updated.dateTime ? <time dateTime={updated.dateTime}>{updated.text}</time> : updated.text}</strong></p>
         {predictionDate && !readingsCurrent && (

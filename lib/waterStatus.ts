@@ -1,4 +1,4 @@
-import { EPA_MPN_THRESHOLD, formatMonthDayYear, type Status } from "./data";
+import { EPA_MPN_THRESHOLD, formatMonthDayYear, type Status } from "./data.ts";
 
 /**
  * Words a reader sees for a beach's bacteria status, and for the probability

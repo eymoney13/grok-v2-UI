@@ -1,4 +1,4 @@
-import type { Conditions } from "./data";
+import type { Conditions } from "./data.ts";
 
 // One place that decides what counts as rain, how much fell, and how to say the
 // depth out loud.

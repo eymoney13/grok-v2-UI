@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import DashboardClerkProvider from "@/components/DashboardClerkProvider";
+import RegisterSw from "@/components/public/RegisterSw";
 import { isClerkConfigured } from "@/lib/clerkConfig";
 import "./globals.css";
 
@@ -17,8 +18,21 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Ocean Water Quality",
-  description: "Daily ocean water quality forecast.",
+  metadataBase: new URL("https://dashboard.projectneptune.co"),
+  title: {
+    default: "Beaches near me",
+    template: "%s — Neptune",
+  },
+  description:
+    "Today’s ocean water quality for California beaches. No account. A model estimate, not a water sample.",
+  applicationName: "Neptune",
+  appleWebApp: { capable: true, title: "Neptune", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0e6f78",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -33,6 +47,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-white text-gray-900">
         {children}
+        <RegisterSw />
         <Analytics />
       </body>
     </html>
