@@ -30,7 +30,12 @@ export async function generateMetadata({
   const data = config ? await loadDashboardData(config) : null;
   const match = data
     ? resolveSlugMatch(
-        [...data.beaches, ...data.unmodeled].map((beach) => ({ slug: beach.id, code: beach.code, name: beach.name })),
+        [...data.beaches, ...data.unmodeled].map((beach) => ({
+          slug: beach.id,
+          code: beach.code,
+          name: beach.name,
+          stationKey: beach.stationKey,
+        })),
         code
       )
     : null;

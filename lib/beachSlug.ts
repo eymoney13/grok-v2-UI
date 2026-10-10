@@ -29,15 +29,32 @@ export interface SlugBeach {
   name: string;
   county?: string | null;
   agency?: string | null;
+  /** Pipeline id. When this cell is filled, it is the path. */
+  stationKey?: string | null;
+}
+
+/** A published station_key, made safe for a path. Longer than a station code so the id stays intact. */
+export function slugifyStationKey(stationKey: string): string {
+  return stationKey
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96)
+    .replace(/-+$/g, "");
 }
 
 /**
- * Path segment for one beach. A station code is not an address: the same code
- * is used by more than one agency. When the file has an agency column and this
- * beach names an agency, the slug is the code plus that agency. Otherwise it
- * is the name, the county, and the code.
+ * Path segment for one beach. A filled `station_key` is the path. Otherwise a
+ * station code is not an address: the same code is used by more than one
+ * agency. When the file has an agency column and this beach names an agency,
+ * the slug is the code plus that agency. Otherwise it is the name, the county,
+ * and the code.
  */
 export function beachSlugBase(beach: SlugBeach, agencyColumn: boolean): string {
+  const fromKey = beach.stationKey?.trim() ? slugifyStationKey(beach.stationKey) : "";
+  if (fromKey) return fromKey;
   const code = slugifyCode(beach.code);
   if (agencyColumn && beach.agency?.trim()) {
     const agency = slugifyName(beach.agency);
@@ -70,16 +87,21 @@ export interface SlugIdentity {
   slug: string;
   code: string;
   name: string;
+  stationKey?: string | null;
 }
 
 /**
- * Canonical slug, then a name-only slug when exactly one beach still uses that
- * older path, then a station code when exactly one beach has it. A repeated
- * code does not resolve.
+ * Canonical slug, then the raw station_key when exactly one beach has it, then
+ * a name-only slug when exactly one beach still uses that older path, then a
+ * station code when exactly one beach has it. A repeated code does not resolve.
  */
 export function resolveSlugMatch<T extends SlugIdentity>(beaches: T[], requested: string): T | null {
   const exact = beaches.find((beach) => beach.slug === requested);
   if (exact) return exact;
+  const exactKey = beaches.filter((beach) => beach.stationKey === requested);
+  if (exactKey.length === 1) return exactKey[0]!;
+  const foldedKey = beaches.filter((beach) => beach.stationKey?.toLowerCase() === requested.toLowerCase());
+  if (foldedKey.length === 1) return foldedKey[0]!;
   const legacy = beaches.filter((beach) => slugifyName(beach.name) === requested && requested.length > 0);
   if (legacy.length === 1) return legacy[0]!;
   const exactCode = beaches.filter((beach) => beach.code === requested);

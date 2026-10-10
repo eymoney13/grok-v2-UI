@@ -5,6 +5,7 @@ export interface StationMatch {
   name: string;
   county: string | null;
   agency: string | null;
+  stationKey?: string | null;
 }
 
 function norm(value: string | null | undefined): string {
@@ -22,6 +23,12 @@ export function matchDailyRow(
   agencyColumn: boolean,
   stationsSharingCode: number
 ): DailyJoinedRow | null {
+  if (station.stationKey?.trim()) {
+    const want = norm(station.stationKey);
+    const hits = rows.filter((row) => norm(row.stationKey) === want);
+    if (hits.length > 0) return hits.at(-1) ?? null;
+    if (rows.some((row) => row.stationKey)) return null;
+  }
   const same = rows.filter((row) => row.code === station.code);
   if (same.length === 0) return null;
   if (agencyColumn) {

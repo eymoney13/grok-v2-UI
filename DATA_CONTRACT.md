@@ -24,14 +24,15 @@ These paths and columns were confirmed from `project-neptune-v2` main (PR #1). T
 
 | Field | Use |
 | --- | --- |
-| `station_code` | Station code, kept as text (`0` stays `"0"`). It is not unique across agencies. When this file has an `agency` column, the beach is that code plus `agency`. Otherwise the public path and the list key are the beach name, county, and code. |
+| `station_code` | Station code, kept as text (`0` stays `"0"`). It is not unique across agencies. | 
+| `station_key` | Optional unique id. When the cell is filled, the public path, the board path, and the React key are this value, made URL-safe. A blank cell falls back to `station_code` plus `agency` when that column exists, and otherwise to the beach name, county, and code. |
 | `name` | Beach name shown on the board. |
 | `lat`, `lon` | Map position. |
 | `county` | County filter and grouping. A trailing “County” is ignored when matching. |
 | `last_sample_date` | Date of the last lab sample, `YYYY-MM-DD`. |
 | `sampling_frequency` | Shown only when the file has a value. |
 | `tier` | `model_pool` or `limited_data`. |
-| `agency` | Optional. Present only when the file has that column. A blank cell stays blank. With the column present, a repeated `station_code` is a different beach when the agency differs. |
+| `agency` | Optional. Present only when the file has that column. A blank cell stays blank. When `station_key` is blank and this column is present, a repeated `station_code` is a different beach when the agency differs. |
 
 JSON may be a bare array or an object with `stations`, `beaches`, `roster`, or `records`.
 
@@ -88,7 +89,7 @@ Confirmed on `project-neptune-v2` main, PR #6, commit `b60b5cd`. That publish co
 
 | Path | Use |
 | --- | --- |
-| `outputs/daily/current.csv` | Primary daily file. `outputs/daily/current.json` is accepted with the same fields. `station_code` can repeat. When an `agency` column is present, rows that share a code and differ by agency stay separate, and the last row wins only for that same code and agency. Without that column, a name or county on the row does the same job. A repeated code with none of those fields is not copied onto every roster beach that shares the code. Identical repeats of one beach still let the last row win. |
+| `outputs/daily/current.csv` | Primary daily file. `outputs/daily/current.json` is accepted with the same fields. `station_code` can repeat. A filled `station_key` is the beach: the same key’s last row wins, and two keys that share a code stay separate. Without `station_key`, an `agency` column keeps those rows apart, and otherwise a name or county does. A repeated code with none of those fields is not copied onto every roster beach that shares the code. |
 | A dated file in the same directory, `outputs/daily/YYYY-MM-DD.csv` or `.json` | History. Used only when no current file exists. The newest date wins. |
 | Older names, only if none of the above exist: `daily_status.csv`, `daily_status.json` (same folders as the wide CSVs), then the newest dated file in `outputs/daily/history`, `outputs/daily_status`, or `outputs/status_history` | Fallback for an earlier layout. |
 
@@ -98,8 +99,9 @@ Columns named for this file:
 
 | Field | Use |
 | --- | --- |
+| `station_key` | Optional unique id, same role as on the roster. The daily row joins to the roster on this value when both sides have it. | 
 | `station_code` | Same text code as the roster. Not a global id. | 
-| `agency` | Optional. Read only when the header includes `agency`. Blank stays blank. | 
+| `agency` | Optional. Read only when the header includes `agency`. Blank stays blank. Used when `station_key` is blank. | 
 | `name`, `county` | Optional on this file. When `agency` is absent, they keep two rows with the same `station_code` apart. | 
 | `generated_at` | “Last updated,” after `outputs/run_manifest.json` and before a `generated_at` column on the wide nowcast. |
 | `posting_status` | `closure`, `warning`, `advisory`, `open`, or `unknown`. Also accepts `closed` for a closure. Any other word is ignored. |

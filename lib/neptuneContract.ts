@@ -18,6 +18,8 @@ export interface RosterStation {
   county: string | null;
   /** Set when the roster file has an `agency` column. Blank cells stay null. */
   agency: string | null;
+  /** Unique pipeline id. Null when the column is absent or the cell is blank. */
+  stationKey: string | null;
   lastSampleDate: string | null;
   samplingFrequency: string | null;
   tier: RosterTier | null;
@@ -236,6 +238,7 @@ export function parseRosterRecord(row: Record<string, unknown>): RosterStation |
     lon: asNumber(first(row, ["lon", "lng", "longitude", "Longitude"])),
     county: normalizeCounty(first(row, ["county", "County"])),
     agency: agencyFromRow(row),
+    stationKey: stationKeyFromRow(row),
     lastSampleDate: asDateString(first(row, ["last_sample_date", "lastSampleDate"])),
     samplingFrequency: textOrNull(first(row, ["sampling_frequency", "samplingFrequency"])),
     tier: asTier(first(row, ["tier", "Tier"])),
@@ -254,6 +257,15 @@ export function jsonHasAgencyColumn(data: unknown): boolean {
 export function agencyFromRow(row: Record<string, unknown>): string | null {
   for (const [key, value] of Object.entries(row)) {
     if (key.toLowerCase() !== "agency") continue;
+    return textOrNull(value);
+  }
+  return null;
+}
+
+export function stationKeyFromRow(row: Record<string, unknown>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    const folded = key.toLowerCase();
+    if (folded !== "station_key" && folded !== "stationkey") continue;
     return textOrNull(value);
   }
   return null;
@@ -455,6 +467,8 @@ export interface DailyJoinedRow {
   agency: string | null;
   name: string | null;
   county: string | null;
+  /** Unique pipeline id from this row. Null when the cell is blank or absent. */
+  stationKey: string | null;
   reading: PublishedReading;
   index: DailyIndexFields;
 }
@@ -493,6 +507,7 @@ export function emptyDailyStatus(generatedAt: string | null = null): DailyStatus
 }
 
 function dailyIdentityKey(row: DailyJoinedRow, agencyColumn: boolean): string {
+  if (row.stationKey) return `key\0${row.stationKey.trim().toLowerCase()}`;
   if (agencyColumn) return `${row.code}\0${(row.agency ?? "").trim().toLowerCase()}`;
   if (row.name || row.county) {
     return `${row.code}\0${(row.name ?? "").trim().toLowerCase()}\0${(row.county ?? "").trim().toLowerCase()}`;
@@ -514,6 +529,7 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
       agency: agencyColumn ? agencyFromRow(row) : null,
       name: textOrNull(first(row, DAILY_NAME_KEYS)),
       county: normalizeCounty(first(row, DAILY_COUNTY_KEYS)),
+      stationKey: stationKeyFromRow(row),
       reading: withPostingFileDate(parsePublishedReading(row), generatedAt),
       index: readNeptuneFields(row),
     };
@@ -543,7 +559,8 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
 /**
  * One current daily file, or one dated history file.
  * The last row for one beach replaces earlier rows of that same beach.
- * A repeated station code is kept when agency, or name and county, differs.
+ * A filled station_key is that beach. Otherwise a repeated station code is kept
+ * when agency, or name and county, differs.
  * An empty payload is an empty file. It does not mean "ignore this file."
  */
 export function parseDailyStatus(data: unknown): DailyStatusFile {

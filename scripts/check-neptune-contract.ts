@@ -297,6 +297,46 @@ const splitArchive = groupArchive(
 assert.equal(splitArchive.size, 2);
 assert.equal(splitArchive.get("0\0a")?.nowcast?.probability, 0.1);
 assert.equal(splitArchive.get("0\0b")?.nowcast?.probability, 0.9);
+
+const keyedDaily = parseDailyStatusRows([
+  { station_code: "0", station_key: "oc-health-0", agency: "County Health", posting_status: "warning" },
+  { station_code: "0", station_key: "sd-health-0", agency: "County Health", posting_status: "open" },
+  { station_code: "0", station_key: "oc-health-0", agency: "County Health", posting_status: "advisory" },
+]);
+assert.equal(keyedDaily.rows.length, 2);
+assert.equal(keyedDaily.readings.get("0"), undefined);
+assert.ok(keyedDaily.duplicateCodes.includes("0"));
+assert.equal(
+  matchDailyRow(
+    keyedDaily.rows,
+    { code: "0", name: "North", county: "Orange", agency: "County Health", stationKey: "oc-health-0" },
+    true,
+    2
+  )?.reading.postingStatus,
+  "advisory"
+);
+assert.equal(
+  matchDailyRow(
+    keyedDaily.rows,
+    { code: "0", name: "South", county: "San Diego", agency: "County Health", stationKey: "sd-health-0" },
+    true,
+    2
+  )?.reading.postingStatus,
+  "open"
+);
+assert.equal(
+  matchDailyRow(
+    keyedDaily.rows,
+    { code: "0", name: "North", county: "Orange", agency: "County Health", stationKey: "missing-key" },
+    true,
+    2
+  ),
+  null
+);
+assert.equal(parseRosterJson([{ station_code: "0", name: "North", station_key: "oc-health-0", agency: "County Health" }])[0]?.stationKey, "oc-health-0");
+assert.equal(parseRosterJson([{ station_code: "1", name: "South" }])[0]?.stationKey, null);
+assert.equal(parseRosterJson([{ station_code: "2", name: "Zero", station_key: 0 }])[0]?.stationKey, "0");
+assert.equal(parseRosterJson([{ station_code: "3", name: "Blank", station_key: "" }])[0]?.stationKey, null);
 assert.equal(latestDatedStatusName(["notes.txt", "2026-10-01.csv", "2026-10-09.json", "2026-10-08.csv"]), "2026-10-09.json");
 assert.equal(latestDatedStatusName(["readme.md"]), null);
 

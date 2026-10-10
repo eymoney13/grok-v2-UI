@@ -17,6 +17,8 @@ export interface PublicBeach {
   code: string;
   slug: string;
   name: string;
+  /** Raw station_key when the roster published one. The path is `slug`. */
+  stationKey: string | null;
   county: string | null;
   latitude: number;
   longitude: number;

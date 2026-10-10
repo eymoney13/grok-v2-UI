@@ -205,6 +205,21 @@ const withAgency = assignSlugs(
   true
 );
 assert.deepEqual(withAgency, ["0-county-health", "0-heal-the-bay"]);
+const withKey = assignSlugs(
+  [
+    { code: "0", name: "North", county: "Orange", agency: "County Health", stationKey: "oc-health-0" },
+    { code: "0", name: "South", county: "Orange", agency: "Heal the Bay", stationKey: "HB/0" },
+    { code: "0", name: "Blank Key Beach", county: "Ventura", agency: "Ventura County", stationKey: " " },
+  ],
+  true
+);
+assert.deepEqual(withKey, ["oc-health-0", "hb-0", "0-ventura-county"]);
+const keyedCatalog = [
+  { slug: "oc-health-0", code: "0", name: "North", stationKey: "oc-health-0" },
+  { slug: "hb-0", code: "0", name: "South", stationKey: "HB/0" },
+];
+assert.equal(resolveSlugMatch(keyedCatalog, "HB/0")?.slug, "hb-0");
+assert.equal(resolveSlugMatch(keyedCatalog, "0"), null);
 const catalog = slugBeaches.map((beach, index) => ({ ...beach, slug: slugs[index]! }));
 assert.equal(resolveSlugMatch(catalog, "huntington-state-beach")?.slug, "huntington-state-beach-orange-0");
 assert.equal(resolveSlugMatch(catalog, "0"), null);

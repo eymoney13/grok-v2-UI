@@ -145,6 +145,7 @@ interface RosterEntry {
   code: string;
   name: string;
   agency: string | null;
+  stationKey: string | null;
   /**
    * The name to use in a sentence. Differs from `name` only where the roster
    * appends something purely to disambiguate a tab label.
@@ -172,6 +173,7 @@ const blankRosterFields = {
   samplingFrequency: null,
   lastSampleDate: null,
   agency: null,
+  stationKey: null,
 } as const;
 
 type RosterDraft = Omit<RosterEntry, "id">;
@@ -183,6 +185,7 @@ function stampIds(entries: RosterDraft[], agencyColumn: boolean): RosterEntry[] 
       name: entry.name,
       county: entry.county,
       agency: entry.agency,
+      stationKey: entry.stationKey,
     })),
     agencyColumn
   );
@@ -202,6 +205,7 @@ async function resolveRoster(config: LocationConfig, bundle: V2Bundle | null): P
         longitude: station.lon ?? undefined,
         county: station.county,
         agency: station.agency,
+        stationKey: station.stationKey,
         region: regionForCounty(station.county, regions),
         tier: station.tier,
         samplingFrequency: station.samplingFrequency,
@@ -661,6 +665,7 @@ export async function loadDashboardData(
 
     beaches.push({
       id: entry.id,
+      stationKey: entry.stationKey,
       code,
       name: entry.name,
       proseName: entry.proseName,
@@ -781,6 +786,7 @@ function unmodeledItem(
   const dailyRow = dailyFor(bundle, entry, sharing);
   return {
     id: entry.id,
+    stationKey: entry.stationKey,
     code: entry.code,
     name: entry.name,
     proseName: entry.proseName,
@@ -858,7 +864,13 @@ function dailyFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) 
   if (!bundle) return null;
   return matchDailyRow(
     bundle.dailyRows,
-    { code: entry.code, name: entry.name, county: entry.county, agency: entry.agency },
+    {
+      code: entry.code,
+      name: entry.name,
+      county: entry.county,
+      agency: entry.agency,
+      stationKey: entry.stationKey,
+    },
     bundle.dailyAgencyColumn,
     sharing
   );

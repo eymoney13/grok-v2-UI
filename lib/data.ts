@@ -679,10 +679,12 @@ export interface ForecastDay {
 }
 
 export interface BeachData {
-  /** Shareable path and React key. Not the station code: that code is not unique. */
+  /** Shareable path and React key. A published station_key when the file has one. */
   id: string;
   code: string;
   name: string;
+  /** Unique pipeline id. Null when the roster has no station_key for this beach. */
+  stationKey: string | null;
   /**
    * The name the written summary says out loud. Usually identical to `name`;
    * it differs only on a board whose roster appends a disambiguator meant for
@@ -791,10 +793,11 @@ export type RosterTier = "model_pool" | "limited_data";
 
 /** What the list and the map need. The detail page loads the rest. */
 export interface BeachListItem {
-  /** Shareable path and React key. Not the station code: that code is not unique. */
+  /** Shareable path and React key. A published station_key when the file has one. */
   id: string;
   code: string;
   name: string;
+  stationKey: string | null;
   proseName: string;
   latitude: number;
   longitude: number;
@@ -827,6 +830,7 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     id: beach.id,
     code: beach.code,
     name: beach.name,
+    stationKey: beach.stationKey,
     proseName: beach.proseName,
     latitude: beach.latitude,
     longitude: beach.longitude,
