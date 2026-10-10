@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
 import { assignSlugs, encodeStationKey, resolveSlugMatch, slugifyName } from "../lib/beachSlug.ts";
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
+import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/statewideCounts.ts";
 import { bandLabel, statusDetail, BAND_GUIDANCE_ES } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
 
@@ -251,5 +252,33 @@ assert.match(spanish.outlook, /sábado/i);
 assert.match(spanish.status, /104/);
 assert.match(spanish.rain ?? "", /no muestra lluvia/);
 assert.equal(spanish.outlookLabel, "Experimental");
+
+assert.equal(SHOW_STATEWIDE_STATUS_COUNTS, false);
+const coast = [
+  { status: "Not recommended" as const, hasEstimate: true },
+  { status: "Not recommended" as const, hasEstimate: true },
+  { status: "Normal" as const, hasEstimate: true },
+  { status: "Slightly elevated" as const, hasEstimate: true },
+  { status: "Not recommended" as const, hasEstimate: false },
+  { status: null, hasEstimate: false, neptuneIndex: 400, neptuneBand: "hazardous" },
+  { status: "Normal" as const, hasEstimate: true, neptuneIndex: 160, neptuneBand: "unhealthy_for_swimming" },
+];
+assert.equal(statewideStatusHeadline(coast), null);
+assert.equal(statewideStatusHeadline(coast, "es"), null);
+assert.equal(statewideStatusHeadline(coast, "en", true), "3 beaches over the limit today");
+assert.equal(
+  statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true }], "en", true),
+  "1 beach over the limit today"
+);
+assert.equal(statewideStatusHeadline([], "es", true), "0 playas sobre el límite hoy");
+assert.equal(
+  statewideStatusHeadline([{ status: "Normal", hasEstimate: true, neptuneIndex: 40, neptuneBand: "good" }], "en", true),
+  "0 beaches over the limit today"
+);
+const overSummary = dailySummary({ ...base, status: "Not recommended" }, "en");
+const overText = Object.values(overSummary).filter((value) => typeof value === "string").join("\n");
+assert.match(overText, /over the/);
+assert.doesNotMatch(overText, /\d+ beaches/i);
+assert.doesNotMatch(overText, /unsafe today/i);
 
 console.log("public page checks passed");

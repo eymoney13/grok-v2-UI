@@ -9,6 +9,7 @@ import { UserButton } from "@clerk/nextjs";
 import { ArrowRight, ChevronRight, List, Map as MapIcon, Waves } from "lucide-react";
 import { formatMonthDayYear, type BeachListItem, type DataSourceName, type Status } from "@/lib/data";
 import { lookAheadOfferLine } from "@/lib/forecastDisplay";
+import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import { publishedNeptuneScore } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
@@ -116,6 +117,7 @@ export default function SandboxDashboard({
   });
   const ordered = [...filtered].sort((a, b) => b.latitude - a.latitude || a.name.localeCompare(b.name));
   const groups = groupByCounty(ordered);
+  const coastCount = statewideStatusHeadline(beaches);
   const filtersOn = !!(normalizedQuery || countyFilter || regionFilter || statusFilter || tierFilter);
   const offerLine = lookAheadOfferLine(alertsEnabled);
 
@@ -204,6 +206,7 @@ export default function SandboxDashboard({
               <h2 ref={heading} tabIndex={-1}>Today’s water quality</h2>
               <span>{filtersOn ? `${filtered.length} of ${beaches.length}` : beaches.length} beaches</span>
             </div>
+            {coastCount && <p className={s.supporting}>{coastCount}</p>}
             <p className={s.supporting}>Search or filter, then open a beach for today’s estimate.{alertsEnabled && <> <button type="button" className={s.emailAlertLink} onClick={() => alertSignupRef.current?.open()}>Get email alerts</button></>}</p>
             <div className={s.searchRow}>
               <label className={s.searchLabel}>

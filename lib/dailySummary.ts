@@ -107,6 +107,7 @@ export function publishedOutlook(
     .map((day) => ({ date: day.date, status: day.status }));
 }
 
+/** One beach. A coast-wide count does not belong in this sentence. */
 export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
   return {
     status: statusSentence(facts, lang),

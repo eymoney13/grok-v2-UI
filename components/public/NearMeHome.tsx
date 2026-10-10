@@ -7,6 +7,7 @@ import { glanceLine } from "@/lib/dailySummary";
 import { hasCoordinates, milesBetween, nearest } from "@/lib/geo";
 import { copy, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
+import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { PublicChrome, usePublicLanguage } from "./Language";
 import { StatusChip } from "./StatusChip";
 import styles from "./public.module.css";
@@ -116,6 +117,7 @@ function Home({
 
   const visible = results.slice(0, mode === "search" ? SEARCH_COUNT : NEAR_COUNT);
   const closestMiles = here && visible[0] && hasCoordinates(visible[0]) ? milesBetween(here, visible[0]) : null;
+  const coastCount = statewideStatusHeadline(beaches, lang);
 
   return (
     <>
@@ -134,6 +136,7 @@ function Home({
       ) : (
         <p className={styles.dateline}>{t.awaiting}</p>
       )}
+      {coastCount && <p className={styles.note}>{coastCount}</p>}
 
       <div className={styles.actions}>
         <button className={styles.primary} type="button" onClick={locate}>

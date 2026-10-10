@@ -38,6 +38,7 @@ node scripts/build-v2-sample.mjs
 - Search, plus county, region, status, and roster filters. Region appears when the regions file names any.
 - A clustered map, and a beach page at `/california/beach/<slug>` with today’s status, the last test, lab results against the limit, and the experimental forecast. The slug is the same one used on the public beach page.
 - A phone-first home at `/` that lists the nearest beaches after the browser shares a location, and a search when it does not. The map on that screen loads only after “Show these on a map.”
+- No statewide total of beaches over the limit on the home page or in a beach summary. `SHOW_STATEWIDE_STATUS_COUNTS` in `lib/statewideCounts.ts` is off. The model is uncalibrated and runs high, so that total would mislead. Each beach still shows its own reading.
 - A shareable `/beach/<slug>` page. Its summary states today’s status, the last lab test when a sample age was published, and the experimental outlook. Rain and the latest lab result appear only when those fields are in the file. A blank rain field is not described as a dry day. Locked or missing forecast days are not given a direction.
 - Installable PWA basics: a web manifest and a service worker that always asks the network, so a saved page is not reused as today’s reading. English and Spanish on the public home and beach page. Beach names stay as published.
 - “Last tested N days ago,” a calm limited-lab line, “Last updated,” and a banner when the forecast date is not today.
