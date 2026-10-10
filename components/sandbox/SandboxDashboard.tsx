@@ -12,6 +12,7 @@ import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { IndexScale } from "@/lib/neptuneIndex";
+import { staleCountyBanner } from "@/lib/publicCopy";
 import { confidenceWords, copyReading, methodShort, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
 import { unknownCallPhrase } from "@/lib/publicCopy";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
@@ -122,6 +123,7 @@ export default function SandboxDashboard({
   const ordered = [...filtered].sort((a, b) => b.latitude - a.latitude || a.name.localeCompare(b.name));
   const groups = groupByCounty(ordered);
   const coastCount = statewideStatusHeadline(beaches);
+  const staleCounties = staleCountyBanner(run.staleCounties, "en");
   const filtersOn = !!(normalizedQuery || countyFilter || regionFilter || statusFilter || tierFilter);
   const offerLine = lookAheadOfferLine(alertsEnabled);
 
@@ -193,8 +195,8 @@ export default function SandboxDashboard({
         {run.checksPassed === false && (
           <p className={s.stale} role="status">The latest model run reported a check that did not pass. Treat today’s estimates with extra caution.</p>
         )}
-        {run.staleCounties.length > 0 && (
-          <p className={s.stale} role="status">The latest run marked these counties stale: {run.staleCounties.join(", ")}.</p>
+        {staleCounties && (
+          <p className={s.stale} role="status">{staleCounties}</p>
         )}
         {!entitled && view === "list" && (
           <aside className={s.proBanner} aria-label="Join Neptune Pro">

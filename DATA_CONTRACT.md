@@ -133,7 +133,7 @@ Not in the sample, because they are not published yet. The adapter already accep
 
 | Input | What the board does |
 | --- | --- |
-| `outputs/run_manifest.json` with `generated_at`, `model_version`, `stale_counties`, `checks_passed` | `generated_at` becomes “Last updated.” `stale_counties` is a banner. `checks_passed: false` is a caution banner. A missing file adds no banner. |
+| `outputs/run_manifest.json` with `generated_at`, `model_version`, `stale_counties`, `checks_passed` | `generated_at` becomes “Last updated.” `stale_counties` is a banner on the public home, each beach page, and the California board. A comma-separated string, or `{ county, stale }` rows, is the same list. The same fields under `stats`, `summary`, or `run` are read when the top level is blank. `checks_passed: false` is a caution banner on the California board. A missing file adds no banner. |
 | `generated_at` as a column on the nowcast or archive | Same “Last updated” clock, in the board’s timezone, used when the manifest and the daily file are both blank. |
 | `rain_advisory` or `recent_rain`, and `method` is `rules` | “Rain advisory. The rules path flagged recent rain.” A published rain total, including zero, does not create this note. |
 | A calibrated probability column on the nowcast, forecast, or archive. Names tried, in order: `calibrated_probability`, `calibrated_exc_probability`, `p_calibrated` | A second line, “Calibrated estimate,” labeled as a model figure, not a lab result. |

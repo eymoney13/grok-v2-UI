@@ -69,6 +69,7 @@ export default async function BeachPage({ params }: { params: Promise<{ slug: st
         predictionDate={catalog.predictionDate}
         readingsCurrent={catalog.readingsCurrent}
         advisory={advisory}
+        staleCounties={catalog.staleCounties}
       />
     </LanguageProvider>
   );

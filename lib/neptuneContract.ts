@@ -457,18 +457,51 @@ export function regionForCounty(county: string | null, regions: RegionDef[]): st
   return null;
 }
 
+function staleCountyNames(raw: unknown): string[] {
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((county) => normalizeCounty(county))
+      .filter((county): county is string => !!county);
+  }
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw) {
+    if (isObj(item)) {
+      const flagged = item.stale ?? item.flagged ?? item.is_stale ?? item.isStale;
+      if (flagged === false || flagged === 0 || flagged === "false") continue;
+      const name = normalizeCounty(item.county ?? item.name ?? item.county_name ?? item.countyName);
+      if (name) names.push(name);
+      continue;
+    }
+    const name = normalizeCounty(item);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+function staleCountiesFromManifest(data: Record<string, unknown>): string[] {
+  const direct = staleCountyNames(data.stale_counties ?? data.staleCounties);
+  if (direct.length > 0) return direct;
+  for (const key of ["stats", "summary", "run"]) {
+    const nested = data[key];
+    if (!isObj(nested)) continue;
+    const names = staleCountyNames(nested.stale_counties ?? nested.staleCounties);
+    if (names.length > 0) return names;
+  }
+  return [];
+}
+
 export function parseManifest(data: unknown): RunManifest {
   if (!isObj(data)) {
     return { generatedAt: null, modelVersion: null, staleCounties: [], checksPassed: null };
   }
-  const stale = data.stale_counties ?? data.staleCounties ?? [];
+  const nested = ["stats", "summary", "run"].map((key) => data[key]).find(isObj);
   return {
-    generatedAt: asTimestamp(data.generated_at ?? data.generatedAt),
-    modelVersion: textOrNull(data.model_version ?? data.modelVersion),
-    staleCounties: Array.isArray(stale)
-      ? stale.map((county) => normalizeCounty(county)).filter((county): county is string => !!county)
-      : [],
-    checksPassed: asBool(data.checks_passed ?? data.checksPassed),
+    generatedAt: asTimestamp(data.generated_at ?? data.generatedAt ?? nested?.generated_at ?? nested?.generatedAt),
+    modelVersion: textOrNull(data.model_version ?? data.modelVersion ?? nested?.model_version ?? nested?.modelVersion),
+    staleCounties: staleCountiesFromManifest(data),
+    checksPassed: asBool(data.checks_passed ?? data.checksPassed ?? nested?.checks_passed ?? nested?.checksPassed),
   };
 }
 

@@ -27,6 +27,7 @@ export default async function Home() {
         beaches={catalog.beaches.map(toGlance)}
         predictionDate={catalog.predictionDate}
         readingsCurrent={catalog.readingsCurrent}
+        staleCounties={catalog.staleCounties}
       />
     </LanguageProvider>
   );
