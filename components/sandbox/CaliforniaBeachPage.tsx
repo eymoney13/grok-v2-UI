@@ -7,7 +7,8 @@ import { ArrowLeft, Waves } from "lucide-react";
 import type { BeachData, BeachListItem } from "@/lib/data";
 import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
-import { copyReading, officialPosting } from "@/lib/publishedReading";
+import { copyReading, officialPosting, showsUnknownCall } from "@/lib/publishedReading";
+import { unknownCallPhrase } from "@/lib/publicCopy";
 import { OfficialBanner, PostingAside, ReadingNotes } from "./SandboxBeachDetail";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
@@ -51,6 +52,7 @@ export default function CaliforniaBeachPage({
   const router = useRouter();
   const tested = lastTestedLabel(listItem.daysSinceSample);
   const posted = officialPosting(copyReading(listItem));
+  const unknownCall = showsUnknownCall(listItem);
   const limited = hasLimitedLabData(listItem.daysSinceSample, listItem.noRecentSample, listItem.staleAfterDays);
   const shareSlug = listItem.id;
   return (
@@ -93,11 +95,13 @@ export default function CaliforniaBeachPage({
           <div className={s.detail}>
             <OfficialBanner reading={copyReading(listItem)} />
             <PostingAside reading={copyReading(listItem)} />
-            <section className={s.empty} aria-label={posted ? "Our estimate" : "No estimate today"}>
-              <h2>{posted ? "Our estimate" : "No estimate today"}</h2>
+            <section className={s.empty} aria-label={posted ? "Our estimate" : unknownCall ? unknownCallPhrase("en") : "No estimate today"}>
+              <h2>{unknownCall ? unknownCallPhrase("en") : posted ? "Our estimate" : "No estimate today"}</h2>
               <p>
-                This beach is on the roster, and the files do not include a model estimate for it.
-                {posted ? " The official posting above is the one to follow." : " Nothing here is filled in."}
+                {unknownCall
+                  ? "This beach is on the roster. The files did not include enough recent data for a call."
+                  : "This beach is on the roster, and the files do not include a model estimate for it."}
+                {posted ? " The official posting above is the one to follow." : unknownCall ? "" : " Nothing here is filled in."}
               </p>
             </section>
             <div className={s.sampleFacts}>

@@ -6,9 +6,9 @@ import {
   indexScalePhrase,
   type NeptuneDisplay,
 } from "@/lib/neptuneIndex";
-import { copy, statusPill, type Lang } from "@/lib/publicCopy";
+import { copy, statusPill, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
-import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
+import { copyReading, kindTitle, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
 import styles from "./public.module.css";
 
 const TONE = {
@@ -34,6 +34,7 @@ export function StatusChip({
     | "finalStatus"
     | "postingDate"
     | "rainAdvisory"
+    | "callUnknown"
   >;
   lang: Lang;
 }) {
@@ -91,11 +92,14 @@ function EstimateChip({
   beach,
   lang,
 }: {
-  beach: Pick<GlanceBeach, "hasEstimate" | "status" | "neptuneDisplay" | "tier">;
+  beach: Pick<GlanceBeach, "hasEstimate" | "status" | "neptuneDisplay" | "tier" | "callUnknown" | "finalStatus">;
   lang: Lang;
 }) {
   const t = copy[lang];
   if (beach.neptuneDisplay) return <IndexChip display={beach.neptuneDisplay} lang={lang} />;
+  if (showsUnknownCall(beach)) {
+    return <span className={styles.muted}>{unknownCallPhrase(lang)}</span>;
+  }
   if (beach.hasEstimate && beach.status) {
     return <span className={`${styles.pill} ${TONE[beach.status]}`}>{statusPill(beach.status, lang)}</span>;
   }

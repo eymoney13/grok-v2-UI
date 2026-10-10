@@ -1,5 +1,5 @@
 import type { NeptuneDisplay, IndexScale } from "./neptuneIndex.ts";
-import type { ConfidenceLevel, EstimateMethod, PostingStatus } from "./publishedReading.ts";
+import { isUnknownCall, type ConfidenceLevel, type EstimateMethod, type PostingStatus } from "./publishedReading.ts";
 
 export interface LocationConfig {
   slug: string;
@@ -671,10 +671,16 @@ export interface ForecastDay {
   drivers?: Driver[];
   conditions?: Conditions;
   /**
-   * Look-ahead days stay experimental unless the file marks that lead go_live.
+   * Look-ahead days stay experimental unless the file marks that lead go_live
+   * in its own per-day column. A confidence column is not that mark.
    * Absent means the file did not mark it, which keeps the Experimental label.
    */
   experimental?: boolean;
+  /**
+   * The rules path published Unknown for this day. The probability must not
+   * fill in Good, Safe, or under the limit.
+   */
+  callUnknown?: boolean;
   /** Method for this lead, when outputs/daily_status.csv published one. */
   method?: EstimateMethod | null;
   /** high, medium, or low for this lead. Not the go_live flag. */
@@ -716,7 +722,14 @@ export interface BeachData {
   status: Status;
   threshold: number;
   // Today's Good/Moderate/Poor call — see ForecastDay.verdict.
+  // Null when the published call is Unknown; see callUnknown.
   verdict: Verdict | null;
+  /**
+   * The rules path published Unknown on call, prediction, or final_status.
+   * The page says there is not enough recent data to call, and does not
+   * treat the probability as Safe.
+   */
+  callUnknown?: boolean;
   // The model had no recent lab sample to anchor this beach's prediction, so it
   // leans entirely on environmental signal. Surfaced as a caveat in the summary.
   noRecentSample: boolean;
@@ -839,6 +852,8 @@ export interface BeachListItem {
   finalStatus: string | null;
   postingDate: string | null;
   rainAdvisory: boolean | null;
+  /** Rules-path Unknown call. Not a fourth water-quality status. */
+  callUnknown?: boolean;
 }
 
 export function toBeachListItem(beach: BeachData): BeachListItem {
@@ -873,6 +888,7 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     finalStatus: beach.finalStatus,
     postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
+    callUnknown: beach.callUnknown,
   };
 }
 
@@ -1005,6 +1021,20 @@ export function verdictFromPrediction(raw: unknown): Verdict | null {
   if (text === "unsafe") return "Poor";
   if (text === "safe") return "Good";
   return null;
+}
+
+/**
+ * The published call wins. `Unknown` is a no-call: the probability is not
+ * allowed to turn it into Good or Poor.
+ */
+export function resolvePublishedCall(
+  published: unknown,
+  prob: number | null | undefined,
+  cutoff: number
+): { verdict: Verdict | null; callUnknown: boolean } {
+  if (isUnknownCall(published)) return { verdict: null, callUnknown: true };
+  const called = verdictFromPrediction(published) ?? verdictFor(prob, cutoff);
+  return { verdict: refineSafeVerdict(called, prob, cutoff), callUnknown: false };
 }
 
 // Good/Poor reuses the Normal / Not-recommended palette rather than

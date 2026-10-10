@@ -694,10 +694,11 @@ export function buildSummary(input: SummaryInput): string[] {
   // reads as "stay normal as well" off one scale and "good" off another.
   const ratingOf = tierMode
     ? (d: ForecastDay) => {
+        if (d.callUnknown) return null;
         const st = input.forecastStatuses?.[input.forecast.indexOf(d)] ?? d.status;
         return st ? VERDICT_OF_STATUS[st] ?? null : null;
       }
-    : (d: ForecastDay) => d.verdict ?? null;
+    : (d: ForecastDay) => (d.callUnknown ? null : d.verdict ?? null);
 
   // Already trimmed for prose upstream, where the roster knows which part of a
   // name is a disambiguator and which is the place itself. This used to split

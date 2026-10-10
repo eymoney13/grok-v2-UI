@@ -111,6 +111,22 @@ assert.doesNotMatch(echoed.confidence?.text ?? "", /less certain/);
 assert.equal(dailySummary({ ...base, method: "model", rainAdvisory: true }, "en").rainAdvisory, null);
 assert.equal(dailySummary({ ...base, method: "rules", rainAdvisory: false }, "en").rainAdvisory, null);
 
+const noCall = dailySummary({ ...base, status: "Normal", callUnknown: true }, "en");
+assert.equal(noCall.status, "Not enough recent data to call");
+assert.doesNotMatch(noCall.status, /under the|Safe|Good/i);
+const noCallEs = dailySummary({ ...base, status: "Normal", callUnknown: true }, "es");
+assert.equal(noCallEs.status, "No hay datos recientes suficientes para decidir");
+assert.doesNotMatch(noCallEs.status, /seguro/i);
+const noCallFromStatus = dailySummary({ ...base, status: "Normal", finalStatus: "Unknown" }, "en");
+assert.equal(noCallFromStatus.status, "Not enough recent data to call");
+assert.doesNotMatch(noCallFromStatus.status, /under the/);
+const noCallOutlook = dailySummary(
+  { ...base, outlook: [{ date: "2026-10-10", status: "Normal", experimental: true, callUnknown: true }] },
+  "en"
+);
+assert.match(noCallOutlook.outlook, /Not enough recent data to call/);
+assert.doesNotMatch(noCallOutlook.outlook, /under the limit/);
+
 const unknownPosting = dailySummary({ ...base, postingStatus: "unknown", finalStatus: "Safe" }, "en");
 assert.doesNotMatch(unknownPosting.status, /County closure|Official posting|Safe/);
 assert.match(unknownPosting.postingNote ?? "", /No official posting data for this beach/);
@@ -172,6 +188,19 @@ const indexed = dailySummary(
 assert.match(indexed.status, /92 \/ 100, higher is cleaner/);
 assert.match(indexed.status, /Good/);
 assert.doesNotMatch(indexed.status, /Hazardous/);
+const indexedUnknown = dailySummary(
+  { ...base, callUnknown: true, finalStatus: "Unknown", neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
+  "en"
+);
+assert.match(indexedUnknown.status, /92 \/ 100/);
+assert.doesNotMatch(indexedUnknown.status, /under the limit|Not enough recent data|\bSafe\b/);
+const postedUnknown = dailySummary(
+  { ...base, postingStatus: "closure", postingSource: "Orange County", finalStatus: "Unknown" },
+  "en"
+);
+assert.match(postedUnknown.status, /County closure: Closure/);
+assert.match(postedUnknown.status, /Not enough recent data to call/);
+assert.doesNotMatch(postedUnknown.status, /County closure: Unknown|under the/);
 const kept = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(42, "hazardous", indexScale) },
   "en"
@@ -300,6 +329,14 @@ assert.equal(
 );
 assert.equal(
   statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true }], "en", true),
+  "1 beach over the limit today"
+);
+assert.equal(
+  statewideStatusHeadline([{ status: "Not recommended", hasEstimate: true, callUnknown: true }], "en", true),
+  "0 beaches over the limit today"
+);
+assert.equal(
+  statewideStatusHeadline([{ status: "Normal", hasEstimate: true, callUnknown: true, neptuneBand: "poor" }], "en", true),
   "1 beach over the limit today"
 );
 assert.equal(statewideStatusHeadline([], "es", true), "0 playas sobre el límite hoy");

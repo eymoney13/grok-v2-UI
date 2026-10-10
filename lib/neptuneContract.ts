@@ -608,17 +608,17 @@ export function selectDailySource(input: {
 }
 
 const LEAD_HEADERS = new Set(["lead_days", "leaddays", "lead_time", "leadtime", "lead"]);
-const LONG_MATURITY_HEADERS = new Set([
-  "go_live",
+/**
+ * Compact forms of a go-live column name. The published header is not fixed.
+ * Anything with "confidence" in the name is a confidence level, not this mark.
+ * Bare "status" is not included: that would also match posting_status and final_status.
+ */
+const MATURITY_STEMS = new Set([
   "golive",
-  "lead_confidence",
-  "leadconfidence",
-  "forecast_confidence",
-  "forecastconfidence",
-  "day_confidence",
-  "dayconfidence",
+  "experimental",
+  "experiment",
   "maturity",
-  "release_status",
+  "release",
   "releasestatus",
 ]);
 
@@ -663,32 +663,59 @@ export function leadNumberFromRow(row: Record<string, unknown>): number | null {
   return null;
 }
 
+function compactHeader(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function headerHasConfidence(key: string): boolean {
+  return key.toLowerCase().includes("confidence");
+}
+
+function isMaturityStem(compact: string): boolean {
+  return MATURITY_STEMS.has(compact);
+}
+
+/** A long daily_status row is already one lead, so the header has no day prefix. */
+function longHeaderIsMaturity(key: string): boolean {
+  if (headerHasConfidence(key)) return false;
+  const compact = compactHeader(key);
+  if (compact === "status" || compact === "postingstatus" || compact === "finalstatus") return false;
+  if (isMaturityStem(compact)) return true;
+  for (const prefix of ["lead", "forecast", "day"]) {
+    if (compact.startsWith(prefix) && isMaturityStem(compact.slice(prefix.length))) return true;
+  }
+  return false;
+}
+
 function maturityFromLongRow(row: Record<string, unknown>): LeadMaturity | null {
   for (const [key, value] of Object.entries(row)) {
-    const folded = foldedHeader(key).replace(/_/g, "");
-    if (!LONG_MATURITY_HEADERS.has(foldedHeader(key)) && !LONG_MATURITY_HEADERS.has(folded)) continue;
+    if (!longHeaderIsMaturity(key)) continue;
     const parsed = parseLeadMaturity(value);
     if (parsed) return parsed;
   }
   return null;
 }
 
+/** The part of `dayN_*` after the lead number, compacted. Null when this header is not that lead. */
+function wideMaturityRemainder(key: string, lead: number): string | null {
+  if (headerHasConfidence(key)) return null;
+  const folded = foldedHeader(key);
+  const underscored = folded.match(new RegExp(`^day${lead}_(.+)$`));
+  if (underscored) return underscored[1].replace(/[^a-z0-9]/g, "");
+  const compact = folded.replace(/_/g, "");
+  const camel = compact.match(new RegExp(`^day${lead}([a-z].+)$`));
+  return camel ? camel[1] : null;
+}
+
 /**
- * `dayN_confidence` on a wide forecast row, or the same mark under another name.
- * high, medium, and low in that cell are not a go-live mark.
+ * The go-live mark on a wide forecast row. The column name is not fixed.
+ * `day1_release`, `day1_go_live`, `day1GoLive`, and `day1_maturity` all count.
+ * A header that contains "confidence" does not, even when the cell says go_live.
  */
 export function leadMaturityFromWide(row: Record<string, unknown>, lead: number): LeadMaturity | null {
-  const names = new Set([
-    `day${lead}_confidence`,
-    `day${lead}_go_live`,
-    `day${lead}_maturity`,
-    `day${lead}confidence`,
-    `day${lead}golive`,
-    `day${lead}maturity`,
-  ]);
   for (const [key, value] of Object.entries(row)) {
-    const folded = foldedHeader(key).replace(/_/g, "");
-    if (!names.has(foldedHeader(key)) && !names.has(folded)) continue;
+    const remainder = wideMaturityRemainder(key, lead);
+    if (!remainder || !isMaturityStem(remainder)) continue;
     const parsed = parseLeadMaturity(value);
     if (parsed) return parsed;
   }

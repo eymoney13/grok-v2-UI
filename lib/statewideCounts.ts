@@ -20,11 +20,17 @@ export interface StatusCountable {
   hasEstimate?: boolean;
   neptuneBand?: string | null;
   neptuneDisplay?: { countsAsPoor?: boolean } | null;
+  /** A rules-path Unknown is not an over-limit call. A published poor index still counts. */
+  callUnknown?: boolean;
 }
 
 /** One beach on the over-limit side of a published estimate. Not a posting. */
 export function beachCountsAsOverLimit(beach: StatusCountable): boolean {
   if (beach.hasEstimate === false) return false;
+  if (beach.callUnknown) {
+    if (beach.neptuneDisplay?.countsAsPoor) return true;
+    return beach.neptuneBand === "poor";
+  }
   if (beach.status === "Not recommended") return true;
   if (beach.neptuneDisplay?.countsAsPoor) return true;
   return beach.neptuneBand === "poor";

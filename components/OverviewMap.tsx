@@ -26,6 +26,7 @@ export type MapBeach = {
   postingSource?: string | null;
   finalStatus?: string | null;
   rainAdvisory?: boolean | null;
+  callUnknown?: boolean;
 };
 import {
   BASEMAP_ATTRIBUTION,
@@ -34,7 +35,8 @@ import {
   BASEMAP_URL,
 } from "@/lib/basemap";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
-import { copyReading, officialPosting, postingLabel, postingPinText, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
+import { copyReading, officialPosting, postingLabel, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
+import { unknownCallPhrase } from "@/lib/publicCopy";
 
 function colorFor(status: Status) {
   if (status === "Not recommended") return "#cc3333";
@@ -598,6 +600,7 @@ function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
   const posting = officialPosting(copyReading(beach));
   if (posting) return officialPin(postingPinText(posting));
   if (beach.neptuneDisplay) return indexPin(beach.neptuneDisplay);
+  if (showsUnknownCall(beach)) return limitedPin();
   if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict }, binaryVerdict);
   return limitedPin();
 }
@@ -609,6 +612,7 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
     return `${beach.name}, ${posting.kind}, ${postingLabel(posting)}${source}`;
   }
   if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
+  if (showsUnknownCall(beach)) return `${beach.name}, ${unknownCallPhrase("en")}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
   const phrase = statusPhrase?.(beach.status);
   return phrase ? `${beach.name}, ${phrase}` : beach.name;
@@ -718,7 +722,7 @@ export default function OverviewMap({
       ) : (
         beaches.map((b) => {
           const posted = officialPosting(copyReading(b));
-          if (!b.status && !posted) return null;
+          if (!b.status && !posted && !b.neptuneDisplay && !showsUnknownCall(b)) return null;
           const accessibleName = pinName(b, statusPhrase);
           return (
             <Marker

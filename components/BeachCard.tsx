@@ -174,6 +174,7 @@ function StatusHero({
   probability,
   showIndex,
   when,
+  callUnknown = false,
 }: {
   status: Status;
   // When set, the hero reads "Good"/"Poor" instead of the 3-tier status. Only
@@ -185,7 +186,15 @@ function StatusHero({
   // The day being viewed, worded for the subtitle ("today", "on Thursday").
   // Undefined keeps the existing "today" phrasing.
   when?: string;
+  callUnknown?: boolean;
 }) {
+  if (callUnknown) {
+    return (
+      <div className="rounded-lg bg-[#eef2f3] p-5">
+        <p className="text-xl font-medium text-[#3d4c50]">Not enough recent data to call</p>
+      </div>
+    );
+  }
   const toneStatus = verdict ? VERDICT_AS_STATUS[verdict] : status;
   const tint = STATUS_TINT[toneStatus];
   const Icon = toneStatus === "Not recommended" ? AlertTriangle : CircleCheck;
@@ -520,11 +529,13 @@ function SevenDayWindow({
           const pct = Math.round(day.probability * 100);
           // Each day is scored against its own cutoff — Boston's model re-tunes
           // the threshold per forecast horizon.
-          const verdict = binaryVerdict ? (day.verdict ?? null) : null;
+          const unknown = day.callUnknown === true;
+          const verdict = !unknown && binaryVerdict ? (day.verdict ?? null) : null;
           // The tooltip and screen-reader text, which name the band AND the
           // number whichever the cell itself is showing.
-          const cellSummary =
-            verdict ?? `${STATUS_LABEL[day.status]} · ${pct}%`;
+          const cellSummary = unknown
+            ? "Not enough recent data to call"
+            : verdict ?? `${STATUS_LABEL[day.status]} · ${pct}%`;
 
           return (
             <button
@@ -546,19 +557,25 @@ function SevenDayWindow({
                     : "hover:outline hover:outline-1 hover:outline-blue-300"
                 }`}
                 style={{
-                  backgroundColor: verdict
-                    ? VERDICT_CELL_COLOR[verdict]
-                    : // Rounded, like every other classification on the
-                      // board. This used to compare the raw fraction against
-                      // the same boundaries, so a day at 0.2968 was "30%" in
-                      // the tooltip and "Moderate" in the word, while 29.68
-                      // fell under 30 here and painted the cell green. Reusing
-                      // riskTier also drops a second copy of the palette that
-                      // had to agree with RISK_TIERS by hand.
-                      riskTier(pct).color,
+                  backgroundColor: unknown
+                    ? "#eef2f3"
+                    : verdict
+                      ? VERDICT_CELL_COLOR[verdict]
+                      : // Rounded, like every other classification on the
+                        // board. This used to compare the raw fraction against
+                        // the same boundaries, so a day at 0.2968 was "30%" in
+                        // the tooltip and "Moderate" in the word, while 29.68
+                        // fell under 30 here and painted the cell green. Reusing
+                        // riskTier also drops a second copy of the palette that
+                        // had to agree with RISK_TIERS by hand.
+                        riskTier(pct).color,
                 }}
               >
-                {verdict ? (
+                {unknown ? (
+                  <span className="px-0.5 text-center text-[9px] font-semibold leading-tight text-[#3d4c50]">
+                    No call
+                  </span>
+                ) : verdict ? (
                   // Two spans rather than one truncated label: a clipped
                   // "Moderat" would read as a rendering bug, and display:none
                   // keeps the hidden one out of the accessibility tree so a
@@ -652,7 +669,7 @@ export default function BeachCard({
     cells[0];
   const activeDay = activeCell.day;
 
-  const verdict = features.binaryVerdict ? (activeDay.verdict ?? null) : null;
+  const verdict = activeDay.callUnknown ? null : features.binaryVerdict ? (activeDay.verdict ?? null) : null;
 
   // On a locked beach the summary arrives pre-built from the server: the
   // drivers buildSummary writes from are exactly what the paywall withholds,
@@ -667,7 +684,7 @@ export default function BeachCard({
           // tab labels apart, the sentence drops it; on one whose names carry the
           // street, the sentence keeps it.
           name: beach.proseName,
-          verdict: activeDay.verdict ?? null,
+          verdict: activeDay.callUnknown ? null : activeDay.verdict ?? null,
           date: activeDay.date,
           // "past" | "today" | "forecast" — the cell type already carries it, and
           // the summary needs it for tense, not just for the outlook.
@@ -684,7 +701,7 @@ export default function BeachCard({
           // cannot see and which disagrees with the tier they can — a 34% day is
           // "Good" against a 50% cutoff but "Slightly elevated" on the shared
           // scale. Passing the tier keeps the paragraph and the label agreeing.
-          status: features.binaryVerdict ? null : activeDay.status,
+          status: features.binaryVerdict || activeDay.callUnknown ? null : activeDay.status,
         })
       : [];
 
@@ -729,6 +746,7 @@ export default function BeachCard({
           <StatusHero
             status={activeDay.status}
             verdict={verdict}
+            callUnknown={activeDay.callUnknown === true}
             probability={activeDay.probability}
             showIndex={features.neptuneIndex}
             when={

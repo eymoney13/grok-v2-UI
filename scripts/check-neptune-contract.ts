@@ -20,11 +20,13 @@ import {
   selectDailySource,
   textFlag,
 } from "../lib/neptuneContract.ts";
+import { resolvePublishedCall } from "../lib/data.ts";
 import { matchDailyRow, matchLeadRows } from "../lib/stationIdentity.ts";
 import {
   confidenceWords,
   mergeReadings,
   methodWords,
+  isUnknownCall,
   officialPosting,
   openPostingWords,
   parseLeadMaturity,
@@ -155,6 +157,19 @@ assert.equal(closed?.source, "Orange County");
 assert.equal(officialPosting(parsePublishedReading({ final_status: "Over limit" })), null);
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "  " })), null);
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "unknown", final_status: "Safe" })), null);
+assert.equal(isUnknownCall("Unknown"), true);
+assert.equal(isUnknownCall(" unknown "), true);
+assert.equal(isUnknownCall("safe"), false);
+const unknownClosure = officialPosting(parsePublishedReading({ posting_status: "closure", final_status: "Unknown" }));
+assert.equal(unknownClosure?.kind, "closure");
+assert.equal(unknownClosure?.detail, null);
+assert.equal(unknownClosure ? postingLabel(unknownClosure) : null, "Closure");
+assert.equal(officialPosting(parsePublishedReading({ posting_status: "closure", final_status: "Beach closed" }))?.detail, "Beach closed");
+assert.deepEqual(resolvePublishedCall("Unknown", 0.1, 0.5), { verdict: null, callUnknown: true });
+assert.deepEqual(resolvePublishedCall("safe", 0.1, 0.5).callUnknown, false);
+assert.equal(resolvePublishedCall("safe", 0.1, 0.5).verdict, "Good");
+assert.equal(resolvePublishedCall("unsafe", 0.1, 0.5).verdict, "Poor");
+assert.equal(resolvePublishedCall("", 0.1, 0.5).verdict, "Good");
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "open", final_status: "Safe" })), null);
 assert.match(unknownPostingWords(parsePublishedReading({ posting_status: "unknown" })) ?? "", /No official posting data for this beach/);
 assert.doesNotMatch(unknownPostingWords(parsePublishedReading({ posting_status: "unknown" })) ?? "", /safe/i);
@@ -499,7 +514,7 @@ const leadRows = [
   { station_code: "0", agency: "Orange County", lead_days: 0, method: "pooled_model", confidence: "low", posting_status: "warning" },
   { station_code: "0", agency: "San Diego County", lead_days: 0, method: "rules", confidence: "high" },
   { station_code: "0", agency: "Orange County", lead_days: 1, method: "model", confidence: "medium", go_live: "go_live" },
-  { station_code: "0", agency: "Orange County", lead_days: 2, method: "model", confidence: "high", day_confidence: "experimental" },
+  { station_code: "0", agency: "Orange County", lead_days: 2, method: "model", confidence: "high", day_confidence: "go_live", release: "experimental" },
   { station_code: "0", agency: "Orange County", lead_days: 1, method: "rules", confidence: "low", go_live: "experimental" },
   { station_code: "DHS114", lead: 4, method: "model" },
 ];
@@ -529,10 +544,23 @@ const sanDiego = matchLeadRows(
 assert.equal(sanDiego.find((row) => row.lead === 0)?.reading.method, "rules");
 assert.equal(sanDiego.find((row) => row.lead === 1), undefined);
 assert.deepEqual(leadZeroSourceRows(leadRows).map((row) => row.agency), ["Orange County", "San Diego County"]);
-assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 1), "go_live");
-assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 2), "experimental");
+assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 1), null);
+assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 2), null);
 assert.equal(leadMaturityFromWide({ day1_confidence: "go_live", day2_confidence: "experimental", day3_confidence: "high" }, 3), null);
+assert.equal(leadMaturityFromWide({ day1_go_live: "go_live" }, 1), "go_live");
+assert.equal(leadMaturityFromWide({ day1_release: "go_live", day1_confidence: "experimental" }, 1), "go_live");
+assert.equal(leadMaturityFromWide({ day2GoLive: "experimental" }, 2), "experimental");
+assert.equal(leadMaturityFromWide({ day1_status: "go_live", day1_release_status: "go_live" }, 1), "go_live");
+assert.equal(leadMaturityFromWide({ day1_release: "" }, 1), null);
 assert.equal(leadMaturityFromWide({}, 1), null);
+const confidenceOnly = parseLeadStatusRows([
+  { station_code: "A", lead_days: 1, confidence: "high", day_confidence: "go_live", lead_confidence: "experimental" },
+]);
+assert.equal(confidenceOnly.rows[0]?.maturity, null);
+assert.equal(
+  parseLeadStatusRows([{ station_code: "A", lead_days: 1, release_status: "go_live" }]).rows[0]?.maturity,
+  "go_live"
+);
 
 const preferred = mergeReadings(
   { method: "pooled_model", confidence: "low", postingStatus: null, postingSource: null, finalStatus: null, postingDate: null, rainAdvisory: null },

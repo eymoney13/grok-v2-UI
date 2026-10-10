@@ -7,9 +7,7 @@ import {
   statusFromProb,
   statusFromThreshold,
   thresholdFor,
-  verdictFor,
-  refineSafeVerdict,
-  verdictFromPrediction,
+  resolvePublishedCall,
   type BeachData,
   type BeachListItem,
   type Conditions,
@@ -45,7 +43,7 @@ import {
   type NeptuneDisplay,
   type NeptuneFields,
 } from "./neptuneIndex";
-import { EMPTY_READING, copyReading, mergeReadings } from "./publishedReading.ts";
+import { EMPTY_READING, copyReading, isUnknownCall, mergeReadings } from "./publishedReading.ts";
 
 interface NowcastRow {
   StationCode: string;
@@ -380,19 +378,37 @@ function parseBool(raw: unknown): boolean {
   return String(raw ?? "").trim().toLowerCase() === "true";
 }
 
-// The binary call for a row: the backend's own decision when it publishes one,
-// otherwise derived from the probability. See verdictFromPrediction for why the
-// published value has to win where both exist.
-function resolveVerdict(
-  published: unknown,
+// The binary call for a row. A published Unknown is a no-call and blocks the
+// probability fallback. An explicit safe or unsafe still wins over that fallback.
+function resolveVerdict(published: unknown, prob: number, cutoff: number): { verdict: Verdict | null; callUnknown: boolean } {
+  return resolvePublishedCall(published, prob, cutoff);
+}
+
+/** Archive call, nowcast prediction, and final_status. Unknown in any of them wins. */
+function todayCall(
+  archiveCall: unknown,
+  nowcastCall: unknown,
+  finalStatus: unknown,
   prob: number,
   cutoff: number
-): Verdict | null {
-  // The backend's own call decides Safe vs Unsafe; refineSafeVerdict then splits
-  // Safe into Good/Moderate. Order matters: recomputing the Poor boundary here
-  // would let the dashboard contradict the model on rounding edges.
-  const called = verdictFromPrediction(published) ?? verdictFor(prob, cutoff);
-  return refineSafeVerdict(called, prob, cutoff);
+): { verdict: Verdict | null; callUnknown: boolean } {
+  const published = isUnknownCall(archiveCall) || isUnknownCall(nowcastCall) ? "Unknown" : (archiveCall ?? nowcastCall);
+  const called = resolveVerdict(published, prob, cutoff);
+  if (called.callUnknown || isUnknownCall(finalStatus)) return { verdict: null, callUnknown: true };
+  return called;
+}
+
+/** dayN_call and dayN_prediction. Unknown in either cell wins over a safe or unsafe word. */
+function dayPublishedCall(row: Record<string, unknown>, lead: number): unknown {
+  const names = new Set([`day${lead}call`, `day${lead}prediction`]);
+  let found: unknown = null;
+  for (const [key, value] of Object.entries(row)) {
+    const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!names.has(compact)) continue;
+    if (isUnknownCall(value)) return "Unknown";
+    if (found == null && value != null && String(value).trim() !== "") found = value;
+  }
+  return found;
 }
 
 // 1..PUBLISHED_FACTORS, for building the column names. Backends that publish
@@ -607,16 +623,19 @@ export async function loadDashboardData(
         if (!dayStatus) continue;
         const leadRow = leadHits.find((row) => row.lead === i) ?? null;
         const maturity = leadMaturityFromWide(fcRow as unknown as Record<string, unknown>, i) ?? leadRow?.maturity ?? null;
+        const called = resolveVerdict(dayPublishedCall(fcRow as unknown as Record<string, unknown>, i), p, cutoff);
+        const callUnknown = called.callUnknown || isUnknownCall(leadRow?.reading.finalStatus);
         // Forecast days carry top contributing factors (why the model predicts
         // this), but no lab sample — there is no future water-quality test.
-        // The Experimental label stays unless this lead is marked go_live.
+        // The Experimental label stays unless this lead's own column says go_live.
         forecast.push({
           date: String(date),
           probability: p,
           mpnLabel: mpn,
           status: dayStatus,
           threshold: cutoff,
-          verdict: resolveVerdict(fcRow[`day${i}_prediction`], p, cutoff),
+          verdict: callUnknown ? null : called.verdict,
+          callUnknown,
           factors: buildFactors(dayFactors(fcRow, i)),
           drivers: buildDrivers(dayFactors(fcRow, i), dayDirections(fcRow, i)),
           conditions: buildConditions(fcRow, `day${i}_`),
@@ -633,18 +652,25 @@ export async function loadDashboardData(
         const cutoff = row.threshold ?? threshold;
         const dayStatus = classify(row.probability, cutoff);
         if (!dayStatus) continue;
+        const called = resolveVerdict(
+          isUnknownCall(row.call) || isUnknownCall(row.reading?.finalStatus) ? "Unknown" : row.call,
+          row.probability,
+          cutoff
+        );
         if (existing) {
           existing.probability = row.probability;
           existing.status = dayStatus;
           existing.threshold = cutoff;
-          existing.verdict = resolveVerdict(row.call, row.probability, cutoff);
+          existing.callUnknown = existing.callUnknown || called.callUnknown;
+          existing.verdict = existing.callUnknown ? null : called.verdict;
         } else if (!forecast.some((day) => day.date === row.targetDate)) {
           forecast.push({
             date: row.targetDate,
             probability: row.probability,
             status: dayStatus,
             threshold: cutoff,
-            verdict: resolveVerdict(row.call, row.probability, cutoff),
+            verdict: called.callUnknown ? null : called.verdict,
+            callUnknown: called.callUnknown,
             experimental: true,
           });
         }
@@ -668,13 +694,15 @@ export async function loadDashboardData(
         if (!dayStatus) continue;
         // Replay that day's saved nowcast: same factors + the lab result that
         // was latest as of that date (no future sample leaks backward).
+        const called = resolveVerdict(dayPublishedCall(histRow as unknown as Record<string, unknown>, i), p, cutoff);
         pastDays.push({
           date: String(date),
           probability: p,
           mpnLabel: mpn,
           status: dayStatus,
           threshold: cutoff,
-          verdict: resolveVerdict(histRow[`day${i}_prediction`], p, cutoff),
+          verdict: called.callUnknown ? null : called.verdict,
+          callUnknown: called.callUnknown,
           factors: buildFactors(dayFactors(histRow, i)),
           drivers: buildDrivers(dayFactors(histRow, i), dayDirections(histRow, i)),
           conditions: buildConditions(histRow, `day${i}_`),
@@ -710,7 +738,7 @@ export async function loadDashboardData(
       insight: normalizeInsight(String(now.insight ?? ""), status),
       status,
       threshold,
-      verdict: resolveVerdict(archivedNow?.call ?? now.prediction, prob, threshold),
+      ...todayCall(archivedNow?.call, now.prediction, reading.finalStatus, prob, threshold),
       noRecentSample: parseBool(now.no_recent_sample),
       ...rosterFacts(entry, archive, bundle),
       calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
@@ -860,6 +888,7 @@ function unmodeledItem(
     staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
     hasEstimate: false,
     status: null,
+    callUnknown: isUnknownCall(reading.finalStatus) || isUnknownCall(archive?.nowcast?.call),
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,

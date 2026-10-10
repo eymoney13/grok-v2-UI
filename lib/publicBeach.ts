@@ -9,6 +9,8 @@ export interface OutlookDay {
   status: Status;
   /** False only when this lead was marked go_live. Missing means still experimental. */
   experimental?: boolean;
+  /** This day published Unknown. The outlook must not call it under the limit. */
+  callUnknown?: boolean;
 }
 
 /**
@@ -47,6 +49,8 @@ export interface PublicBeach {
   finalStatus: string | null;
   postingDate: string | null;
   rainAdvisory: boolean | null;
+  /** Rules-path Unknown. The page must not read this beach as safe. */
+  callUnknown?: boolean;
 }
 
 /** The home screen list. Rain, lab results, and the outlook stay on the beach page. */
@@ -74,6 +78,7 @@ export type GlanceBeach = Pick<
   | "finalStatus"
   | "postingDate"
   | "rainAdvisory"
+  | "callUnknown"
 >;
 
 export function toGlance(beach: PublicBeach): GlanceBeach {
@@ -100,5 +105,6 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     finalStatus: beach.finalStatus,
     postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
+    callUnknown: beach.callUnknown,
   };
 }

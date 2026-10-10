@@ -27,12 +27,14 @@ import {
   methodWords,
   kindTitle,
   officialPosting,
+  showsUnknownCall,
   openPostingWords,
   postingLabel,
   rainAdvisoryWords,
   unknownPostingWords,
   type PublishedReading,
 } from "@/lib/publishedReading";
+import { unknownCallPhrase } from "@/lib/publicCopy";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
 import LabHistory, { type LabPoint } from "../LabHistory";
 import WhyPrediction from "../WhyPrediction";
@@ -86,17 +88,17 @@ function ForecastLookAhead({
             <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
           </a>
         ) : (
-          <button key={forecast.date} type="button" className={`${s.futureDay} ${bandClass(forecast.status)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${bandLabel(forecast.status)}`}>
+          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown ? s.unknownCall : bandClass(forecast.status)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${forecast.callUnknown ? unknownCallPhrase("en") : bandLabel(forecast.status)}`}>
             <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
             <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
             {mixed && dayIsExperimental(forecast) && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
-            <strong>{statusReading(forecast.status).pill}</strong>
+            <strong>{forecast.callUnknown ? unknownCallPhrase("en") : statusReading(forecast.status).pill}</strong>
           </button>
         ))}</div>
         {picked && (
           <div className={s.forecastPick}>
-            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {statusReading(picked.status).title}</p>
-            <p>{statusReading(picked.status).detail}</p>
+            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).title}</p>
+            <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>
             <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
             {pickedMethod && <p>{pickedMethod}</p>}
             {pickedConfidence && <p>{pickedConfidence.text}</p>}
@@ -169,7 +171,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"] }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -179,6 +181,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
 }) {
   const today = buildWindowCells(beach).find((cell) => cell.type === "today")!.day;
   const reading = statusReading(today.status);
+  const todayUnknown = showsUnknownCall(beach) || today.callUnknown === true;
   const indexScore = beach.neptuneDisplay;
   const readingFields = copyReading(beach);
   const posting = officialPosting(readingFields);
@@ -226,6 +229,14 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
         </p>
       </section>
+    ) : todayUnknown ? (
+    <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">
+      <div className={s.predictionHeader}>
+        <p className={s.eyebrow}>{posting ? "Our estimate" : "Today’s estimate"}</p>
+        <span>{dateLabel(today.date)}</span>
+      </div>
+      <h3>{unknownCallPhrase("en")}</h3>
+    </section>
     ) : (
     <section className={`${s.predictionHero} ${bandClass(today.status)}`} aria-label="Today’s estimate">
       <div className={s.predictionHeader}>
@@ -266,11 +277,11 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <LabHistory samples={labHistory} />
 
-    <Figures probability={today.probability} ours={!!posting} />
+    {!todayUnknown && <Figures probability={today.probability} ours={!!posting} />}
     <WhyPrediction
       key={today.date}
       prominentToggle
-      title={indexScore ? "Why today’s model estimate?" : `Why “${reading.title.toLowerCase()}” today?`}
+      title={indexScore || todayUnknown ? "Why today’s model estimate?" : `Why “${reading.title.toLowerCase()}” today?`}
       factors={today.factors ?? []}
       drivers={today.drivers ?? beach.drivers}
       conditions={today.conditions ?? beach.conditions}
@@ -297,6 +308,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     {alertSignup}
     {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
               if (neighbor.neptuneDisplay) return <NeptuneIndexBadge display={neighbor.neptuneDisplay} />;
+              if (showsUnknownCall(neighbor)) return <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>;
               if (neighbor.hasEstimate !== false && neighbor.status) return <span className={`${s.band} ${s.listReading} ${bandClass(neighbor.status)}`}><span>{statusReading(neighbor.status).pill}</span></span>;
               return <span className={s.noEstimate}>No estimate</span>;
             })()}<ArrowRight size={16} aria-hidden="true" /></button></li>)}</ul></section>}

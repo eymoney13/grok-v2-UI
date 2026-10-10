@@ -13,6 +13,7 @@ import {
 import {
   statusDetail,
   statusPhrase,
+  unknownCallPhrase,
   type Lang,
 } from "./publicCopy.ts";
 import type { OutlookDay, PublicBeach } from "./publicBeach.ts";
@@ -24,6 +25,7 @@ import {
   officialSummaryLead,
   openPostingWords,
   rainAdvisoryWords,
+  showsUnknownCall,
   unknownPostingWords,
   type ConfidenceLevel,
   type EstimateMethod,
@@ -61,6 +63,7 @@ export interface SummaryFacts {
   finalStatus: string | null;
   postingDate: string | null;
   rainAdvisory: boolean | null;
+  callUnknown?: boolean;
 }
 
 export interface DailySummary {
@@ -98,7 +101,7 @@ const TIER_ES =
  * A hidden horizon contributes no days, so the page cannot describe a direction.
  */
 export function publishedOutlook(
-  days: { date: string; status: Status; locked?: boolean; experimental?: boolean }[],
+  days: { date: string; status: Status; locked?: boolean; experimental?: boolean; callUnknown?: boolean }[],
   predictionDate: string,
   horizon: ForecastHorizon
 ): OutlookDay[] {
@@ -111,6 +114,7 @@ export function publishedOutlook(
       date: day.date,
       status: day.status,
       experimental: day.experimental !== false,
+      ...(day.callUnknown ? { callUnknown: true as const } : {}),
     }));
 }
 
@@ -163,6 +167,7 @@ function statusSentence(facts: SummaryFacts, lang: Lang): string {
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
   const indexed = indexSentence(facts.neptuneDisplay, lang);
   if (indexed) return indexed;
+  if (showsUnknownCall(facts)) return unknownCallPhrase(lang);
   if (!facts.hasEstimate) {
     return lang === "es"
       ? "Hoy no se publicó un estimado para esta playa."
@@ -240,6 +245,7 @@ function outlookSentence(facts: SummaryFacts, lang: Lang): string {
   if (facts.outlook.length === 0) return lang === "es" ? NO_OUTLOOK_ES : NO_OUTLOOK_EN;
   const parts = facts.outlook.map((day) => {
     const name = weekday(day.date, lang);
+    if (day.callUnknown) return `${name}: ${unknownCallPhrase(lang)}`;
     const phrase = statusPhrase(day.status, lang);
     return lang === "es" ? `${name} está ${phrase}` : `${name} is ${phrase}`;
   });

@@ -141,3 +141,10 @@ export function statusPhrase(status: Status, lang: Lang): string {
 export function statusDetail(status: Status, lang: Lang): string {
   return STATUS_DETAIL[lang][status];
 }
+
+/** Rules path published Unknown. Neutral, and never a translation of "safe". */
+export function unknownCallPhrase(lang: Lang): string {
+  return lang === "es"
+    ? "No hay datos recientes suficientes para decidir"
+    : "Not enough recent data to call";
+}

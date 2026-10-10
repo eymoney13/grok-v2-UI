@@ -9,6 +9,8 @@ import {
   type BeachData,
 } from "@/lib/data";
 import { VERDICT_CELL_COLOR, VERDICT_CELL_TEXT } from "@/lib/window";
+import { unknownCallPhrase } from "@/lib/publicCopy";
+import { showsUnknownCall } from "@/lib/publishedReading";
 import BoardHeading from "./BoardHeading";
 
 // Every beach on one screen: the name on the left, today's call on the right,
@@ -80,14 +82,16 @@ export default function BeachList({
 
       <ul className="divide-y divide-gray-100">
         {beaches.map((beach) => {
-          const verdict = binaryVerdict ? beach.verdict : null;
+          const unknown = showsUnknownCall(beach);
+          const verdict = !unknown && binaryVerdict ? beach.verdict : null;
           const pct = Math.round(beach.probability * 100);
           const status = verdict ? VERDICT_AS_STATUS[verdict] : beach.status;
           const pctText = `${pct}${hidePercent ? "" : "%"}`;
           // A binary board's cell is the verdict alone; it publishes no
-          // percentage to stack anything under.
-          const label =
-            verdict ?? `${pctText}, ${STATUS_LABEL[beach.status]}`;
+          // percentage to stack anything under. An Unknown call is neither.
+          const label = unknown
+            ? unknownCallPhrase("en")
+            : verdict ?? `${pctText}, ${STATUS_LABEL[beach.status]}`;
 
           return (
             <li key={beach.id}>
@@ -125,19 +129,25 @@ export default function BeachList({
                     cells, which draw the same word on the same fill. */}
                 <span
                   aria-hidden="true"
-                  className={`flex w-20 shrink-0 flex-col items-center justify-center rounded-sm ${
-                    verdict ? "h-7" : "h-10"
+                  className={`flex shrink-0 flex-col items-center justify-center rounded-sm ${
+                    unknown ? "h-auto w-36 px-1 py-1" : verdict ? "h-7 w-20" : "h-10 w-20"
                   }`}
                   style={{
-                    backgroundColor: verdict
-                      ? VERDICT_CELL_COLOR[verdict]
-                      : TIER_CELL_COLOR[status],
-                    color: verdict
-                      ? VERDICT_CELL_TEXT[verdict]
-                      : STATUS_BAND_TEXT[status],
+                    backgroundColor: unknown
+                      ? "#eef2f3"
+                      : verdict
+                        ? VERDICT_CELL_COLOR[verdict]
+                        : TIER_CELL_COLOR[status],
+                    color: unknown
+                      ? "#3d4c50"
+                      : verdict
+                        ? VERDICT_CELL_TEXT[verdict]
+                        : STATUS_BAND_TEXT[status],
                   }}
                 >
-                  {verdict ? (
+                  {unknown ? (
+                    <span className="text-center text-[10px] font-semibold leading-tight">{label}</span>
+                  ) : verdict ? (
                     <span className="text-[11px] font-semibold">{verdict}</span>
                   ) : (
                     <>

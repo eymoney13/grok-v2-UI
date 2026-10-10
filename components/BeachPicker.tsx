@@ -62,7 +62,7 @@ export default function BeachPicker({
   const active = beaches[activeIndex];
 
   const statusOf = (b: BeachData) =>
-    binaryVerdict && b.verdict ? VERDICT_AS_STATUS[b.verdict] : b.status;
+    b.callUnknown ? null : binaryVerdict && b.verdict ? VERDICT_AS_STATUS[b.verdict] : b.status;
 
   const close = (returnFocus = true) => {
     setOpen(false);
@@ -159,7 +159,7 @@ export default function BeachPicker({
           <span
             aria-hidden="true"
             className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: STATUS_COLOR[statusOf(active)] }}
+            style={{ backgroundColor: statusOf(active) ? STATUS_COLOR[statusOf(active)!] : "#8aa0a2" }}
           />
         )}
         <span className="min-w-0 flex-1 truncate text-left font-medium">
@@ -205,7 +205,7 @@ export default function BeachPicker({
                 <span
                   aria-hidden="true"
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: STATUS_COLOR[status] }}
+                  style={{ backgroundColor: status ? STATUS_COLOR[status] : "#8aa0a2" }}
                 />
                 <span
                   className={`min-w-0 flex-1 truncate ${
@@ -217,9 +217,13 @@ export default function BeachPicker({
                 {/* The reading itself, so the list answers "which of these is
                     clean today" without opening any of them. */}
                 <span className="shrink-0 text-xs text-gray-500">
-                  {binaryVerdict && b.verdict
-                    ? b.verdict
-                    : STATUS_BAND[status].short}
+                  {b.callUnknown
+                    ? "Not enough recent data to call"
+                    : binaryVerdict && b.verdict
+                      ? b.verdict
+                      : status
+                        ? STATUS_BAND[status].short
+                        : ""}
                 </span>
                 {selected ? (
                   <Check

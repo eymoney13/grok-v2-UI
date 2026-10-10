@@ -12,7 +12,8 @@ import { lookAheadOfferLine } from "@/lib/forecastDisplay";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { IndexScale } from "@/lib/neptuneIndex";
-import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel } from "@/lib/publishedReading";
+import { confidenceWords, copyReading, kindTitle, methodShort, officialPosting, openPostingWords, postingLabel, showsUnknownCall } from "@/lib/publishedReading";
+import { unknownCallPhrase } from "@/lib/publicCopy";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
 import type { CtaLocation } from "@/lib/analytics";
@@ -110,6 +111,7 @@ export default function SandboxDashboard({
     if (regionFilter && beach.region !== regionFilter) return false;
     if (tierFilter && beach.tier !== tierFilter) return false;
     if (statusFilter === "none" && beach.hasEstimate) return false;
+    if ((statusFilter === "under" || statusFilter === "near" || statusFilter === "over") && showsUnknownCall(beach)) return false;
     if (statusFilter === "under" && beach.status !== "Normal") return false;
     if (statusFilter === "near" && beach.status !== "Slightly elevated") return false;
     if (statusFilter === "over" && beach.status !== "Not recommended") return false;
@@ -301,6 +303,8 @@ export default function SandboxDashboard({
                                   const method = methodShort(beach.method);
                                   const estimate = score ? (
                                     <NeptuneIndexBadge display={score} />
+                                  ) : showsUnknownCall(beach) ? (
+                                    <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>
                                   ) : beach.hasEstimate && beach.status ? (
                                     <span className={`${s.band} ${s.listReading} ${bandClass(beach.status)}`}>
                                       <span className={s.listBandLabel}><span className={s.dot} />{statusReading(beach.status).pill}</span>

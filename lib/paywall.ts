@@ -129,14 +129,14 @@ function redactBeach(beach: BeachData, features: FeatureFlags, publicTodayInsigh
 function freeSummary(beach: BeachData, features: FeatureFlags): string[] {
   return buildSummary({
     name: beach.proseName,
-    verdict: features.binaryVerdict ? beach.verdict : null,
+    verdict: beach.callUnknown ? null : features.binaryVerdict ? beach.verdict : null,
     date: beach.predictionDate,
     timeframe: "today",
     noRecentSample: beach.noRecentSample,
     drivers: beach.drivers,
     conditions: beach.conditions,
     forecast: beach.forecast,
-    status: features.binaryVerdict ? null : beach.status,
+    status: beach.callUnknown || features.binaryVerdict ? null : beach.status,
     includeOutlook: false,
   });
 }

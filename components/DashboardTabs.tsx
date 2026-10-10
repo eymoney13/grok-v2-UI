@@ -134,6 +134,7 @@ export default function DashboardTabs({
   // call, not the 3-tier status — a beach can be Poor while its status still
   // reads "Normal" under the shared tiers.
   const underlineFor = (b: BeachData): string => {
+    if (b.callUnknown) return "bg-[#8aa0a2]";
     if (!features.binaryVerdict) return STATUS_UNDERLINE[b.status];
     return STATUS_UNDERLINE[
       b.verdict ? VERDICT_AS_STATUS[b.verdict] : b.status

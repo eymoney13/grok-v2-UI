@@ -75,6 +75,7 @@ function fromModeled(beach: BeachData, slug: string): PublicBeach {
     horizon,
     outlook: publishedOutlook(beach.forecast, beach.predictionDate, horizon),
     fallbackUsed: beach.fallbackUsed,
+    callUnknown: beach.callUnknown,
     ...copyReading(beach),
   };
 }
@@ -103,6 +104,7 @@ function fromUnmodeled(beach: BeachListItem, slug: string): PublicBeach {
     horizon: forecastHorizonFor(beach.code),
     outlook: [],
     fallbackUsed: beach.fallbackUsed,
+    callUnknown: beach.callUnknown,
     ...copyReading(beach),
   };
 }

@@ -38,6 +38,7 @@
 .beachName { font-weight: 500; font-size: 15px; line-height: 1.5; }
 .band { display: inline-flex; align-items: center; gap: 8px; background: var(--tone-bg); color: var(--tone); padding: 7px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .low { --tone: #3c6435; --tone-bg: #edf4e7; }
+.unknownCall { --tone: #3d4c50; --tone-bg: #eef2f3; }
 .moderate { --tone: #786016; --tone-bg: #f8f0d7; }
 .high { --tone: #a63d36; --tone-bg: #fbece7; }
 .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; font-size: 11px; }

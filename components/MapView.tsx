@@ -30,6 +30,9 @@ function colorFor(status: BeachData["status"]) {
 // beach's own cutoff so the map agrees with the card; everything else keeps the
 // 3-tier status.
 function readingFor(beach: BeachData, binaryVerdict: boolean) {
+  if (beach.callUnknown) {
+    return { label: "Not enough recent data to call", color: "#66777b" };
+  }
   if (binaryVerdict && beach.verdict) {
     return {
       label: beach.verdict,

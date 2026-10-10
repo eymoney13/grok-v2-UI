@@ -116,6 +116,22 @@ function asBool(raw: unknown): boolean | null {
   return null;
 }
 
+/**
+ * The rules path had no recent data to make a call.
+ * This is the word `Unknown` on `call`, `prediction`, or `final_status`.
+ * It is not `posting_status: unknown`, which means the county feed had no posting.
+ */
+export function isUnknownCall(raw: unknown): boolean {
+  return String(raw ?? "").trim().toLowerCase() === "unknown";
+}
+
+/** True when this beach or day published that no-call word. */
+export function showsUnknownCall(
+  source: { callUnknown?: boolean; finalStatus?: string | null } | null | undefined
+): boolean {
+  return source?.callUnknown === true || isUnknownCall(source?.finalStatus);
+}
+
 /** closure, warning, advisory, open, or unknown. Any other word, including "safe", is ignored. */
 export function parsePostingStatus(raw: unknown): PostingStatus | null {
   if (raw == null || raw === "") return null;
@@ -181,7 +197,9 @@ export function mergeReadings(...parts: (PublishedReading | null | undefined)[])
 export function officialPosting(reading: PublishedReading | null | undefined): OfficialPosting | null {
   const kind = reading?.postingStatus;
   if (kind !== "closure" && kind !== "warning" && kind !== "advisory") return null;
-  const detail = reading?.finalStatus?.trim() || null;
+  const rawDetail = reading?.finalStatus?.trim() || null;
+  // "Unknown" is the rules-path no-call, not a county label such as "Beach closed".
+  const detail = rawDetail && !isUnknownCall(rawDetail) ? rawDetail : null;
   const source = reading?.postingSource?.trim() || null;
   return { kind, detail, source };
 }
