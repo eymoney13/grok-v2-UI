@@ -109,6 +109,16 @@ export function statusDetail(status: Status, lang: Lang): string {
   return statusWords(status, lang).detail;
 }
 
+/** Counties the run manifest flagged. Null when the file named none. */
+export function staleCountyBanner(counties: readonly string[], lang: Lang): string | null {
+  const names = counties.map((county) => county.trim()).filter((county) => county.length > 0);
+  if (names.length === 0) return null;
+  const list = names.join(", ");
+  return lang === "es"
+    ? `La última ejecución marcó estos condados como desactualizados: ${list}.`
+    : `The latest run marked these counties stale: ${list}.`;
+}
+
 /** Rules path published Unknown. Neutral, and never a translation of "safe". */
 export function unknownCallPhrase(lang: Lang): string {
   return lang === "es"

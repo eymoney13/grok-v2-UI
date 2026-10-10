@@ -4,7 +4,7 @@ import { assignSlugs, encodeStationKey, resolveSlugMatch, slugifyName } from "..
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
 import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/statewideCounts.ts";
 import { displayBandLabel, indexScalePhrase, parseIndexBands, resolveNeptuneDisplay } from "../lib/neptuneIndex.ts";
-import { statusDetail } from "../lib/publicCopy.ts";
+import { staleCountyBanner, statusDetail } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
 import { nearestBeachNeighbors } from "../lib/beachNeighbors.ts";
 import { coordinatesOutsideWestCoast, hasMapCoordinates, nearest } from "../lib/geo.ts";
@@ -262,6 +262,12 @@ assert.match(elevated, /about half of exceedances/);
 assert.doesNotMatch(elevated, /Over the limit|\bClosed\b|\bWarning\b/);
 assert.equal(statusReading("Not recommended").pill, "Elevated risk");
 assert.equal(statusReading("Not recommended").phrase, "an elevated risk");
+assert.equal(staleCountyBanner([], "en"), null);
+assert.equal(
+  staleCountyBanner(["Orange", "Ventura"], "en"),
+  "The latest run marked these counties stale: Orange, Ventura."
+);
+assert.match(staleCountyBanner(["Orange"], "es") ?? "", /desactualizados: Orange/);
 assert.doesNotMatch(statusDetail("Not recommended", "es"), /Sobre el límite/);
 
 const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);

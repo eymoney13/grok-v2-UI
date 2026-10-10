@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { glanceLine } from "@/lib/dailySummary";
 import { hasMapCoordinates, milesBetween, nearest } from "@/lib/geo";
-import { copy, statusPill, type Lang } from "@/lib/publicCopy";
+import { copy, staleCountyBanner, statusPill, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { PublicChrome, usePublicLanguage } from "./Language";
@@ -44,14 +44,16 @@ export default function NearMeHome({
   beaches,
   predictionDate,
   readingsCurrent,
+  staleCounties = [],
 }: {
   beaches: GlanceBeach[];
   predictionDate: string;
   readingsCurrent: boolean;
+  staleCounties?: readonly string[];
 }) {
   return (
     <PublicChrome>
-      <Home beaches={beaches} predictionDate={predictionDate} readingsCurrent={readingsCurrent} />
+      <Home beaches={beaches} predictionDate={predictionDate} readingsCurrent={readingsCurrent} staleCounties={staleCounties} />
     </PublicChrome>
   );
 }
@@ -60,10 +62,12 @@ function Home({
   beaches,
   predictionDate,
   readingsCurrent,
+  staleCounties = [],
 }: {
   beaches: GlanceBeach[];
   predictionDate: string;
   readingsCurrent: boolean;
+  staleCounties?: readonly string[];
 }) {
   const { lang } = usePublicLanguage();
   const t = copy[lang];
@@ -118,6 +122,7 @@ function Home({
   const visible = results.slice(0, mode === "search" ? SEARCH_COUNT : NEAR_COUNT);
   const closestMiles = here && visible[0] && hasMapCoordinates(visible[0]) ? milesBetween(here, visible[0]) : null;
   const coastCount = statewideStatusHeadline(beaches, lang);
+  const staleCountiesNote = staleCountyBanner(staleCounties, lang);
 
   return (
     <>
@@ -136,6 +141,7 @@ function Home({
       ) : (
         <p className={styles.dateline}>{t.awaiting}</p>
       )}
+      {staleCountiesNote && <p className={styles.stale} role="status">{staleCountiesNote}</p>}
       {coastCount && <p className={styles.note}>{coastCount}</p>}
 
       <div className={styles.actions}>

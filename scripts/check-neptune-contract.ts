@@ -393,6 +393,19 @@ const manifest = parseManifest({
 assert.equal(manifest.modelVersion, "v2-test");
 assert.equal(manifest.checksPassed, false);
 assert.deepEqual(manifest.staleCounties, ["Orange"]);
+assert.deepEqual(
+  parseManifest({ stats: { stale_counties: "Ventura County, San Diego", checks_passed: true } }).staleCounties,
+  ["Ventura", "San Diego"]
+);
+assert.deepEqual(
+  parseManifest({
+    stale_counties: [
+      { county: "Orange County", stale: true },
+      { name: "Los Angeles", stale: false },
+    ],
+  }).staleCounties,
+  ["Orange"]
+);
 
 const indexed = parseArchiveRow({
   station_code: "DHS114",

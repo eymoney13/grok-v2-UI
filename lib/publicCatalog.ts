@@ -14,12 +14,14 @@ export interface PublicCatalog {
   predictionDate: string;
   generatedAt: string | null;
   readingsCurrent: boolean;
+  /** Counties named stale in outputs/run_manifest.json. Empty when the file is absent. */
+  staleCounties: string[];
 }
 
 const loadCachedBeaches = unstable_cache(
   async (): Promise<Omit<PublicCatalog, "readingsCurrent">> => {
     const config = getLocation("california");
-    if (!config) return { beaches: [], predictionDate: "", generatedAt: null };
+    if (!config) return { beaches: [], predictionDate: "", generatedAt: null, staleCounties: [] };
     const data = await loadDashboardData(config);
     const beaches = [
       ...data.beaches.map((beach) => fromModeled(beach, beach.id)),
@@ -29,6 +31,7 @@ const loadCachedBeaches = unstable_cache(
       beaches,
       predictionDate: data.predictionDate,
       generatedAt: data.generatedAt,
+      staleCounties: data.staleCounties,
     };
   },
   ["california-public-beaches"],

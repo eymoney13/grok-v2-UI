@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { dailySummary } from "@/lib/dailySummary";
-import { copy, type Lang } from "@/lib/publicCopy";
+import { copy, staleCountyBanner, type Lang } from "@/lib/publicCopy";
 import type { ConfidenceLevel } from "@/lib/publishedReading";
 import type { GlanceBeach, PublicBeach } from "@/lib/publicBeach";
 import { PublicChrome, usePublicLanguage } from "./Language";
@@ -33,12 +33,14 @@ export default function BeachPublic({
   predictionDate,
   readingsCurrent,
   advisory,
+  staleCounties = [],
 }: {
   beach: PublicBeach;
   nearby: GlanceBeach[];
   predictionDate: string;
   readingsCurrent: boolean;
   advisory: { label: string; href: string };
+  staleCounties?: readonly string[];
 }) {
   return (
     <PublicChrome>
@@ -48,6 +50,7 @@ export default function BeachPublic({
         predictionDate={predictionDate}
         readingsCurrent={readingsCurrent}
         advisory={advisory}
+        staleCounties={staleCounties}
       />
     </PublicChrome>
   );
@@ -59,18 +62,21 @@ function Beach({
   predictionDate,
   readingsCurrent,
   advisory,
+  staleCounties = [],
 }: {
   beach: PublicBeach;
   nearby: GlanceBeach[];
   predictionDate: string;
   readingsCurrent: boolean;
   advisory: { label: string; href: string };
+  staleCounties?: readonly string[];
 }) {
   const { lang } = usePublicLanguage();
   const t = copy[lang];
   const summary = dailySummary(beach, lang);
   const [copied, setCopied] = useState(false);
   const date = predictionDate || "";
+  const staleCountiesNote = staleCountyBanner(staleCounties, lang);
 
   async function copyLink() {
     const url = `${window.location.origin}/beach/${beach.slug}`;
@@ -86,6 +92,7 @@ function Beach({
     <>
       <p className={styles.meta}>{beach.county}</p>
       <h1>{beach.name}</h1>
+      {staleCountiesNote && <p className={styles.stale} role="status">{staleCountiesNote}</p>}
       {date && !readingsCurrent && (
         <p className={styles.stale} role="status">
           {t.stale} {formatDay(date, lang)}
