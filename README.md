@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). That is the public “Beaches near me” screen: browser location, or a search by name, with no account. Each beach has a page at `/beach/<slug>`. When the roster publishes `station_key`, that value is the slug. Otherwise the slug is the station code plus agency, or the beach name, county, and station code. A station code alone is not the address, because the same code is used by more than one agency. The full coast board stays at `/california`.
+Open [http://localhost:3000](http://localhost:3000). That is the public “Beaches near me” screen: browser location, or a search by name, with no account. Each beach has a page at `/beach/<slug>`. When the roster publishes `station_key` (`agency\|station_code`), the slug is the beach name plus that key with the pipe written as `~`, for example `huntington-state-beach--orange-county~0`. Otherwise the slug is the station code plus agency, or the beach name, county, and station code. A station code alone is not the address, because the same code is used by more than one agency. The full coast board stays at `/california`.
 
 `npm run build` compiles the production app. `node scripts/check-neptune-contract.ts` (Node 22, with type stripping) checks the parsers.
 

@@ -25,7 +25,7 @@ These paths and columns were confirmed from `project-neptune-v2` main (PR #1). T
 | Field | Use |
 | --- | --- |
 | `station_code` | Station code, kept as text (`0` stays `"0"`). It is not unique across agencies. | 
-| `station_key` | Optional unique id. When the cell is filled, the public path, the board path, and the React key are this value, made URL-safe. A blank cell falls back to `station_code` plus `agency` when that column exists, and otherwise to the beach name, county, and code. |
+| `station_key` | Optional unique id, format `agency\|station_code` (v2 main `8b92e31`, PR #7). When the cell is filled, the path is the beach-name slug, `--`, then the key with the pipe replaced: `huntington-state-beach--orange-county~0` for `Orange County\|0`. The `~` is the pipe. The link has no raw `\|`. That encoded key still opens the beach if the name prefix is old or missing, and the page redirects to the current slug. A blank cell falls back to `station_code` plus `agency` when that column exists, and otherwise to the beach name, county, and code. |
 | `name` | Beach name shown on the board. |
 | `lat`, `lon` | Map position. |
 | `county` | County filter and grouping. A trailing “County” is ignored when matching. |
@@ -99,7 +99,7 @@ Columns named for this file:
 
 | Field | Use |
 | --- | --- |
-| `station_key` | Optional unique id, same role as on the roster. The daily row joins to the roster on this value when both sides have it. | 
+| `station_key` | Same `agency\|station_code` value as the roster. The daily row joins on this raw value. The public path uses the URL-safe form described on the roster. | 
 | `station_code` | Same text code as the roster. Not a global id. | 
 | `agency` | Optional. Read only when the header includes `agency`. Blank stays blank. Used when `station_key` is blank. | 
 | `name`, `county` | Optional on this file. When `agency` is absent, they keep two rows with the same `station_code` apart. | 

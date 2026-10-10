@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { NEPTUNE_INDEX } from "../config/neptune-index.ts";
-import { assignSlugs, resolveSlugMatch, slugifyName } from "../lib/beachSlug.ts";
+import { assignSlugs, encodeStationKey, resolveSlugMatch, slugifyName } from "../lib/beachSlug.ts";
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
 import { bandLabel, statusDetail, BAND_GUIDANCE_ES } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
@@ -213,13 +213,33 @@ const withKey = assignSlugs(
   ],
   true
 );
-assert.deepEqual(withKey, ["oc-health-0", "hb-0", "0-ventura-county"]);
+assert.deepEqual(withKey, ["north--oc-health-0", "south--hb-0", "0-ventura-county"]);
 const keyedCatalog = [
-  { slug: "oc-health-0", code: "0", name: "North", stationKey: "oc-health-0" },
-  { slug: "hb-0", code: "0", name: "South", stationKey: "HB/0" },
+  { slug: "north--oc-health-0", code: "0", name: "North", stationKey: "oc-health-0" },
+  { slug: "south--hb-0", code: "0", name: "South", stationKey: "HB/0" },
 ];
-assert.equal(resolveSlugMatch(keyedCatalog, "HB/0")?.slug, "hb-0");
+assert.equal(resolveSlugMatch(keyedCatalog, "HB/0")?.slug, "south--hb-0");
+assert.equal(resolveSlugMatch(keyedCatalog, "old--hb-0")?.slug, "south--hb-0");
 assert.equal(resolveSlugMatch(keyedCatalog, "0"), null);
+const pipeBeaches = [
+  { code: "0", name: "Huntington State Beach", county: "Orange", stationKey: "Orange County|0" },
+  { code: "0", name: "Silver Strand State Beach", county: "San Diego", stationKey: "San Diego County|0" },
+  { code: "0", name: "Twin", county: "Orange", stationKey: "Foo Bar|0" },
+  { code: "0", name: "Twin", county: "Orange", stationKey: "Foo-Bar|0" },
+];
+const pipeSlugs = assignSlugs(pipeBeaches);
+assert.equal(encodeStationKey("Orange County|0"), "orange-county~0");
+assert.equal(pipeSlugs[0], "huntington-state-beach--orange-county~0");
+assert.equal(pipeSlugs[1], "silver-strand-state-beach--san-diego-county~0");
+assert.equal(pipeSlugs[2], "twin--foo-bar~0");
+assert.equal(pipeSlugs[3], "twin--foo-bar~0-2");
+for (const slug of pipeSlugs) assert.equal(slug.includes("|"), false);
+const pipeCatalog = pipeBeaches.map((beach, index) => ({ ...beach, slug: pipeSlugs[index]! }));
+assert.equal(resolveSlugMatch(pipeCatalog, "Orange County|0")?.slug, "huntington-state-beach--orange-county~0");
+assert.equal(resolveSlugMatch(pipeCatalog, "orange-county~0")?.stationKey, "Orange County|0");
+assert.equal(resolveSlugMatch(pipeCatalog, "old-name--orange-county~0")?.stationKey, "Orange County|0");
+assert.equal(resolveSlugMatch(pipeCatalog, "twin--foo-bar~0-2")?.stationKey, "Foo-Bar|0");
+assert.equal(resolveSlugMatch(pipeCatalog, "0"), null);
 const catalog = slugBeaches.map((beach, index) => ({ ...beach, slug: slugs[index]! }));
 assert.equal(resolveSlugMatch(catalog, "huntington-state-beach")?.slug, "huntington-state-beach-orange-0");
 assert.equal(resolveSlugMatch(catalog, "0"), null);
