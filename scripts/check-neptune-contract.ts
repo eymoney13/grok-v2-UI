@@ -23,7 +23,7 @@ import {
   selectDailySource,
   textFlag,
 } from "../lib/neptuneContract.ts";
-import { resolvePublishedCall } from "../lib/data.ts";
+import { resolvePublishedCall, statusForPublishedCall } from "../lib/data.ts";
 import {
   fetchNeptuneV2Snapshot,
   formatRemoteErrors,
@@ -177,6 +177,10 @@ assert.equal(unknownClosure ? postingLabel(unknownClosure) : null, "Closed");
 assert.deepEqual(unknownClosure ? postingHeadline(unknownClosure) : null, { title: "Closed", detail: null });
 assert.deepEqual(closed ? postingHeadline(closed) : null, { title: "Closed", detail: "Beach closed" });
 assert.equal(officialPosting(parsePublishedReading({ posting_status: "closure", final_status: "Beach closed" }))?.detail, "Beach closed");
+assert.equal(statusForPublishedCall("Normal", "Unsafe"), "Not recommended");
+assert.equal(statusForPublishedCall("Not recommended", "Safe"), "Normal");
+assert.equal(statusForPublishedCall("Slightly elevated", "Safe"), "Slightly elevated");
+assert.equal(statusForPublishedCall("Normal", "Unknown"), "Normal");
 assert.deepEqual(resolvePublishedCall("Unknown", 0.1, 0.5), { verdict: null, callUnknown: true });
 assert.deepEqual(resolvePublishedCall("safe", 0.1, 0.5).callUnknown, false);
 assert.equal(resolvePublishedCall("safe", 0.1, 0.5).verdict, "Good");

@@ -1046,6 +1046,20 @@ export function resolvePublishedCall(
   return { verdict: refineSafeVerdict(called, prob, cutoff), callUnknown: false };
 }
 
+/**
+ * The published Safe/Unsafe word is the status the page shows.
+ * Unsafe is Elevated risk even when the probability sits under the 30% tier.
+ * Safe is not Elevated risk. Unknown leaves the probability tier alone; the
+ * no-call sentence is chosen separately.
+ */
+export function statusForPublishedCall(classified: Status | null, published: unknown): Status | null {
+  if (isUnknownCall(published)) return classified;
+  const verdict = verdictFromPrediction(published);
+  if (verdict === "Poor") return "Not recommended";
+  if (verdict === "Good" && classified === "Not recommended") return "Normal";
+  return classified;
+}
+
 // Good/Poor reuses the Normal / Not-recommended palette rather than
 // introducing a second green and a second red. Callers style a verdict by
 // mapping it through this.

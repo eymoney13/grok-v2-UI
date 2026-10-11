@@ -9,6 +9,7 @@ import {
   statusFromThreshold,
   thresholdFor,
   resolvePublishedCall,
+  statusForPublishedCall,
   type BeachData,
   type BeachListItem,
   type Conditions,
@@ -627,7 +628,8 @@ export async function loadDashboardData(
       dailyRow?.probability != null
         ? dailyRow.probability
         : (archivedNow?.probability ?? Number(now.exc_probability));
-    const status = classify(prob);
+    const publishedToday = dailyRow?.call ?? archivedNow?.call ?? now.prediction;
+    const status = statusForPublishedCall(classify(prob), publishedToday);
     if (!status) {
       if (usingV2 && rowUnknown) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
       continue;
@@ -715,7 +717,7 @@ export async function loadDashboardData(
         const date = addUtcDays(dailyDate, lead);
         if (!date) continue;
         const p = horizon.probability;
-        const dayStatus = classify(p, threshold);
+        const dayStatus = statusForPublishedCall(classify(p, threshold), horizon.call);
         if (!dayStatus) continue;
         const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow.releases, leadHits, lead);
         const called = resolveVerdict(horizon.call, p, threshold);
