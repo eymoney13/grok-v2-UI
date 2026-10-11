@@ -457,18 +457,51 @@ export function regionForCounty(county: string | null, regions: RegionDef[]): st
   return null;
 }
 
+function staleCountyNames(raw: unknown): string[] {
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((county) => normalizeCounty(county))
+      .filter((county): county is string => !!county);
+  }
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw) {
+    if (isObj(item)) {
+      const flagged = item.stale ?? item.flagged ?? item.is_stale ?? item.isStale;
+      if (flagged === false || flagged === 0 || flagged === "false") continue;
+      const name = normalizeCounty(item.county ?? item.name ?? item.county_name ?? item.countyName);
+      if (name) names.push(name);
+      continue;
+    }
+    const name = normalizeCounty(item);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+function staleCountiesFromManifest(data: Record<string, unknown>): string[] {
+  const direct = staleCountyNames(data.stale_counties ?? data.staleCounties);
+  if (direct.length > 0) return direct;
+  for (const key of ["stats", "summary", "run"]) {
+    const nested = data[key];
+    if (!isObj(nested)) continue;
+    const names = staleCountyNames(nested.stale_counties ?? nested.staleCounties);
+    if (names.length > 0) return names;
+  }
+  return [];
+}
+
 export function parseManifest(data: unknown): RunManifest {
   if (!isObj(data)) {
     return { generatedAt: null, modelVersion: null, staleCounties: [], checksPassed: null };
   }
-  const stale = data.stale_counties ?? data.staleCounties ?? [];
+  const nested = ["stats", "summary", "run"].map((key) => data[key]).find(isObj);
   return {
-    generatedAt: asTimestamp(data.generated_at ?? data.generatedAt),
-    modelVersion: textOrNull(data.model_version ?? data.modelVersion),
-    staleCounties: Array.isArray(stale)
-      ? stale.map((county) => normalizeCounty(county)).filter((county): county is string => !!county)
-      : [],
-    checksPassed: asBool(data.checks_passed ?? data.checksPassed),
+    generatedAt: asTimestamp(data.generated_at ?? data.generatedAt ?? nested?.generated_at ?? nested?.generatedAt),
+    modelVersion: textOrNull(data.model_version ?? data.modelVersion ?? nested?.model_version ?? nested?.modelVersion),
+    staleCounties: staleCountiesFromManifest(data),
+    checksPassed: asBool(data.checks_passed ?? data.checksPassed ?? nested?.checks_passed ?? nested?.checksPassed),
   };
 }
 
@@ -501,6 +534,17 @@ export interface DailyJoinedRow {
   releases: DayReleases;
   /** This row's location status or flag says the position is unknown. */
   locationUnknown: boolean;
+  /**
+   * `call` or `prediction` on this daily row. Not `final_status`.
+   * The word Unknown is a no-call even when probability is blank.
+   */
+  call: string | null;
+  /** `probability` or `exc_probability`. Null when the cell is blank. */
+  probability: number | null;
+  /** Calibrated probability on this row. Null when the column is absent. */
+  calibratedProbability: number | null;
+  /** `prediction_date`, `forecast_date`, or `date` on this row. */
+  predictionDate: string | null;
 }
 
 export interface DailyStatusFile {
@@ -554,16 +598,21 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
     const code = stationCode(first(row, DAILY_STATION_KEYS));
     if (!code) continue;
     rawCount.set(code, (rawCount.get(code) ?? 0) + 1);
+    const extra = optionalModelFields(row);
     const joined: DailyJoinedRow = {
       code,
       agency: agencyColumn ? agencyFromRow(row) : null,
       name: textOrNull(first(row, DAILY_NAME_KEYS)),
       county: normalizeCounty(first(row, DAILY_COUNTY_KEYS)),
       stationKey: stationKeyFromRow(row),
-      reading: withPostingFileDate(parsePublishedReading(row), generatedAt),
+      reading: withPostingFileDate(extra.reading, generatedAt),
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
       locationUnknown: locationUnknownFromRow(row),
+      call: textOrNull(first(row, ["call", "prediction"])),
+      probability: asFraction(first(row, ["probability", "exc_probability"])),
+      calibratedProbability: extra.calibratedProbability,
+      predictionDate: asDateString(first(row, ["prediction_date", "forecast_date", "date"])),
     };
     const key = dailyIdentityKey(joined, agencyColumn);
     if (!byIdentity.has(key)) order.push(key);
@@ -749,17 +798,21 @@ export function parseLeadStatusRows(rows: Record<string, unknown>[]): LeadStatus
     const code = stationCode(first(row, DAILY_STATION_KEYS));
     const lead = leadNumberFromRow(row);
     if (!code || lead == null) continue;
-    const reading = parsePublishedReading(row);
+    const extra = optionalModelFields(row);
     kept.push({
       code,
       agency: agencyColumn ? agencyFromRow(row) : null,
       name: textOrNull(first(row, DAILY_NAME_KEYS)),
       county: normalizeCounty(first(row, DAILY_COUNTY_KEYS)),
       stationKey: stationKeyFromRow(row),
-      reading,
+      reading: extra.reading,
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
       locationUnknown: locationUnknownFromRow(row),
+      call: textOrNull(first(row, ["call", "prediction"])),
+      probability: asFraction(first(row, ["probability", "exc_probability"])),
+      calibratedProbability: extra.calibratedProbability,
+      predictionDate: asDateString(first(row, ["prediction_date", "forecast_date", "date"])),
       lead,
       maturity: leadRelease(row, lead),
     });

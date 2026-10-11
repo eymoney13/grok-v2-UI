@@ -1,6 +1,7 @@
 import "server-only";
 
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import Papa from "papaparse";
 import {
@@ -35,6 +36,7 @@ import {
   type StationArchive,
 } from "./neptuneContract";
 import { parseIndexBands, type IndexScale } from "./neptuneIndex.ts";
+import { fetchNeptuneV2Snapshot, formatRemoteErrors, NEPTUNE_V2_REPO, NEPTUNE_V2_REF } from "./neptuneRemote.ts";
 import type { PublishedReading } from "./publishedReading.ts";
 
 /**
@@ -42,8 +44,9 @@ import type { PublishedReading } from "./publishedReading.ts";
  *
  * Preference order for a statewide board:
  *   1. NEPTUNE_V2_DIR, when set (a local checkout of project-neptune-v2)
- *   2. data/neptune-v2 in this repo (a sample in the v2 shape)
- *   3. public/data/<slug> published CSVs
+ *   2. The latest files from eymoney13/project-neptune-v2 main, fetched at runtime
+ *   3. data/neptune-v2 in this repo (committed snapshot, used when that fetch fails)
+ *   4. public/data/<slug> published CSVs
  *
  * Wide nowcast and forecast files are optional on top of the archive. When a
  * v2 path is missing, the published CSV for that input is used instead.
@@ -117,11 +120,52 @@ const EMPTY_BUNDLE: V2Bundle = {
   dailySource: "history",
 };
 
-function v2Roots(): string[] {
+/**
+ * Preference:
+ *   1. NEPTUNE_V2_DIR, a local checkout. Set NEPTUNE_V2_REMOTE=off to skip the network.
+ *   2. A snapshot just read from project-neptune-v2 main (raw, then the contents API).
+ *   3. data/neptune-v2 in this repo, the committed fallback.
+ */
+async function v2Roots(): Promise<string[]> {
   const env = process.env.NEPTUNE_V2_DIR?.trim();
   const roots = env ? [env] : [];
+  if (!env && process.env.NEPTUNE_V2_REMOTE !== "off") {
+    const remote = await remoteSnapshotRoot();
+    if (remote) roots.push(remote);
+  }
   roots.push(path.join(process.cwd(), "data", "neptune-v2"));
   return roots;
+}
+
+let remoteSnapshot: Promise<string | null> | null = null;
+
+function remoteToken(): string | null {
+  const named = process.env.NEPTUNE_V2_GITHUB_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim();
+  return named || null;
+}
+
+async function remoteSnapshotRoot(): Promise<string | null> {
+  if (!remoteSnapshot) remoteSnapshot = materializeRemoteSnapshot();
+  return remoteSnapshot;
+}
+
+async function materializeRemoteSnapshot(): Promise<string | null> {
+  const attempt = await fetchNeptuneV2Snapshot({ token: remoteToken() });
+  if (!attempt.ok) {
+    console.warn(
+      `[neptune-v2] Could not read ${NEPTUNE_V2_REPO} ${NEPTUNE_V2_REF}. ${formatRemoteErrors(attempt)} Using the committed data/neptune-v2 snapshot.`
+    );
+    return null;
+  }
+  const root = path.join(tmpdir(), "neptune-v2-remote");
+  await mkdir(root, { recursive: true });
+  for (const [file, text] of Object.entries(attempt.files)) {
+    const destination = path.join(root, file);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, text);
+  }
+  console.warn(`[neptune-v2] Read ${NEPTUNE_V2_REPO} ${NEPTUNE_V2_REF} via ${attempt.method}.`);
+  return root;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -215,7 +259,7 @@ async function loadThresholds(filePath: string | null): Promise<Record<string, n
 
 export async function loadV2Bundle(): Promise<V2Bundle> {
   let root: string | null = null;
-  for (const candidate of v2Roots()) {
+  for (const candidate of await v2Roots()) {
     const roster = await firstExisting([
       path.join(candidate, "data", "roster.json"),
       path.join(candidate, "data", "roster.csv"),

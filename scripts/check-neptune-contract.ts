@@ -24,6 +24,12 @@ import {
   textFlag,
 } from "../lib/neptuneContract.ts";
 import { resolvePublishedCall } from "../lib/data.ts";
+import {
+  fetchNeptuneV2Snapshot,
+  formatRemoteErrors,
+  githubContentsUrl,
+  rawGithubUrl,
+} from "../lib/neptuneRemote.ts";
 import { matchDailyRow, matchLeadRows } from "../lib/stationIdentity.ts";
 import {
   confidenceWords,
@@ -393,6 +399,119 @@ const manifest = parseManifest({
 assert.equal(manifest.modelVersion, "v2-test");
 assert.equal(manifest.checksPassed, false);
 assert.deepEqual(manifest.staleCounties, ["Orange"]);
+
+const manifestNested = parseManifest({
+  stats: {
+    generated_at: "2026-10-11T12:00:00Z",
+    model_version: "nested",
+    checks_passed: true,
+    stale_counties: "Ventura County, San Diego",
+  },
+});
+assert.equal(manifestNested.modelVersion, "nested");
+assert.equal(manifestNested.checksPassed, true);
+assert.equal(manifestNested.generatedAt, "2026-10-11T12:00:00.000Z");
+assert.deepEqual(manifestNested.staleCounties, ["Ventura", "San Diego"]);
+
+const manifestObjects = parseManifest({
+  stale_counties: [
+    { county: "Orange County", stale: true },
+    { county: "Los Angeles", stale: false },
+    { name: "San Diego County", flagged: "false" },
+    { county: "Ventura", is_stale: 1 },
+    { county: "Santa Barbara", stale: 0 },
+  ],
+});
+assert.deepEqual(manifestObjects.staleCounties, ["Orange", "Ventura"]);
+
+const unknownDaily = parseDailyStatusRows([
+  {
+    station_key: "VCEHD|1100",
+    station_code: "1100",
+    call: "Unknown",
+    probability: "",
+    final_status: "Unknown",
+  },
+]);
+const unknownBeach = unknownDaily.rows.find((row) => row.stationKey === "VCEHD|1100");
+assert.ok(unknownBeach);
+assert.equal(unknownBeach.code, "1100");
+assert.equal(unknownBeach.call, "Unknown");
+assert.equal(unknownBeach.probability, null);
+assert.equal(unknownBeach.calibratedProbability, null);
+assert.equal(unknownBeach.predictionDate, null);
+assert.equal(unknownBeach.reading.finalStatus, "Unknown");
+assert.equal(officialPosting(unknownBeach.reading), null);
+assert.equal(isUnknownCall(unknownBeach.call), true);
+assert.equal(isUnknownCall(unknownBeach.reading.finalStatus), true);
+
+const finalStatusOnly = parseDailyStatusRows([{ station_code: "U2", final_status: "Unknown" }]);
+assert.equal(finalStatusOnly.rows[0]?.call, null);
+assert.equal(finalStatusOnly.rows[0]?.probability, null);
+assert.equal(finalStatusOnly.rows[0]?.reading.finalStatus, "Unknown");
+
+const filledDaily = parseDailyStatusRows([
+  {
+    station_code: "P1",
+    call: "Unsafe",
+    probability: 0.62,
+    prediction_date: "2026-10-11",
+    calibrated_probability: 0.4,
+  },
+]);
+assert.equal(filledDaily.rows[0]?.call, "Unsafe");
+assert.equal(filledDaily.rows[0]?.probability, 0.62);
+assert.equal(filledDaily.rows[0]?.predictionDate, "2026-10-11");
+assert.equal(filledDaily.rows[0]?.calibratedProbability, 0.4);
+
+function mockFetch(routes: Record<string, { status: number; body: string }>): typeof fetch {
+  return (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const hit = routes[url];
+    if (!hit) return new Response("missing", { status: 404 });
+    return new Response(hit.body, { status: hit.status });
+  }) as typeof fetch;
+}
+
+const currentRaw = rawGithubUrl("outputs/daily/current.csv");
+const rosterRaw = rawGithubUrl("data/roster.json");
+const currentApi = githubContentsUrl("outputs/daily/current.csv");
+const rosterApi = githubContentsUrl("data/roster.json");
+const manifestApi = githubContentsUrl("outputs/run_manifest.json");
+const bandsApi = githubContentsUrl("config/neptune_index_bands.json");
+const staleApi = githubContentsUrl("config/staleness_thresholds.json");
+
+const viaApi = await fetchNeptuneV2Snapshot({
+  token: null,
+  fetchImpl: mockFetch({
+    [currentRaw]: { status: 404, body: "404: Not Found" },
+    [currentApi]: { status: 200, body: "station_code,call\n1100,Unknown\n" },
+    [rosterApi]: { status: 200, body: "[]" },
+    [manifestApi]: { status: 404, body: "Not Found" },
+    [bandsApi]: { status: 200, body: "{}" },
+    [staleApi]: { status: 200, body: "{}" },
+  }),
+});
+assert.equal(viaApi.ok, true);
+assert.equal(viaApi.method, "api");
+assert.match(viaApi.files["outputs/daily/current.csv"] ?? "", /Unknown/);
+assert.equal(viaApi.files["data/roster.json"], "[]");
+assert.equal(viaApi.files["outputs/run_manifest.json"], undefined);
+assert.ok(viaApi.errors.some((error) => error.method === "raw" && error.status === 404));
+
+const bothMissing = await fetchNeptuneV2Snapshot({
+  token: null,
+  fetchImpl: mockFetch({
+    [currentRaw]: { status: 404, body: "404: Not Found" },
+    [rosterRaw]: { status: 404, body: "404: Not Found" },
+    [currentApi]: { status: 404, body: '{"message":"Not Found","status":"404"}' },
+  }),
+});
+assert.equal(bothMissing.ok, false);
+assert.equal(bothMissing.method, null);
+assert.deepEqual(bothMissing.files, {});
+assert.match(formatRemoteErrors(bothMissing), /raw .*current\.csv → HTTP 404: 404: Not Found/);
+assert.match(formatRemoteErrors(bothMissing), /api .*current\.csv\?ref=main → HTTP 404/);
 
 const indexed = parseArchiveRow({
   station_code: "DHS114",

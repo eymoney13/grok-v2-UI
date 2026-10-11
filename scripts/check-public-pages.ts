@@ -4,7 +4,7 @@ import { assignSlugs, encodeStationKey, resolveSlugMatch, slugifyName } from "..
 import { dailySummary, publishedOutlook, type SummaryFacts } from "../lib/dailySummary.ts";
 import { SHOW_STATEWIDE_STATUS_COUNTS, statewideStatusHeadline } from "../lib/statewideCounts.ts";
 import { displayBandLabel, indexScalePhrase, parseIndexBands, resolveNeptuneDisplay } from "../lib/neptuneIndex.ts";
-import { statusDetail } from "../lib/publicCopy.ts";
+import { staleCountyBanner, statusDetail } from "../lib/publicCopy.ts";
 import { statusReading } from "../lib/waterStatus.ts";
 import { cautiousElevatedNote, elevatedCallStyle, TIER_ELEVATED_STYLE } from "../lib/tierCallStyle.ts";
 import { nearestBeachNeighbors } from "../lib/beachNeighbors.ts";
@@ -282,6 +282,12 @@ assert.doesNotMatch(cautiousElevatedNote("limited_data", "Not recommended", "es"
 assert.equal(cautiousElevatedNote("model_pool", "Not recommended", "en"), null);
 assert.equal(cautiousElevatedNote("limited_data", "Normal", "en"), null);
 assert.equal(cautiousElevatedNote(null, "Not recommended", "en"), null);
+assert.equal(staleCountyBanner([], "en"), null);
+assert.equal(
+  staleCountyBanner(["Orange", "Ventura"], "en"),
+  "The latest run marked these counties stale: Orange, Ventura."
+);
+assert.match(staleCountyBanner(["Orange"], "es") ?? "", /desactualizados: Orange/);
 const limitedHigh = dailySummary(
   { ...base, status: "Not recommended", tier: "limited_data", confidence: "high" },
   "en"

@@ -390,18 +390,24 @@ function resolveVerdict(published: unknown, prob: number, cutoff: number): { ver
   return resolvePublishedCall(published, prob, cutoff);
 }
 
-/** Archive call, nowcast prediction, and final_status. Unknown in any of them wins. */
+/**
+ * Daily `call`, archive call, nowcast prediction, and final_status.
+ * Unknown in any of them wins, including when the probability cell is blank.
+ * A filled daily call is the current file and wins over an older archive word.
+ */
 function todayCall(
   archiveCall: unknown,
   nowcastCall: unknown,
+  dailyCall: unknown,
   finalStatus: unknown,
   prob: number,
   cutoff: number
 ): { verdict: Verdict | null; callUnknown: boolean } {
-  const published = isUnknownCall(archiveCall) || isUnknownCall(nowcastCall) ? "Unknown" : (archiveCall ?? nowcastCall);
-  const called = resolveVerdict(published, prob, cutoff);
-  if (called.callUnknown || isUnknownCall(finalStatus)) return { verdict: null, callUnknown: true };
-  return called;
+  if (isUnknownCall(archiveCall) || isUnknownCall(nowcastCall) || isUnknownCall(dailyCall) || isUnknownCall(finalStatus)) {
+    return { verdict: null, callUnknown: true };
+  }
+  const published = dailyCall ?? archiveCall ?? nowcastCall;
+  return resolveVerdict(published, prob, cutoff);
 }
 
 /** dayN_call and dayN_prediction. Unknown in either cell wins over a safe or unsafe word. */
@@ -552,6 +558,28 @@ export async function loadDashboardData(
         generated_at: archivedNow.generatedAt ?? archivedNow.publishTimestampUtc ?? undefined,
       };
     }
+    const dailyRow = dailyFor(bundle, entry, sharing);
+    const dailyDate =
+      dailyRow?.predictionDate ??
+      (bundle?.dailyGeneratedAt && /^\d{4}-\d{2}-\d{2}/.test(bundle.dailyGeneratedAt)
+        ? bundle.dailyGeneratedAt.slice(0, 10)
+        : null);
+    if ((!now || !now.prediction_date) && dailyRow?.probability != null && dailyDate) {
+      now = {
+        StationCode: code,
+        Latitude: entry.latitude,
+        Longitude: entry.longitude,
+        prediction_date: dailyDate,
+        exc_probability: dailyRow.probability,
+        prediction: dailyRow.call ?? undefined,
+        generated_at: bundle?.dailyGeneratedAt ?? undefined,
+      };
+    }
+    const rowUnknown =
+      isUnknownCall(dailyRow?.call) ||
+      isUnknownCall(dailyRow?.reading.finalStatus) ||
+      isUnknownCall(now?.prediction) ||
+      isUnknownCall(archivedNow?.call);
     if (!now || !now.prediction_date) {
       if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
       continue;
@@ -582,9 +610,15 @@ export async function loadDashboardData(
         ? statusFromThreshold(p, cutoff)
         : statusFromProb(p, code, thresholdMap);
 
-    const prob = archivedNow?.probability ?? Number(now.exc_probability);
+    const prob =
+      dailyRow?.probability != null
+        ? dailyRow.probability
+        : (archivedNow?.probability ?? Number(now.exc_probability));
     const status = classify(prob);
-    if (!status) continue;
+    if (!status) {
+      if (usingV2 && rowUnknown) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
+      continue;
+    }
 
     const rawFactors = factorSlots.map((n) => now[`top_factor_${n}`]);
     const factors = buildFactors(rawFactors);
@@ -592,7 +626,6 @@ export async function loadDashboardData(
     const conditions = buildConditions(now);
     const nowRecord = now as unknown as Record<string, unknown>;
     const wideOptional = optionalModelFields(nowRecord);
-    const dailyRow = dailyFor(bundle, entry, sharing);
     const leadHits = leadsFor(bundle, entry, sharing);
     const lead0 = leadHits.find((row) => row.lead === 0) ?? null;
     const mergedIndex = mergeNeptuneFields(
@@ -750,10 +783,10 @@ export async function loadDashboardData(
       insight: normalizeInsight(String(now.insight ?? ""), status),
       status,
       threshold,
-      ...todayCall(archivedNow?.call, now.prediction, reading.finalStatus, prob, threshold),
+      ...todayCall(archivedNow?.call, now.prediction, dailyRow?.call, reading.finalStatus, prob, threshold),
       noRecentSample: parseBool(now.no_recent_sample),
       ...rosterFacts(entry, archive, bundle),
-      calibratedProbability: archive?.calibratedProbability ?? wideOptional.calibratedProbability,
+      calibratedProbability: dailyRow?.calibratedProbability ?? archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
       ...reading,
       ...presentIndex(mergedIndex, {
@@ -904,7 +937,10 @@ function unmodeledItem(
     staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
     hasEstimate: false,
     status: null,
-    callUnknown: isUnknownCall(reading.finalStatus) || isUnknownCall(archive?.nowcast?.call),
+    callUnknown:
+      isUnknownCall(reading.finalStatus) ||
+      isUnknownCall(dailyRow?.call) ||
+      isUnknownCall(archive?.nowcast?.call),
     probability: null,
     predictionDate: null,
     fallbackUsed: archive?.fallbackUsed ?? null,
