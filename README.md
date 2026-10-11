@@ -22,13 +22,9 @@ All file reads go through `lib/neptuneAdapter.ts`. Column names are parsed in `l
 1. If `NEPTUNE_V2_DIR` is set, that directory is treated as a `project-neptune-v2` checkout (`data/roster.json`, `outputs/forecast_archive/forecasts.csv`, `outputs/daily/current.csv`, `config/staleness_thresholds.json`, and the wide CSVs). The network fetch is skipped. `NEPTUNE_V2_REMOTE=off` skips it too.
 2. Otherwise the app fetches `outputs/daily/current.csv` and `data/roster.json` from `eymoney13/project-neptune-v2` `main`, plus the run manifest, index bands, and staleness config when those files exist. Raw GitHub is tried first, then the contents API. A token in `NEPTUNE_V2_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` is sent when one is set. The download stays in a temp directory and is not committed.
 3. If that fetch fails, the app uses the committed snapshot in `data/neptune-v2/`.
-4. A wide CSV that is not in the v2 tree falls back to `public/data/southbay/`.
+4. A wide CSV that is not in the v2 tree falls back to `public/data/southbay/`, unless `outputs/daily/current.csv` is the daily file. That file already carries the nowcast and days 1–3, so the older South Bay CSVs are not mixed in.
 
-`data/neptune-v2/` is a local sample and the committed fallback. It is the published South Bay files rewritten into the v2 layout, not a dump of the live statewide roster. This environment cannot read `project-neptune-v2`, so the running app warns and keeps this snapshot until a token that can see that repo is set. Rebuild the sample with:
-
-```bash
-node scripts/build-v2-sample.mjs
-```
+`data/neptune-v2/` is the committed snapshot of `project-neptune-v2` main generated at 2026-10-10T14:56:12Z: 679 stations in `outputs/daily/current.csv`, plus the roster, run manifest, index bands, and staleness config from that publish. The app still tries to fetch a newer copy from that repo at runtime and uses this snapshot when the fetch fails. `node scripts/build-v2-sample.mjs` will not overwrite a snapshot that already has `outputs/daily/current.csv`.
 
 `/california` uses the roster file instead of the hardcoded station list. Stations with no model row show as “No estimate today.” Blank fields stay blank.
 

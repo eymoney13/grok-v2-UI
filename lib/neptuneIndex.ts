@@ -146,13 +146,21 @@ function chromeFor(id: string) {
   return CHROME[id] ?? NEUTRAL;
 }
 
+function bandEndpoint(row: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    if (row[key] == null || row[key] === "") continue;
+    return numberOr(row[key], Number.NaN);
+  }
+  return Number.NaN;
+}
+
 function parseBand(raw: unknown, scaleMin: number, scaleMax: number): IndexBand | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const id = normalizeBandToken(row.id ?? row.band ?? row.name);
   if (!id) return null;
-  const min = numberOr(row.min ?? row.minimum, Number.NaN);
-  const max = numberOr(row.max ?? row.maximum, Number.NaN);
+  const min = bandEndpoint(row, ["min", "minimum", "min_index", "minIndex"]);
+  const max = bandEndpoint(row, ["max", "maximum", "max_index", "maxIndex"]);
   if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) return null;
   if (max < scaleMin || min > scaleMax) return null;
   const paint = chromeFor(id);
@@ -184,8 +192,25 @@ function textOrNull(raw: unknown): string | null {
 
 function parseBandList(raw: unknown, scaleMin: number, scaleMax: number): IndexBand[] {
   if (!Array.isArray(raw)) return [];
-  const bands = raw
-    .map((item) => parseBand(item, scaleMin, scaleMax))
+  const drafts = raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const min = bandEndpoint(row, ["min", "minimum", "min_index", "minIndex"]);
+      const explicitMax = bandEndpoint(row, ["max", "maximum", "max_index", "maxIndex"]);
+      if (!Number.isFinite(min)) return null;
+      return { row, min, max: Number.isFinite(explicitMax) ? explicitMax : null };
+    })
+    .filter((item): item is { row: Record<string, unknown>; min: number; max: number | null } => item != null)
+    .sort((a, b) => a.min - b.min);
+  const closed = drafts.map((draft, index) => {
+    if (draft.max != null) return draft;
+    const next = drafts[index + 1];
+    const max = next ? Math.max(draft.min, next.min - 1) : scaleMax;
+    return { ...draft, row: { ...draft.row, min: draft.min, max } };
+  });
+  const bands = closed
+    .map((draft) => parseBand(draft.row, scaleMin, scaleMax))
     .filter((band): band is IndexBand => band != null);
   return bands.sort((a, b) => a.min - b.min || a.max - b.max);
 }
@@ -219,7 +244,8 @@ export function parseIndexBands(raw: unknown): IndexScale | null {
   if (!(scaleMax > scaleMin)) return null;
   const higherRaw = data.higher_is_better ?? data.higherIsBetter;
   const higherIsBetter = higherRaw === false || higherRaw === "false" ? false : true;
-  const bands = parseBandList(data.bands, scaleMin, scaleMax);
+  const shared = data.bands ?? (Array.isArray(data.default) ? data.default : null);
+  const bands = parseBandList(shared, scaleMin, scaleMax);
   const tiers = parseTiers(data.tiers ?? data.by_tier ?? data.byTier, scaleMin, scaleMax);
   if (bands.length === 0 && Object.keys(tiers).length === 0) return null;
   return { scaleMin, scaleMax, higherIsBetter, bands, tiers };

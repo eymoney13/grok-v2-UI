@@ -1,0 +1,108 @@
+
+{
+  "generated_at": "2026-10-10T14:56:12Z",
+  "model_version": "long_history",
+  "roster_version": "2026-10-09",
+  "roster_row_count": 679,
+  "stations_scored": 678,
+  "preflight_status": "staleness",
+  "stale_counties": [
+    {
+      "county": "Humboldt",
+      "gap_type": "loader behind source"
+    },
+    {
+      "county": "Monterey",
+      "gap_type": "source stale"
+    },
+    {
+      "county": "Orange",
+      "gap_type": "source stale"
+    },
+    {
+      "county": "San Francisco",
+      "gap_type": "source stale"
+    }
+  ],
+  "neptune_index": null,
+  "neptune_band": null,
+  "station_failures": [],
+  "open_meteo": {
+    "stations": 679,
+    "cells": 181,
+    "http_requests": 8,
+    "cache_hits": 0,
+    "retries": 0,
+    "batch_errors": [],
+    "elapsed_seconds": 6.035,
+    "batch_size": 50,
+    "past_days": 3,
+    "forecast_days": 4,
+    "grid_degrees": 0.05,
+    "run_dates": [
+      "2026-10-10"
+    ]
+  },
+  "runtime_seconds": 20.482,
+  "stations_published": 679,
+  "published": true,
+  "posting_source_failures": [],
+  "posting_sources": [
+    {
+      "source": "Ventura ArcGIS",
+      "status": "ok",
+      "fetched_at": "2026-10-10T14:56:12Z",
+      "stations": 40
+    },
+    {
+      "source": "OC ocbeachinfo",
+      "status": "ok",
+      "fetched_at": "2026-10-10T14:56:12Z",
+      "stations": 185
+    }
+  ],
+  "forecast_flag": "experimental",
+  "coordinate_flags": [
+    {
+      "station_key": "VCEHD|1100",
+      "station_code": "1100",
+      "county": "Ventura",
+      "reason": "county_mismatch",
+      "lat": 42.114,
+      "lon": -124.45083333333334,
+      "coordinate_source": "sample_target"
+    }
+  ],
+  "coordinate_lookup_error": null,
+  "stage_seconds": {
+    "postings": 0.496,
+    "coordinates": 1.788,
+    "samples": 2.74,
+    "weather": 6.036,
+    "source_newest": 17.135,
+    "features": 1.572,
+    "score": 1.521
+  },
+  "manifest_staleness": {
+    "alert": false,
+    "previous_generated_at": "2026-10-10T14:45:05Z",
+    "age_hours": 0.185,
+    "limit_hours": 30
+  },
+  "tiers": {
+    "model_pool": 182,
+    "limited_data": 497
+  },
+  "unsafe_share": {
+    "overall": 0.154639,
+    "model_pool": 0.076923,
+    "limited_data": 0.183099
+  },
+  "mean_probability": {
+    "overall": 0.077589,
+    "model_pool": 0.079123,
+    "limited_data": 0.077026
+  }
+}
+
+

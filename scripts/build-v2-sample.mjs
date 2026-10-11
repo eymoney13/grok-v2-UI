@@ -17,6 +17,12 @@ import { coordinateWordUnknown, isInWestCoastBox, locationMarkedUnknown, outside
 const root = process.cwd();
 const source = path.join(root, "public", "data", "southbay");
 const dest = path.join(root, "data", "neptune-v2");
+if (fs.existsSync(path.join(dest, "outputs", "daily", "current.csv")) && process.env.NEPTUNE_REBUILD_SAMPLE !== "1") {
+  console.error(
+    "data/neptune-v2 already has outputs/daily/current.csv, the published snapshot. Refusing to replace it with the South Bay stand-in. Set NEPTUNE_REBUILD_SAMPLE=1 to rebuild that stand-in anyway."
+  );
+  process.exit(1);
+}
 
 const NAMES = {
   "Francis State Beach": "Half Moon Bay - Francis State Beach",

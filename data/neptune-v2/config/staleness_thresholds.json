@@ -1,4 +1,190 @@
+
 {
-  "default_days": 7,
-  "counties": {}
+  "minimum_days": 14,
+  "multiplier": 2,
+  "rule": "Alert when a county's newest result is older than 2x its typical longest gap between samples, minimum 14 days.",
+  "gap_definition": "typical_longest_gap_days is the median, across beach stations with at least 8 sample days, of (last_sample - first_sample) / (sample_days - 1). computed_threshold_days = max(14, round(2 * typical_longest_gap_days)). Los Angeles, San Diego, and San Francisco are seeded at 14; Orange and Long Beach City at 21; Santa Barbara and Ventura at 28; San Luis Obispo at 90. Other Bay Area and Central Coast counties are clamped to 35-60.",
+  "source": {
+    "name": "data.ca.gov BeachWatch",
+    "dataset": "beach-water-quality-postings-and-closures",
+    "resource_id": "7bd961cf-abe4-433b-8033-378161237ff3",
+    "resource_name": "Beach Water Quality Monitoring Results - Bacteria"
+  },
+  "counties": {
+    "Alameda": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 9.36,
+      "computed_threshold_days": 19,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "East Bay Parks District",
+      "group": "bay_area",
+      "station_count": 6
+    },
+    "Contra Costa": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 10.04,
+      "computed_threshold_days": 20,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "East Bay Parks District",
+      "group": "bay_area",
+      "station_count": 2
+    },
+    "Humboldt": {
+      "threshold_days": 22,
+      "typical_longest_gap_days": 10.92,
+      "computed_threshold_days": 22,
+      "threshold_source": "computed",
+      "normally_has_data": true,
+      "beachwatch_county": "Humboldt",
+      "group": "other",
+      "station_count": 5
+    },
+    "Long Beach City": {
+      "threshold_days": 21,
+      "typical_longest_gap_days": 8.78,
+      "computed_threshold_days": 18,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "Long Beach City",
+      "group": "seed",
+      "station_count": 15,
+      "aliases": [
+        "Long Beach"
+      ]
+    },
+    "Los Angeles": {
+      "threshold_days": 14,
+      "typical_longest_gap_days": 7.7,
+      "computed_threshold_days": 15,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "Los Angeles",
+      "group": "seed",
+      "station_count": 80
+    },
+    "Marin": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 12.56,
+      "computed_threshold_days": 25,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "Marin",
+      "group": "bay_area",
+      "station_count": 29
+    },
+    "Mendocino": {
+      "threshold_days": 31,
+      "typical_longest_gap_days": 15.46,
+      "computed_threshold_days": 31,
+      "threshold_source": "computed",
+      "normally_has_data": true,
+      "beachwatch_county": "Mendocino",
+      "group": "other",
+      "station_count": 5
+    },
+    "Monterey": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 11.6,
+      "computed_threshold_days": 23,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "Monterey",
+      "group": "central_coast",
+      "station_count": 15
+    },
+    "Orange": {
+      "threshold_days": 21,
+      "typical_longest_gap_days": 7.9,
+      "computed_threshold_days": 16,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "Orange",
+      "group": "seed",
+      "station_count": 191
+    },
+    "San Diego": {
+      "threshold_days": 14,
+      "typical_longest_gap_days": 7.91,
+      "computed_threshold_days": 16,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "San Diego",
+      "group": "seed",
+      "station_count": 149
+    },
+    "San Francisco": {
+      "threshold_days": 14,
+      "typical_longest_gap_days": 6.21,
+      "computed_threshold_days": 14,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "San Francisco",
+      "group": "seed",
+      "station_count": 20
+    },
+    "San Luis Obispo": {
+      "threshold_days": 90,
+      "typical_longest_gap_days": 9.13,
+      "computed_threshold_days": 18,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "San Luis Obispo",
+      "group": "seed",
+      "station_count": 19
+    },
+    "San Mateo": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 7.92,
+      "computed_threshold_days": 16,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "San Mateo",
+      "group": "bay_area",
+      "station_count": 35
+    },
+    "Santa Barbara": {
+      "threshold_days": 28,
+      "typical_longest_gap_days": 7.39,
+      "computed_threshold_days": 15,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "Santa Barbara",
+      "group": "seed",
+      "station_count": 19
+    },
+    "Santa Cruz": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 11.94,
+      "computed_threshold_days": 24,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "Santa Cruz",
+      "group": "central_coast",
+      "station_count": 41
+    },
+    "Sonoma": {
+      "threshold_days": 35,
+      "typical_longest_gap_days": 12.95,
+      "computed_threshold_days": 26,
+      "threshold_source": "bay_area_central_coast_band",
+      "normally_has_data": true,
+      "beachwatch_county": "Sonoma",
+      "group": "bay_area",
+      "station_count": 7
+    },
+    "Ventura": {
+      "threshold_days": 28,
+      "typical_longest_gap_days": 11.67,
+      "computed_threshold_days": 23,
+      "threshold_source": "seed",
+      "normally_has_data": true,
+      "beachwatch_county": "Ventura",
+      "group": "seed",
+      "station_count": 40
+    }
+  }
 }
+
+

@@ -478,6 +478,9 @@ export async function loadDashboardData(
   const data = dataSlugFor(config);
   const bundle = config.useStatewideRoster ? await loadV2Bundle() : null;
   const usingV2 = !!(bundle?.available);
+  // current.csv already carries the nowcast and the day 1–3 columns. Do not
+  // fill the gaps with the older South Bay CSVs.
+  const currentFile = usingV2 && bundle?.dailySource === "current";
 
   // Every input is optional. A v2 file wins when this board asked for the
   // statewide roster and that file is present. A missing v2 file falls back
@@ -492,20 +495,20 @@ export async function loadDashboardData(
     thresholdMap,
   ] = await Promise.all([
     resolveRoster(config, bundle),
-    usingV2 && bundle?.nowcast != null
-      ? Promise.resolve(bundle.nowcast as NowcastRow[])
+    usingV2 && (bundle?.nowcast != null || currentFile)
+      ? Promise.resolve((bundle?.nowcast ?? []) as NowcastRow[])
       : readCsvOptional<NowcastRow>(data, "nowcast_latest.csv"),
-    usingV2 && bundle?.forecast != null
-      ? Promise.resolve(bundle.forecast as ForecastRow[])
+    usingV2 && (bundle?.forecast != null || currentFile)
+      ? Promise.resolve((bundle?.forecast ?? []) as ForecastRow[])
       : readCsvOptional<ForecastRow>(data, "forecast_3day.csv"),
-    usingV2 && bundle?.history != null
-      ? Promise.resolve(bundle.history as ForecastRow[])
+    usingV2 && (bundle?.history != null || currentFile)
+      ? Promise.resolve((bundle?.history ?? []) as ForecastRow[])
       : readCsvOptional<ForecastRow>(data, "history_3day.csv"),
-    usingV2 && bundle?.accuracy != null
-      ? Promise.resolve(bundle.accuracy as unknown as AccuracyRow[])
+    usingV2 && (bundle?.accuracy != null || currentFile)
+      ? Promise.resolve((bundle?.accuracy ?? []) as unknown as AccuracyRow[])
       : readCsvOptional<AccuracyRow>(data, "accuracy.csv"),
-    usingV2 && bundle?.thresholds != null
-      ? Promise.resolve(bundle.thresholds)
+    usingV2 && (bundle?.thresholds != null || currentFile)
+      ? Promise.resolve(bundle?.thresholds ?? {})
       : loadThresholds(data),
   ]);
 
@@ -573,7 +576,17 @@ export async function loadDashboardData(
         exc_probability: dailyRow.probability,
         prediction: dailyRow.call ?? undefined,
         generated_at: bundle?.dailyGeneratedAt ?? undefined,
+        last_result: dailyRow.lastResultMpn ?? undefined,
+        days_since_sample: dailyRow.lastSampleAgeDays,
       };
+    }
+    if (now && dailyRow) {
+      if ((now.last_result == null || now.last_result === "") && dailyRow.lastResultMpn != null) {
+        now.last_result = dailyRow.lastResultMpn;
+      }
+      if (now.days_since_sample == null && dailyRow.lastSampleAgeDays != null) {
+        now.days_since_sample = dailyRow.lastSampleAgeDays;
+      }
     }
     const rowUnknown =
       isUnknownCall(dailyRow?.call) ||
@@ -645,9 +658,14 @@ export async function loadDashboardData(
         wideOptional.reading
       )
     );
-    const locationUnknown = publishedLocationUnknown(entry, nowRecord, dailyRow, leadHits);
+    const locationUnknown =
+      publishedLocationUnknown(entry, nowRecord, dailyRow, leadHits) || manifestLocationUnknown(bundle, entry);
 
-    const days = archivedNow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? parseDaysSince(now.days_since_sample);
+    const days =
+      dailyRow?.lastSampleAgeDays ??
+      archivedNow?.lastSampleAgeDays ??
+      archive?.lastSampleAgeDays ??
+      parseDaysSince(now.days_since_sample);
 
     const fcRow = takeStation(forecastByCode, entry, forecastAgency, sharing);
     const forecast: ForecastDay[] = [];
@@ -686,6 +704,31 @@ export async function loadDashboardData(
           experimental: maturity !== "go_live",
           method: leadRow?.reading.method ?? null,
           confidence: leadRow?.reading.confidence ?? null,
+        });
+      }
+    }
+    if (forecast.length === 0 && dailyRow && dailyDate) {
+      for (const lead of [1, 2, 3] as const) {
+        const horizon = dailyRow.horizons[lead];
+        if (!horizon) continue;
+        if (horizon.probability == null || !Number.isFinite(horizon.probability)) continue;
+        const date = addUtcDays(dailyDate, lead);
+        if (!date) continue;
+        const p = horizon.probability;
+        const dayStatus = classify(p, threshold);
+        if (!dayStatus) continue;
+        const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow.releases, leadHits, lead);
+        const called = resolveVerdict(horizon.call, p, threshold);
+        forecast.push({
+          date,
+          probability: p,
+          status: dayStatus,
+          threshold,
+          verdict: called.callUnknown ? null : called.verdict,
+          callUnknown: called.callUnknown,
+          experimental: maturity !== "go_live",
+          method: horizon.method,
+          confidence: horizon.confidence,
         });
       }
     }
@@ -786,6 +829,8 @@ export async function loadDashboardData(
       ...todayCall(archivedNow?.call, now.prediction, dailyRow?.call, reading.finalStatus, prob, threshold),
       noRecentSample: parseBool(now.no_recent_sample),
       ...rosterFacts(entry, archive, bundle),
+      lastSampleDate: dailyRow?.lastSampleDate ?? archive?.lastSampleDate ?? entry.lastSampleDate,
+      fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
       calibratedProbability: dailyRow?.calibratedProbability ?? archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
       ...reading,
@@ -926,13 +971,15 @@ function unmodeledItem(
     proseName: entry.proseName,
     latitude: entry.latitude ?? Number.NaN,
     longitude: entry.longitude ?? Number.NaN,
-    locationUnknown: publishedLocationUnknown(entry, null, dailyRow, leadsFor(bundle, entry, sharing)),
+    locationUnknown:
+      publishedLocationUnknown(entry, null, dailyRow, leadsFor(bundle, entry, sharing)) ||
+      manifestLocationUnknown(bundle, entry),
     county: entry.county,
     region: entry.region,
     tier: entry.tier,
     samplingFrequency: entry.samplingFrequency,
-    lastSampleDate: archive?.lastSampleDate ?? entry.lastSampleDate,
-    daysSinceSample: archive?.lastSampleAgeDays ?? null,
+    lastSampleDate: dailyRow?.lastSampleDate ?? archive?.lastSampleDate ?? entry.lastSampleDate,
+    daysSinceSample: dailyRow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? null,
     noRecentSample: false,
     staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
     hasEstimate: false,
@@ -943,7 +990,7 @@ function unmodeledItem(
       isUnknownCall(archive?.nowcast?.call),
     probability: null,
     predictionDate: null,
-    fallbackUsed: archive?.fallbackUsed ?? null,
+    fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
     ...presentIndex(
       mergeNeptuneFields(
         lead0?.index,
@@ -954,10 +1001,10 @@ function unmodeledItem(
         tier: entry.tier,
         method: reading.method,
         postingStatus: reading.postingStatus,
-        daysSinceSample: archive?.lastSampleAgeDays ?? null,
+        daysSinceSample: dailyRow?.lastSampleAgeDays ?? archive?.lastSampleAgeDays ?? null,
         noRecentSample: false,
         staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
-        fallbackUsed: archive?.fallbackUsed ?? null,
+        fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
       },
       bundle?.indexScale ?? null
     ),
@@ -1014,6 +1061,21 @@ function leadsFor(bundle: V2Bundle | null, entry: RosterEntry, sharing: number) 
     bundle.dailyLeads.agencyColumn,
     sharing
   );
+}
+
+function addUtcDays(isoDate: string, days: number): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!match) return null;
+  const dt = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (Number.isNaN(dt.getTime())) return null;
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+function manifestLocationUnknown(bundle: V2Bundle | null, entry: RosterEntry): boolean {
+  const key = entry.stationKey?.trim().toLowerCase();
+  if (!key || !bundle) return false;
+  return bundle.manifest?.coordinateFlags.some((flag) => flag.trim().toLowerCase() === key) ?? false;
 }
 
 function publishedLocationUnknown(

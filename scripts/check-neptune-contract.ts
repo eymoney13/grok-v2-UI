@@ -464,6 +464,101 @@ assert.equal(filledDaily.rows[0]?.probability, 0.62);
 assert.equal(filledDaily.rows[0]?.predictionDate, "2026-10-11");
 assert.equal(filledDaily.rows[0]?.calibratedProbability, 0.4);
 
+const wideCurrent = parseDailyStatusRows([
+  {
+    station_key: "DH|DHS113",
+    station_code: "DHS113",
+    nowcast_call: "Safe",
+    nowcast_probability: 0.023428,
+    day0_calibrated_probability: 0.02,
+    day1_call: "Unsafe",
+    day1_probability: 0.189091,
+    day1_release: "go_live",
+    day2_release: "go_live",
+    day3_release: "go_live",
+    generated_at: "2026-10-10T14:56:12Z",
+    last_result_mpn: 20,
+    last_sample_age_days: 3,
+    method: "model",
+    confidence: "high",
+  },
+]);
+const manhattan = wideCurrent.rows[0];
+assert.ok(manhattan);
+assert.equal(manhattan.call, "Safe");
+assert.equal(manhattan.probability, 0.023428);
+assert.equal(manhattan.calibratedProbability, 0.02);
+assert.equal(manhattan.predictionDate, "2026-10-10");
+assert.equal(manhattan.lastResultMpn, 20);
+assert.equal(manhattan.lastSampleAgeDays, 3);
+assert.equal(manhattan.horizons[1]?.call, "Unsafe");
+assert.equal(manhattan.horizons[1]?.probability, 0.189091);
+assert.equal(manhattan.releases[1], "go_live");
+assert.equal(manhattan.releases[3], "go_live");
+
+const blankUnknown = parseDailyStatusRows([
+  {
+    station_key: "VCEHD|1100",
+    station_code: "1100",
+    nowcast_call: "Unknown",
+    nowcast_probability: "",
+    final_status: "Unknown",
+    day1_call: "Unknown",
+    day1_probability: "",
+    posting_status: "open",
+  },
+]);
+const crescent = blankUnknown.rows.find((row) => row.stationKey === "VCEHD|1100");
+assert.ok(crescent);
+assert.equal(crescent.call, "Unknown");
+assert.equal(crescent.probability, null);
+assert.equal(crescent.horizons[1]?.probability, null);
+assert.equal(crescent.horizons[1]?.call, "Unknown");
+assert.equal(isUnknownCall(crescent.call), true);
+assert.equal(officialPosting(crescent.reading), null);
+
+const publishedManifest = parseManifest({
+  generated_at: "2026-10-10T14:56:12Z",
+  stale_counties: [
+    { county: "Humboldt", gap_type: "loader behind source" },
+    { county: "Monterey", gap_type: "source stale" },
+    { county: "Orange", gap_type: "source stale" },
+    { county: "San Francisco", gap_type: "source stale" },
+  ],
+  coordinate_flags: [{ station_key: "VCEHD|1100", reason: "county_mismatch", lat: 42.114, lon: -124.45 }],
+});
+assert.deepEqual(publishedManifest.staleCounties, ["Humboldt", "Monterey", "Orange", "San Francisco"]);
+assert.deepEqual(publishedManifest.coordinateFlags, ["VCEHD|1100"]);
+
+const publishedStale = parseStaleness({
+  minimum_days: 14,
+  counties: { Humboldt: { threshold_days: 22 }, Orange: { threshold_days: 21 } },
+});
+assert.equal(publishedStale.defaultDays, 14);
+assert.equal(staleLimitDays("Humboldt", publishedStale), 22);
+assert.equal(staleLimitDays("Orange", publishedStale), 21);
+assert.equal(staleLimitDays("Ventura", publishedStale), 14);
+
+const minIndex = parseIndexBands({
+  default: [
+    { band: "Poor", min_index: 0 },
+    { band: "Caution", min_index: 85 },
+    { band: "Good", min_index: 98 },
+  ],
+  by_tier: {
+    limited_data: [
+      { band: "Poor", min_index: 0 },
+      { band: "Good", min_index: 95 },
+    ],
+  },
+});
+assert.equal(minIndex?.bands.find((band) => band.id === "poor")?.max, 84);
+assert.equal(minIndex?.bands.find((band) => band.id === "caution")?.min, 85);
+assert.equal(minIndex?.bands.find((band) => band.id === "caution")?.max, 97);
+assert.equal(minIndex?.bands.find((band) => band.id === "good")?.min, 98);
+assert.equal(minIndex?.tiers.limited_data?.find((band) => band.id === "poor")?.max, 94);
+assert.equal(minIndex?.tiers.limited_data?.some((band) => band.id === "caution"), false);
+
 function mockFetch(routes: Record<string, { status: number; body: string }>): typeof fetch {
   return (async (input: RequestInfo | URL) => {
     const url = String(input);

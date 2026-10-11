@@ -8,12 +8,16 @@
 import { coordinateWordUnknown, locationMarkedUnknown } from "./westCoastBox.mjs";
 
 export { coordinateWordUnknown };
-import { readNeptuneFields } from "./neptuneIndex.ts";
+import { parseNeptuneBandId, parseNeptuneIndexValue, readNeptuneFields } from "./neptuneIndex.ts";
 import {
   EMPTY_READING,
+  parseConfidenceLevel,
   parseLeadMaturity,
+  parseMethod,
   parsePublishedReading,
   withPostingFileDate,
+  type ConfidenceLevel,
+  type EstimateMethod,
   type LeadMaturity,
   type PublishedReading,
 } from "./publishedReading.ts";
@@ -104,6 +108,8 @@ export interface RunManifest {
   modelVersion: string | null;
   staleCounties: string[];
   checksPassed: boolean | null;
+  /** Station keys the manifest flagged for a bad location. */
+  coordinateFlags: string[];
 }
 
 export interface OptionalModelFields {
@@ -394,16 +400,21 @@ export function groupArchive(rows: ArchiveRow[], agencyColumn = false): Map<stri
   return out;
 }
 
+function stalenessDays(raw: unknown): unknown {
+  if (!isObj(raw)) return raw;
+  return raw.threshold_days ?? raw.thresholdDays ?? raw.stale_after_days ?? raw.limit_days ?? raw.days ?? raw.limit;
+}
+
 export function parseStaleness(data: unknown): StalenessTable {
   const table: StalenessTable = { defaultDays: null, byCounty: {} };
   if (!isObj(data)) return table;
-  const fallback = data.default_days ?? data.defaultDays ?? data.default;
+  const fallback = data.default_days ?? data.defaultDays ?? data.minimum_days ?? data.minimumDays ?? data.default;
   const fallbackDays = asNumber(fallback);
   if (fallbackDays != null) table.defaultDays = fallbackDays;
   const counties = data.counties ?? data.by_county ?? data.thresholds;
   const assign = (name: unknown, days: unknown) => {
     const key = countyKey(name);
-    const value = asNumber(days);
+    const value = asNumber(stalenessDays(days));
     if (key && value != null) table.byCounty[key] = value;
   };
   if (Array.isArray(counties)) {
@@ -492,9 +503,21 @@ function staleCountiesFromManifest(data: Record<string, unknown>): string[] {
   return [];
 }
 
+function coordinateFlagsFromManifest(data: Record<string, unknown>): string[] {
+  const raw = data.coordinate_flags ?? data.coordinateFlags;
+  if (!Array.isArray(raw)) return [];
+  const keys: string[] = [];
+  for (const item of raw) {
+    if (!isObj(item)) continue;
+    const key = textOrNull(item.station_key ?? item.stationKey);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
 export function parseManifest(data: unknown): RunManifest {
   if (!isObj(data)) {
-    return { generatedAt: null, modelVersion: null, staleCounties: [], checksPassed: null };
+    return { generatedAt: null, modelVersion: null, staleCounties: [], checksPassed: null, coordinateFlags: [] };
   }
   const nested = ["stats", "summary", "run"].map((key) => data[key]).find(isObj);
   return {
@@ -502,6 +525,7 @@ export function parseManifest(data: unknown): RunManifest {
     modelVersion: textOrNull(data.model_version ?? data.modelVersion ?? nested?.model_version ?? nested?.modelVersion),
     staleCounties: staleCountiesFromManifest(data),
     checksPassed: asBool(data.checks_passed ?? data.checksPassed ?? nested?.checks_passed ?? nested?.checksPassed),
+    coordinateFlags: coordinateFlagsFromManifest(data),
   };
 }
 
@@ -512,6 +536,17 @@ export function countyInStaleList(county: string | null, staleCounties: string[]
 }
 
 export interface DailyIndexFields {
+  index: number | null;
+  band: string | null;
+}
+
+/** One lead on a current.csv row. Lead 0 is the same-day nowcast. */
+export interface DailyHorizon {
+  probability: number | null;
+  call: string | null;
+  calibratedProbability: number | null;
+  method: EstimateMethod | null;
+  confidence: ConfidenceLevel | null;
   index: number | null;
   band: string | null;
 }
@@ -543,8 +578,66 @@ export interface DailyJoinedRow {
   probability: number | null;
   /** Calibrated probability on this row. Null when the column is absent. */
   calibratedProbability: number | null;
-  /** `prediction_date`, `forecast_date`, or `date` on this row. */
+  /** `prediction_date`, `forecast_date`, `date`, or the row's `generated_at`. */
   predictionDate: string | null;
+  /** Leads 0–3. Lead 0 reads `nowcast_probability` / `nowcast_call` before the older names. */
+  horizons: DailyHorizon[];
+  /** `last_result_mpn` on this row. Null when the cell is blank. */
+  lastResultMpn: number | null;
+  /** `last_sample_age_days` on this row. */
+  lastSampleAgeDays: number | null;
+  /** `last_sample_date` on this row. */
+  lastSampleDate: string | null;
+  /** `fallback_used` on this row. */
+  fallbackUsed: boolean | null;
+}
+
+function horizonFromRow(row: Record<string, unknown>, lead: number): DailyHorizon {
+  const probability =
+    lead === 0
+      ? asFraction(first(row, ["nowcast_probability", "probability", "exc_probability"]))
+      : asFraction(first(row, [`day${lead}_probability`, `day${lead}Probability`]));
+  const call =
+    lead === 0
+      ? textOrNull(first(row, ["nowcast_call", "call", "prediction"]))
+      : textOrNull(first(row, [`day${lead}_call`, `day${lead}_prediction`, `day${lead}Call`]));
+  const specificCalibrated = asFraction(
+    first(row, [`day${lead}_calibrated_probability`, `day${lead}CalibratedProbability`])
+  );
+  const calibratedProbability =
+    specificCalibrated ?? (lead === 0 ? asFraction(first(row, CALIBRATED_KEYS)) : null);
+  const specificMethod = parseMethod(first(row, [`day${lead}_method`, `day${lead}Method`]));
+  const method = specificMethod ?? (lead === 0 ? parseMethod(first(row, ["method", "estimate_method"])) : null);
+  const specificConfidence = parseConfidenceLevel(first(row, [`day${lead}_confidence`, `day${lead}Confidence`]));
+  const confidence =
+    specificConfidence ?? (lead === 0 ? parseConfidenceLevel(first(row, ["confidence", "confidence_level"])) : null);
+  const index =
+    lead === 0
+      ? readNeptuneFields(row).index
+      : parseNeptuneIndexValue(first(row, [`day${lead}_neptune_index`, `day${lead}NeptuneIndex`]));
+  const band =
+    lead === 0
+      ? readNeptuneFields(row).band
+      : parseNeptuneBandId(first(row, [`day${lead}_neptune_band`, `day${lead}NeptuneBand`]));
+  return { probability, call, calibratedProbability, method, confidence, index, band };
+}
+
+function dailyMeasureFields(row: Record<string, unknown>) {
+  const horizons = [0, 1, 2, 3].map((lead) => horizonFromRow(row, lead));
+  const today = horizons[0] ?? horizonFromRow(row, 0);
+  return {
+    horizons,
+    call: today.call,
+    probability: today.probability,
+    calibratedProbability: today.calibratedProbability,
+    predictionDate:
+      asDateString(first(row, ["prediction_date", "forecast_date", "date"])) ??
+      asDateString(first(row, GENERATED_KEYS)),
+    lastResultMpn: asNumber(first(row, ["last_result_mpn", "last_result", "lastResult"])),
+    lastSampleAgeDays: asNumber(first(row, ["last_sample_age_days", "lastSampleAgeDays", "days_since_sample"])),
+    lastSampleDate: asDateString(first(row, ["last_sample_date", "lastSampleDate"])),
+    fallbackUsed: asBool(first(row, ["fallback_used", "fallbackUsed"])),
+  };
 }
 
 export interface DailyStatusFile {
@@ -609,10 +702,7 @@ function readingsFromRows(rows: Record<string, unknown>[], generatedAt: string |
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
       locationUnknown: locationUnknownFromRow(row),
-      call: textOrNull(first(row, ["call", "prediction"])),
-      probability: asFraction(first(row, ["probability", "exc_probability"])),
-      calibratedProbability: extra.calibratedProbability,
-      predictionDate: asDateString(first(row, ["prediction_date", "forecast_date", "date"])),
+      ...dailyMeasureFields(row),
     };
     const key = dailyIdentityKey(joined, agencyColumn);
     if (!byIdentity.has(key)) order.push(key);
@@ -809,10 +899,7 @@ export function parseLeadStatusRows(rows: Record<string, unknown>[]): LeadStatus
       index: readNeptuneFields(row),
       releases: dayReleasesFromRow(row),
       locationUnknown: locationUnknownFromRow(row),
-      call: textOrNull(first(row, ["call", "prediction"])),
-      probability: asFraction(first(row, ["probability", "exc_probability"])),
-      calibratedProbability: extra.calibratedProbability,
-      predictionDate: asDateString(first(row, ["prediction_date", "forecast_date", "date"])),
+      ...dailyMeasureFields(row),
       lead,
       maturity: leadRelease(row, lead),
     });
