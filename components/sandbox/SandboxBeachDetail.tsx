@@ -252,7 +252,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
         <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
         <p className={s.predictionExplanation}>
-          The number comes from the model file. This page does not calculate it.{indexScore.higherIsBetter ? " A higher number is cleaner." : ""} <NeptuneIndexExplainerLink />.{" "}
+          A lower number is cleaner water. 50 means about a 50% chance the water is over the limit. <NeptuneIndexExplainerLink />.{" "}
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
         </p>
       </section>

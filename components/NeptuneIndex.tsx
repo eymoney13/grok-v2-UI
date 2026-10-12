@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   bandWidths,
+  DEFAULT_DETECTION,
   indexReading,
   scaleGroups,
   type IndexScale,
@@ -71,10 +72,10 @@ export function NeptuneIndexScale({
         {marker != null && <i className="nb-index-marker" style={{ left: `${marker * 100}%` }} />}
       </div>
       <div className="nb-index-ends" aria-hidden="true">
-        <span>{scale.scaleMin}</span>
+        <span>{scale.higherIsBetter ? scale.scaleMin : `${scale.scaleMin} cleaner`}</span>
         <span>{scale.higherIsBetter ? `${scale.scaleMax} cleaner` : scale.scaleMax}</span>
       </div>
-      {scale.higherIsBetter && <p className="nb-index-direction">Higher is cleaner.</p>}
+      <p className="nb-index-direction">{scale.higherIsBetter ? "Higher is cleaner." : "Lower is cleaner."}</p>
       <ol className="nb-index-key">
         {bands.map((band) => (
           <li key={band.id}>
@@ -101,6 +102,8 @@ export function scaleForDisplay(display: NeptuneDisplay): IndexScale | null {
     higherIsBetter: display.higherIsBetter,
     bands: display.bands,
     tiers: {},
+    formula: null,
+    detection: DEFAULT_DETECTION,
   };
 }
 

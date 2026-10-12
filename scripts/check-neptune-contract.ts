@@ -50,12 +50,17 @@ import {
 import {
   bandForValue,
   displayBandLabel,
+  detectPublishedScale,
   indexConfidenceNote,
+  indexReading,
+  indexScaleMode,
   indexScalePhrase,
   parseIndexBands,
   parseNeptuneBandId,
   readNeptuneFields,
   resolveNeptuneDisplay,
+  scoreFromProbability,
+  swimWords,
 } from "../lib/neptuneIndex.ts";
 
 const roster = parseRosterJson({
@@ -626,32 +631,91 @@ const sampleScale = parseIndexBands(JSON.parse(readFileSync("data/neptune-v2/con
 assert.ok(sampleScale);
 assert.equal(sampleScale.scaleMin, 0);
 assert.equal(sampleScale.scaleMax, 100);
-assert.equal(sampleScale.higherIsBetter, true);
-assert.equal(sampleScale.tiers.model_pool?.length, 3);
-assert.equal(sampleScale.tiers.limited_data?.length, 2);
-assert.equal(sampleScale.tiers.limited_data?.some((band) => band.id === "caution"), false);
-assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "poor")?.max, 84);
-assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "caution")?.min, 85);
-assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "caution")?.max, 97);
-assert.equal(sampleScale.tiers.model_pool?.find((band) => band.id === "good")?.min, 98);
-assert.equal(sampleScale.tiers.limited_data?.find((band) => band.id === "poor")?.max, 94);
-assert.equal(sampleScale.tiers.limited_data?.find((band) => band.id === "good")?.min, 95);
-assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool" })?.bandId, "caution");
-assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "limited_data" })?.bandId, "poor");
-assert.equal(resolveNeptuneDisplay(96, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
-assert.equal(resolveNeptuneDisplay(96, null, sampleScale, { tier: "model_pool" })?.bandId, "caution");
-assert.equal(resolveNeptuneDisplay(98, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
-assert.equal(resolveNeptuneDisplay(84, null, sampleScale, { tier: "model_pool" })?.bandId, "poor");
-const rulesScore = resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool", method: "rules" });
-assert.equal(rulesScore?.bandId, null);
-assert.equal(rulesScore?.index, 92);
-assert.equal(rulesScore?.rulesIndex, true);
-assert.equal(rulesScore?.bands.length, 0);
-assert.equal(resolveNeptuneDisplay(92, "good", sampleScale, { tier: "model_pool", method: "rules" })?.bandId, "good");
+assert.equal(sampleScale.higherIsBetter, false);
+assert.equal(sampleScale.bands.length, 4);
+assert.equal(sampleScale.formula?.input, "calibrated_probability");
+assert.equal(sampleScale.formula?.fallbackInput, "probability");
+assert.equal(sampleScale.formula?.multiply, 100);
+assert.equal(sampleScale.formula?.round, "nearest");
+assert.equal(sampleScale.detection.tolerance, 1);
+assert.equal(sampleScale.detection.minimumRows, 20);
+assert.equal(sampleScale.detection.minimumFraction, 0.8);
+assert.equal(sampleScale.bands.find((band) => band.id === "good")?.max, 24);
+assert.equal(sampleScale.bands.find((band) => band.id === "moderate")?.min, 25);
+assert.equal(sampleScale.bands.find((band) => band.id === "likely_unsafe")?.min, 50);
+assert.equal(sampleScale.bands.find((band) => band.id === "likely_unsafe")?.countsAsUnsafe, true);
+assert.equal(sampleScale.bands.find((band) => band.id === "very_likely_unsafe")?.min, 75);
+assert.equal(sampleScale.bands.find((band) => band.id === "good")?.countsAsUnsafe, false);
+assert.equal(scoreFromProbability({ calibrated_probability: 0.023, probability: 0.9 }, sampleScale.formula!), 2);
+assert.equal(scoreFromProbability({ calibrated_probability: null, probability: 0.504 }, sampleScale.formula!), 50);
 assert.equal(
-  resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool", method: "rules", postingStatus: "warning" })?.bandId,
-  null
+  detectPublishedScale(Array.from({ length: 20 }, () => ({ published: 2, computed: 2 })), sampleScale.detection),
+  "published"
 );
+assert.equal(
+  detectPublishedScale(Array.from({ length: 20 }, () => ({ published: 98, computed: 2 })), sampleScale.detection),
+  "formula"
+);
+assert.equal(
+  indexScaleMode(
+    Array.from({ length: 20 }, () => ({ published: 98, calibrated: 0.02, probability: 0.02 })),
+    sampleScale
+  ),
+  "formula"
+);
+assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
+assert.equal(resolveNeptuneDisplay(30, null, sampleScale)?.bandId, "moderate");
+assert.equal(resolveNeptuneDisplay(60, null, sampleScale)?.bandId, "likely_unsafe");
+assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "model_pool" })?.bandId, "very_likely_unsafe");
+assert.equal(resolveNeptuneDisplay(92, null, sampleScale, { tier: "limited_data" })?.bandId, "very_likely_unsafe");
+assert.equal(resolveNeptuneDisplay(92, null, sampleScale)?.countsAsPoor, true);
+assert.equal(resolveNeptuneDisplay(10, null, sampleScale)?.countsAsPoor, false);
+assert.equal(swimWords("good", "en"), "Safe to swim");
+assert.equal(swimWords("moderate", "en"), "Use caution");
+assert.equal(swimWords("likely_unsafe", "en"), "Not safe");
+assert.equal(swimWords("very_likely_unsafe", "es"), "No es seguro");
+const rulesScore = resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool", method: "rules" });
+assert.equal(rulesScore?.bandId, "good");
+assert.equal(rulesScore?.index, 10);
+assert.equal(rulesScore?.rulesIndex, false);
+assert.equal(rulesScore?.bands.length, 4);
+assert.equal(resolveNeptuneDisplay(92, "good", sampleScale, { tier: "model_pool", method: "rules" })?.bandId, "very_likely_unsafe");
+assert.equal(
+  resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool", method: "rules", postingStatus: "warning" })?.bandId,
+  "very_likely_unsafe"
+);
+const warnedGood = resolveNeptuneDisplay(2, null, sampleScale, { postingStatus: "warning" });
+assert.equal(warnedGood?.bandId, "very_likely_unsafe");
+assert.equal(warnedGood?.forcedByPosting, true);
+assert.equal(warnedGood?.countsAsPoor, false);
+const labScore = resolveNeptuneDisplay(2, null, sampleScale, { labOverLimit: true });
+assert.equal(labScore?.bandId, "good");
+assert.equal(labScore?.labOverride, true);
+assert.equal(indexReading(labScore!, "en").label, "Over the limit");
+assert.equal(indexReading(labScore!, "en").plain, "Over the limit");
+const liveRoster = parseRosterJson(JSON.parse(readFileSync("data/neptune-v2/data/roster.json", "utf8")));
+assert.equal(liveRoster.length, 680);
+assert.equal(liveRoster.filter((station) => station.tier === "model_pool").length, 177);
+assert.equal(liveRoster.filter((station) => station.tier === "limited_data").length, 503);
+const rincon = liveRoster.find((station) => station.stationKey === "VCEHD|1100");
+assert.equal(rincon?.name, "Rincon Beach");
+assert.equal(rincon?.county, "Ventura");
+assert.equal(rincon?.lat, 34.375);
+assert.equal(rincon?.lon, -119.473);
+assert.equal(rincon?.locationUnknown, false);
+const bayshore = liveRoster.find((station) => station.stationKey === "CLBHHS|B-69");
+assert.equal(bayshore?.name, "Bayshore at Division St");
+assert.equal(bayshore?.tier, "limited_data");
+assert.equal(bayshore?.county, "Long Beach City");
+assert.equal(bayshore?.lat, 33.756);
+assert.equal(bayshore?.lon, -118.131);
+assert.equal(bayshore?.lastSampleDate, null);
+for (const key of ["SCCWPCEL|Cowell", "SCCWPCEL|Main", "SCCWPCEL|O440", "SCCWPCEL|O520", "SCCWPCEL|O530"]) {
+  assert.equal(liveRoster.find((station) => station.stationKey === key)?.tier, "limited_data", key);
+}
+const manifestFile = parseManifest(JSON.parse(readFileSync("data/neptune-v2/outputs/run_manifest.json", "utf8")));
+assert.deepEqual(manifestFile.coordinateFlags, []);
 const four = parseIndexBands({
   by_tier: {
     model_pool: [
@@ -689,9 +753,9 @@ const alt = parseIndexBands({
 assert.ok(alt);
 assert.equal(bandForValue(82, alt.bands)?.id, "good");
 assert.equal(bandForValue(60, alt.bands)?.id, "caution");
-assert.equal(resolveNeptuneDisplay(90, null, alt, { tier: "limited_data" })?.bandId, "poor");
+assert.equal(resolveNeptuneDisplay(90, null, alt, { tier: "limited_data" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(90, null, alt, { tier: "model_pool" })?.bandId, "good");
-assert.equal(resolveNeptuneDisplay(90, "poor", alt)?.bandId, "poor");
+assert.equal(resolveNeptuneDisplay(90, "poor", alt)?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(90, "poor", alt)?.index, 90);
 assert.equal(resolveNeptuneDisplay(92, null, null)?.bandId, null);
 assert.equal(resolveNeptuneDisplay(92, null, null)?.index, 92);
@@ -723,7 +787,7 @@ assert.match(indexConfidenceNote(both!, "en") ?? "", /12 days ago/);
 assert.match(indexConfidenceNote(both!, "en") ?? "", /fallback/);
 assert.equal(resolveNeptuneDisplay(90, "good", alt, { daysSinceSample: 2 })?.lowered, false);
 assert.equal(displayBandLabel(resolveNeptuneDisplay(90, "good", alt)!, "es"), "Bueno");
-assert.equal(displayBandLabel(resolveNeptuneDisplay(90, "caution", alt)!, "es"), "Precaución");
+assert.equal(displayBandLabel(resolveNeptuneDisplay(60, "caution", alt)!, "es"), "Precaución");
 assert.equal(displayBandLabel(resolveNeptuneDisplay(20, "poor", alt)!, "es"), "Mala");
 const byTier = parseIndexBands({ by_tier: { model_pool: [{ id: "poor", min: 0, max: 40 }, { id: "good", min: 41, max: 100 }] } });
 assert.equal(byTier?.tiers.model_pool?.[0]?.id, "poor");

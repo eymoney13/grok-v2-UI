@@ -53,6 +53,8 @@ export interface PublicBeach {
   rainAdvisory: boolean | null;
   /** Rules-path Unknown. The page must not read this beach as safe. */
   callUnknown?: boolean;
+  /** No lab sample in the file. Not the same as an Unknown call. */
+  neverTested?: boolean;
 }
 
 /** The home screen list. Rain, lab results, and the outlook stay on the beach page. */
@@ -82,6 +84,7 @@ export type GlanceBeach = Pick<
   | "postingDate"
   | "rainAdvisory"
   | "callUnknown"
+  | "neverTested"
 >;
 
 export function toGlance(beach: PublicBeach): GlanceBeach {
@@ -110,5 +113,6 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
     callUnknown: beach.callUnknown,
+    neverTested: beach.neverTested,
   };
 }

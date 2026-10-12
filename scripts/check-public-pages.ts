@@ -197,8 +197,9 @@ const indexed = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
   "en"
 );
-assert.match(indexed.status, /92 \/ 100, higher is cleaner/);
-assert.match(indexed.status, /Good/);
+assert.match(indexed.status, /92 \/ 100, lower is cleaner/);
+assert.match(indexed.status, /Very Likely Unsafe/);
+assert.match(indexed.status, /Not safe/);
 assert.doesNotMatch(indexed.status, /Hazardous/);
 const indexedUnknown = dailySummary(
   { ...base, callUnknown: true, finalStatus: "Unknown", neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
@@ -233,22 +234,22 @@ const rulesIndex = dailySummary(
   },
   "en"
 );
-assert.match(rulesIndex.status, /92 \/ 100/);
-assert.match(rulesIndex.status, /last lab test \+ rain rule/);
-assert.equal(rulesIndex.method, null);
+assert.match(rulesIndex.status, /92 \/ 100, lower is cleaner/);
+assert.match(rulesIndex.status, /Very Likely Unsafe/);
+assert.match(rulesIndex.method ?? "", /last lab test \+ rain rule/);
 assert.doesNotMatch(rulesIndex.status, /\bGood\b|\bCaution\b|\bPoor\b/);
 const tierCaution = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "model_pool" }) },
   "en"
 );
-assert.match(tierCaution.status, /Caution/);
-assert.doesNotMatch(tierCaution.status, /is Good/);
+assert.match(tierCaution.status, /Very Likely Unsafe/);
+assert.match(tierCaution.status, /Not safe/);
 const tierPoor = dailySummary(
   { ...base, tier: "limited_data", neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "limited_data" }) },
   "en"
 );
-assert.match(tierPoor.status, /Poor/);
-assert.doesNotMatch(tierPoor.status, /Caution/);
+assert.match(tierPoor.status, /Very Likely Unsafe/);
+assert.match(tierPoor.status, /Not safe/);
 
 assert.equal(dailySummary({ ...base, fallbackUsed: null }, "en").fallback, null);
 assert.match(dailySummary({ ...base, fallbackUsed: true }, "en").fallback ?? "", /fallback/);
@@ -285,9 +286,9 @@ assert.equal(cautiousElevatedNote(null, "Not recommended", "en"), null);
 assert.equal(staleCountyBanner([], "en"), null);
 assert.equal(
   staleCountyBanner(["Orange", "Ventura"], "en"),
-  "The latest run marked these counties stale: Orange, Ventura."
+  "Older data than usual in: Orange, Ventura."
 );
-assert.match(staleCountyBanner(["Orange"], "es") ?? "", /desactualizados: Orange/);
+assert.match(staleCountyBanner(["Orange"], "es") ?? "", /Datos más viejos de lo habitual en: Orange/);
 const limitedHigh = dailySummary(
   { ...base, status: "Not recommended", tier: "limited_data", confidence: "high" },
   "en"
@@ -306,9 +307,9 @@ const limitedIndex = dailySummary(
   },
   "en"
 );
-assert.match(limitedIndex.status, /Poor/);
+assert.match(limitedIndex.status, /Very Likely Unsafe/);
 assert.match(limitedIndex.status, /Limited testing history, so this is a cautious estimate/);
-assert.doesNotMatch(limitedIndex.status, /Caution/);
+assert.match(limitedIndex.status, /Not safe/);
 const poolLow = dailySummary(
   { ...base, status: "Not recommended", tier: "model_pool", confidence: "low" },
   "en"
@@ -323,8 +324,8 @@ assert.doesNotMatch(
 
 const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);
 assert.ok(spanishGood);
-assert.equal(displayBandLabel(spanishGood, "es"), "Bueno");
-assert.match(indexScalePhrase(spanishGood, "es") ?? "", /más alto es más limpio/);
+assert.match(indexScalePhrase(spanishGood, "es") ?? "", /más bajo es más limpio/);
+assert.equal(displayBandLabel(spanishGood, "es"), "Muy probablemente inseguro");
 assert.equal(displayBandLabel(resolveNeptuneDisplay(70, "caution", indexScale)!, "es"), "Precaución");
 assert.equal(displayBandLabel(resolveNeptuneDisplay(40, "poor", indexScale)!, "es"), "Mala");
 

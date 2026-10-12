@@ -3,6 +3,7 @@ import { logStationsOutsideWestCoast } from "./geo";
 import "server-only";
 import { assignSlugs } from "./beachSlug.ts";
 import {
+  EPA_MPN_THRESHOLD,
   computeAccuracy,
   dataSlugFor,
   statusFromProb,
@@ -39,6 +40,8 @@ import { matchDailyRow, matchLeadRows } from "./stationIdentity.ts";
 import { factorLabel, isEnvironmentalFactor, isListedFactor } from "./factors";
 import { normalizeInsight } from "./insight";
 import {
+  chooseIndexValue,
+  indexScaleMode,
   mergeNeptuneFields,
   readNeptuneFields,
   resolveNeptuneDisplay,
@@ -46,6 +49,7 @@ import {
   type IndexScale,
   type NeptuneDisplay,
   type NeptuneFields,
+  type PublishedIndexMode,
 } from "./neptuneIndex";
 import { EMPTY_READING, copyReading, isUnknownCall, mergeReadings } from "./publishedReading.ts";
 
@@ -543,6 +547,14 @@ export async function loadDashboardData(
 
   const beaches: BeachData[] = [];
   const unmodeled: BeachListItem[] = [];
+  const indexMode = indexScaleMode(
+    (bundle?.dailyRows ?? []).map((row) => ({
+      published: row.index.index,
+      calibrated: row.calibratedProbability,
+      probability: row.probability,
+    })),
+    bundle?.indexScale ?? null
+  );
   for (const entry of roster) {
     const code = entry.code;
     const sharing = codeCounts.get(code) ?? 1;
@@ -595,7 +607,7 @@ export async function loadDashboardData(
       isUnknownCall(now?.prediction) ||
       isUnknownCall(archivedNow?.call);
     if (!now || !now.prediction_date) {
-      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
+      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing, indexMode));
       continue;
     }
 
@@ -631,7 +643,7 @@ export async function loadDashboardData(
     const publishedToday = dailyRow?.call ?? archivedNow?.call ?? now.prediction;
     const status = statusForPublishedCall(classify(prob), publishedToday);
     if (!status) {
-      if (usingV2 && rowUnknown) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing));
+      if (usingV2 && rowUnknown) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing, indexMode));
       continue;
     }
 
@@ -836,15 +848,25 @@ export async function loadDashboardData(
       calibratedProbability: dailyRow?.calibratedProbability ?? archive?.calibratedProbability ?? wideOptional.calibratedProbability,
       confidenceFlag: archive?.confidenceFlag ?? wideOptional.confidenceFlag,
       ...reading,
-      ...presentIndex(mergedIndex, {
-        tier: entry.tier,
-        method: reading.method,
-        postingStatus: reading.postingStatus,
-        daysSinceSample: days,
-        noRecentSample: parseBool(now.no_recent_sample),
-        staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
-        fallbackUsed: archive?.fallbackUsed ?? null,
-      }, bundle?.indexScale ?? null),
+      ...presentIndex(
+        mergedIndex,
+        {
+          calibratedProbability: dailyRow?.calibratedProbability ?? archive?.calibratedProbability ?? wideOptional.calibratedProbability,
+          probability: dailyRow?.probability ?? prob,
+        },
+        {
+          tier: entry.tier,
+          method: reading.method,
+          postingStatus: reading.postingStatus,
+          daysSinceSample: days,
+          noRecentSample: parseBool(now.no_recent_sample),
+          staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
+          fallbackUsed: archive?.fallbackUsed ?? null,
+          labOverLimit: labIsOver(now.last_result ?? dailyRow?.lastResultMpn),
+        },
+        bundle?.indexScale ?? null,
+        indexMode
+      ),
       excRatePct: entry.excRatePct ?? null,
       nSamples: entry.nSamples ?? null,
       pastDays,
@@ -897,16 +919,28 @@ export async function loadDashboardData(
   };
 }
 
+function labIsOver(value: unknown): boolean {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
+  return Number.isFinite(n) && n > EPA_MPN_THRESHOLD;
+}
+
 function presentIndex(
   fields: NeptuneFields | null | undefined,
+  probabilities: { calibratedProbability: number | null; probability: number | null },
   context: IndexContext,
-  scale: IndexScale | null
+  scale: IndexScale | null,
+  mode: PublishedIndexMode
 ): { neptuneIndex: number | null; neptuneBand: string | null; neptuneDisplay: NeptuneDisplay | null } {
-  const band = fields?.band ?? null;
-  const neptuneDisplay = resolveNeptuneDisplay(fields?.index, band, scale, context);
+  const chosen = chooseIndexValue(
+    fields,
+    { calibrated: probabilities.calibratedProbability, probability: probabilities.probability },
+    scale,
+    mode
+  );
+  const neptuneDisplay = resolveNeptuneDisplay(chosen.index, chosen.band, scale, context);
   return {
     neptuneIndex: neptuneDisplay?.index ?? null,
-    neptuneBand: band,
+    neptuneBand: neptuneDisplay?.bandId ?? chosen.band,
     neptuneDisplay,
   };
 }
@@ -951,7 +985,8 @@ function unmodeledItem(
   entry: RosterEntry,
   archive: StationArchive | null,
   bundle: V2Bundle | null,
-  sharing: number
+  sharing: number,
+  mode: PublishedIndexMode
 ): BeachListItem {
   const dailyRow = dailyFor(bundle, entry, sharing);
   const lead0 = leadsFor(bundle, entry, sharing).find((row) => row.lead === 0) ?? null;
@@ -1000,6 +1035,10 @@ function unmodeledItem(
         archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
       ),
       {
+        calibratedProbability: dailyRow?.calibratedProbability ?? lead0?.calibratedProbability ?? archive?.calibratedProbability ?? null,
+        probability: dailyRow?.probability ?? lead0?.probability ?? archive?.nowcast?.probability ?? null,
+      },
+      {
         tier: entry.tier,
         method: reading.method,
         postingStatus: reading.postingStatus,
@@ -1007,8 +1046,10 @@ function unmodeledItem(
         noRecentSample: false,
         staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
         fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
+        labOverLimit: labIsOver(dailyRow?.lastResultMpn),
       },
-      bundle?.indexScale ?? null
+      bundle?.indexScale ?? null,
+      mode
     ),
     ...reading,
   };

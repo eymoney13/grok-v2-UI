@@ -1,21 +1,24 @@
-
 {
-  "default": [
-    {"band": "Poor", "min_index": 0},
-    {"band": "Caution", "min_index": 85},
-    {"band": "Good", "min_index": 98}
-  ],
-  "by_tier": {
-    "model_pool": [
-      {"band": "Poor", "min_index": 0},
-      {"band": "Caution", "min_index": 85},
-      {"band": "Good", "min_index": 98}
-    ],
-    "limited_data": [
-      {"band": "Poor", "min_index": 0},
-      {"band": "Good", "min_index": 95}
-    ]
-  }
+  "higher_is_better": false,
+  "scale_min": 0,
+  "scale_max": 100,
+  "formula": {
+    "id": "calibrated_probability_times_100",
+    "input": "calibrated_probability",
+    "fallback_input": "probability",
+    "multiply": 100,
+    "round": "nearest"
+  },
+  "published_index_scale": {
+    "detect": "formula_match",
+    "tolerance": 1,
+    "minimum_rows": 20,
+    "minimum_fraction": 0.8
+  },
+  "bands": [
+    {"band": "Good", "min": 0, "max": 24},
+    {"band": "Moderate", "min": 25, "max": 49},
+    {"band": "Likely Unsafe", "min": 50, "max": 74, "counts_as_unsafe": true},
+    {"band": "Very Likely Unsafe", "min": 75, "max": 100, "counts_as_unsafe": true}
+  ]
 }
-
-

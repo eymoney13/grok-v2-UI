@@ -11,6 +11,7 @@ import {
 import {
   statusDetail,
   statusPhrase,
+  notTestedPhrase,
   unknownCallPhrase,
   type Lang,
 } from "./publicCopy.ts";
@@ -64,6 +65,7 @@ export interface SummaryFacts {
   postingDate: string | null;
   rainAdvisory: boolean | null;
   callUnknown?: boolean;
+  neverTested?: boolean;
 }
 
 export interface DailySummary {
@@ -170,6 +172,7 @@ function withCautiousNote(sentence: string, facts: SummaryFacts, lang: Lang): st
 }
 
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
+  if (facts.neverTested) return notTestedPhrase(lang);
   const indexed = indexSentence(facts.neptuneDisplay, lang);
   if (indexed) return withCautiousNote(indexed, facts, lang);
   if (showsUnknownCall(facts)) return unknownCallPhrase(lang);
@@ -189,7 +192,11 @@ function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | nul
   const reading = indexReading(display, lang);
   const guidance = (lang === "es" ? display.guidanceEs : display.guidance) ?? "";
   let sentence: string;
-  if (reading.label && reading.phrase) {
+  if (reading.plain && reading.label && reading.plain !== reading.label && reading.phrase) {
+    sentence = lang === "es"
+      ? `${reading.plain}. El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
+      : `${reading.plain}. Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
+  } else if (reading.label && reading.phrase) {
     sentence = lang === "es"
       ? `El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
       : `Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
