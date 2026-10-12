@@ -8,6 +8,7 @@ export const copy = {
     brand: "Neptune",
     language: "Language",
     homeTitle: "Find your beach",
+    home: "Home",
     homeLead: "Search by beach or city, or use Beaches near me.",
     useLocation: "Beaches near me",
     locating: "Finding your location…",
@@ -18,6 +19,7 @@ export const copy = {
     why: "Why",
     lastTestedHeading: "Last tested",
     notTested: "Not tested yet",
+    forecastPending: "Forecast pending",
     seeMap: "See map",
     allBeaches: "See all beaches",
     limitedBadge: "Limited data",
@@ -62,6 +64,7 @@ export const copy = {
     brand: "Neptune",
     language: "Idioma",
     homeTitle: "Encuentra tu playa",
+    home: "Inicio",
     homeLead: "Busca por playa o ciudad, o usa Playas cerca de mí.",
     useLocation: "Playas cerca de mí",
     locating: "Buscando tu ubicación…",
@@ -72,6 +75,7 @@ export const copy = {
     why: "Por qué",
     lastTestedHeading: "Última prueba",
     notTested: "Aún no se ha analizado",
+    forecastPending: "Pronóstico pendiente",
     seeMap: "Ver mapa",
     allBeaches: "Ver todas las playas",
     limitedBadge: "Datos limitados",
@@ -150,4 +154,9 @@ export function unknownCallPhrase(lang: Lang): string {
 
 export function notTestedPhrase(lang: Lang): string {
   return copy[lang].notTested;
+}
+
+/** Limited-data beach with no trusted index. Not a computed score. */
+export function forecastPendingPhrase(lang: Lang): string {
+  return copy[lang].forecastPending;
 }

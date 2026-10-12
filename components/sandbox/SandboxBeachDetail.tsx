@@ -197,7 +197,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null; tier?: RosterTier | null }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null; tier?: RosterTier | null; forecastPending?: boolean }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -248,7 +248,6 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           <span>{dateLabel(today.date)}</span>
         </div>
         <NeptuneIndexBadge display={indexScore} size="hero" />
-        <CautiousLine tier={beach.tier} status={todayUnknown ? null : today.status} withTitle />
         {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
         <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
         <p className={s.predictionExplanation}>
@@ -256,6 +255,14 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
         </p>
       </section>
+    ) : beach.forecastPending ? (
+    <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">
+      <div className={s.predictionHeader}>
+        <p className={s.eyebrow}>Today’s estimate</p>
+        <span>{dateLabel(today.date)}</span>
+      </div>
+      <h3>Forecast pending</h3>
+    </section>
     ) : todayUnknown ? (
     <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">
       <div className={s.predictionHeader}>
@@ -296,7 +303,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         {beach.tier === "limited_data" && <p className={s.limitedNote}>{TIER_LIMITED_NOTE}</p>}
         {limited && <p className={s.limitedNote}>{limitedLabNote(beach.staleAfterDays, beach.county)}</p>}
         {beach.fallbackUsed === true && <p className={s.limitedNote}>This estimate used a fallback method.</p>}
-        {beach.calibratedProbability != null && (
+        {beach.calibratedProbability != null && !beach.forecastPending && (
           <p className={s.limitedNote}>Calibrated estimate: {Math.round(beach.calibratedProbability * 100)}%. Another model figure, not a lab result.</p>
         )}
         {beach.confidenceFlag && <p className={s.limitedNote}>Pipeline note: {beach.confidenceFlag}. Not a guarantee about today.</p>}
@@ -305,7 +312,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <LabHistory samples={labHistory} />
 
-    {!todayUnknown && <Figures probability={today.probability} ours={!!posting} />}
+    {!todayUnknown && !beach.forecastPending && <Figures probability={today.probability} ours={!!posting} />}
     <WhyPrediction
       key={today.date}
       prominentToggle
@@ -337,9 +344,9 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     {alertSignup}
     {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
               if (neighbor.neptuneDisplay) {
-                const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");
-                return <span className={s.listReading}><NeptuneIndexBadge display={neighbor.neptuneDisplay} />{note && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {note}</span>}</span>;
+                return <span className={s.listReading}><NeptuneIndexBadge display={neighbor.neptuneDisplay} /></span>;
               }
+              if (neighbor.forecastPending) return <span className={s.noEstimate}>Forecast pending</span>;
               if (showsUnknownCall(neighbor)) return <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>;
               if (neighbor.hasEstimate !== false && neighbor.status) {
                 const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");

@@ -733,6 +733,7 @@ export async function loadDashboardData(
         if (!dayStatus) continue;
         const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow.releases, leadHits, lead);
         const called = resolveVerdict(horizon.call, p, threshold);
+        const dayIndex = horizonIndex(horizon, entry.tier, bundle?.indexScale ?? null, indexMode);
         forecast.push({
           date,
           probability: p,
@@ -743,6 +744,8 @@ export async function loadDashboardData(
           experimental: maturity !== "go_live",
           method: horizon.method,
           confidence: horizon.confidence,
+          bandId: dayIndex.bandId,
+          forecastPending: dayIndex.forecastPending,
         });
       }
     }
@@ -919,6 +922,24 @@ export async function loadDashboardData(
   };
 }
 
+function horizonIndex(
+  horizon: { index: number | null; band: string | null; calibratedProbability: number | null; probability: number | null },
+  tier: string | null,
+  scale: IndexScale | null,
+  mode: PublishedIndexMode
+): { bandId: string | null; forecastPending: boolean } {
+  const chosen = chooseIndexValue(
+    { index: horizon.index, band: horizon.band },
+    { calibrated: horizon.calibratedProbability, probability: horizon.probability },
+    scale,
+    mode,
+    tier
+  );
+  if (chosen.forecastPending) return { bandId: null, forecastPending: true };
+  const display = resolveNeptuneDisplay(chosen.index, chosen.band, scale, { tier });
+  return { bandId: display?.bandId ?? null, forecastPending: false };
+}
+
 function labIsOver(value: unknown): boolean {
   const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
   return Number.isFinite(n) && n > EPA_MPN_THRESHOLD;
@@ -930,18 +951,22 @@ function presentIndex(
   context: IndexContext,
   scale: IndexScale | null,
   mode: PublishedIndexMode
-): { neptuneIndex: number | null; neptuneBand: string | null; neptuneDisplay: NeptuneDisplay | null } {
+): { neptuneIndex: number | null; neptuneBand: string | null; neptuneDisplay: NeptuneDisplay | null; forecastPending: boolean } {
   const chosen = chooseIndexValue(
     fields,
     { calibrated: probabilities.calibratedProbability, probability: probabilities.probability },
     scale,
-    mode
+    mode,
+    context.tier
   );
-  const neptuneDisplay = resolveNeptuneDisplay(chosen.index, chosen.band, scale, context);
+  const neptuneDisplay = chosen.forecastPending
+    ? null
+    : resolveNeptuneDisplay(chosen.index, chosen.band, scale, context);
   return {
     neptuneIndex: neptuneDisplay?.index ?? null,
     neptuneBand: neptuneDisplay?.bandId ?? chosen.band,
     neptuneDisplay,
+    forecastPending: chosen.forecastPending,
   };
 }
 

@@ -28,6 +28,7 @@ export type MapBeach = {
   rainAdvisory?: boolean | null;
   callUnknown?: boolean;
   tier?: RosterTier | null;
+  forecastPending?: boolean;
 };
 import {
   BASEMAP_ATTRIBUTION,
@@ -39,7 +40,7 @@ import { hasMapCoordinates } from "@/lib/geo";
 import { INDEX_PIN_SIZE, indexPinHtml, neptuneIndexName, type NeptuneDisplay } from "@/lib/neptuneIndex";
 import { copyReading, officialPosting, postingHeadline, postingPinText, showsUnknownCall, type PostingStatus, type PublishedReading } from "@/lib/publishedReading";
 import { POSTING_LABEL } from "@/lib/readerLabels";
-import { unknownCallPhrase } from "@/lib/publicCopy";
+import { forecastPendingPhrase, unknownCallPhrase } from "@/lib/publicCopy";
 import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 
 function colorFor(status: Status, tier?: RosterTier | null) {
@@ -608,6 +609,7 @@ function pinIcon(beach: MapBeach, binaryVerdict: boolean): L.DivIcon {
   const posting = officialPosting(copyReading(beach));
   if (posting) return officialPin(postingPinText(posting));
   if (beach.neptuneDisplay) return indexPin(beach.neptuneDisplay);
+  if (beach.forecastPending) return limitedPin();
   if (showsUnknownCall(beach)) return limitedPin();
   if (beach.hasEstimate && beach.status) return dotIcon({ status: beach.status, verdict: beach.verdict, tier: beach.tier }, binaryVerdict);
   return limitedPin();
@@ -621,13 +623,8 @@ function pinName(beach: MapBeach, statusPhrase?: (status: Status) => string): st
     const words = headline.detail ? `${headline.title}: ${headline.detail}` : headline.title;
     return `${beach.name}, ${words}${source}`;
   }
-  if (beach.neptuneDisplay) {
-    const lead = `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
-    const note = cautiousElevatedNote(beach.tier, beach.status, "en");
-    const phrase = beach.status ? statusPhrase?.(beach.status) : undefined;
-    if (note && phrase) return `${lead}. ${phrase}. ${note}`;
-    return lead;
-  }
+  if (beach.neptuneDisplay) return `${beach.name}, ${neptuneIndexName(beach.neptuneDisplay)}`;
+  if (beach.forecastPending) return `${beach.name}, ${forecastPendingPhrase("en")}`;
   if (showsUnknownCall(beach)) return `${beach.name}, ${unknownCallPhrase("en")}`;
   if (!beach.hasEstimate || !beach.status) return `${beach.name}, no estimate today`;
   const phrase = statusPhrase?.(beach.status);

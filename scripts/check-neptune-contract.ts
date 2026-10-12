@@ -53,6 +53,7 @@ import {
   detectPublishedScale,
   indexConfidenceNote,
   indexReading,
+  chooseIndexValue,
   indexScaleMode,
   indexScalePhrase,
   parseIndexBands,
@@ -469,6 +470,19 @@ const filledDaily = parseDailyStatusRows([
   },
 ]);
 assert.equal(filledDaily.rows[0]?.call, "Unsafe");
+const alertFlag = parseDailyStatusRows([
+  {
+    station_code: "L1",
+    tier: "limited_data",
+    alert_flag: "Unsafe",
+    nowcast_probability: 1,
+    neptune_index: "",
+    neptune_band: "",
+  },
+]);
+assert.equal(alertFlag.rows[0]?.call, "Unsafe");
+assert.equal(alertFlag.rows[0]?.probability, 1);
+assert.equal(alertFlag.rows[0]?.index.index, null);
 assert.equal(filledDaily.rows[0]?.probability, 0.62);
 assert.equal(filledDaily.rows[0]?.predictionDate, "2026-10-11");
 assert.equal(filledDaily.rows[0]?.calibratedProbability, 0.4);
@@ -663,6 +677,44 @@ assert.equal(
   ),
   "formula"
 );
+const limitedFallback = chooseIndexValue(
+  { index: null, band: null },
+  { calibrated: null, probability: 1 },
+  sampleScale,
+  "formula",
+  "limited_data"
+);
+assert.equal(limitedFallback.forecastPending, true);
+assert.equal(limitedFallback.index, null);
+assert.equal(limitedFallback.band, null);
+const limitedOldScale = chooseIndexValue(
+  { index: 98, band: "Good" },
+  { calibrated: null, probability: 1 },
+  sampleScale,
+  "formula",
+  "limited_data"
+);
+assert.equal(limitedOldScale.forecastPending, true);
+assert.equal(limitedOldScale.index, null);
+const wellTestedFallback = chooseIndexValue(
+  { index: null, band: null },
+  { calibrated: 0.023, probability: 1 },
+  sampleScale,
+  "formula",
+  "model_pool"
+);
+assert.equal(wellTestedFallback.forecastPending, false);
+assert.equal(wellTestedFallback.index, 2);
+const publishedLimited = chooseIndexValue(
+  { index: 26, band: "Moderate" },
+  { calibrated: null, probability: 1 },
+  sampleScale,
+  "published",
+  "limited_data"
+);
+assert.equal(publishedLimited.forecastPending, false);
+assert.equal(publishedLimited.index, 26);
+assert.equal(publishedLimited.band, "Moderate");
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(30, null, sampleScale)?.bandId, "moderate");

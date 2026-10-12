@@ -87,7 +87,7 @@
   border-radius: 12px;
   font: inherit;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 .primary {
@@ -152,7 +152,7 @@
 
 .dateline {
   margin: 0 0 14px;
-  font-size: 0.95rem;
+  font-size: 1.125rem;
 }
 
 .list {
@@ -195,8 +195,8 @@
 
 .meta,
 .tested {
-  font-size: 0.92rem;
-  color: #3d4c50;
+  font-size: 1.125rem;
+  color: #1b140f;
 }
 
 .pill,

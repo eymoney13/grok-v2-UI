@@ -91,7 +91,7 @@ function Beach({
   return (
     <>
       <nav className={styles.crumb} aria-label="Breadcrumb">
-        <a href="/">{t.homeTitle}</a>
+        <a href="/">{t.home}</a>
         <span aria-hidden="true">/</span>
         {beach.county && (
           <>

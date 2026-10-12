@@ -599,8 +599,8 @@ function horizonFromRow(row: Record<string, unknown>, lead: number): DailyHorizo
       : asFraction(first(row, [`day${lead}_probability`, `day${lead}Probability`]));
   const call =
     lead === 0
-      ? textOrNull(first(row, ["nowcast_call", "call", "prediction"]))
-      : textOrNull(first(row, [`day${lead}_call`, `day${lead}_prediction`, `day${lead}Call`]));
+      ? textOrNull(first(row, ["alert_flag", "nowcast_alert_flag", "nowcast_call", "call", "prediction"]))
+      : textOrNull(first(row, [`day${lead}_alert_flag`, `day${lead}_call`, `day${lead}_prediction`, `day${lead}Call`]));
   const specificCalibrated = asFraction(
     first(row, [`day${lead}_calibrated_probability`, `day${lead}CalibratedProbability`])
   );

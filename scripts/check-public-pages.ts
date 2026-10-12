@@ -308,8 +308,25 @@ const limitedIndex = dailySummary(
   "en"
 );
 assert.match(limitedIndex.status, /Very Likely Unsafe/);
-assert.match(limitedIndex.status, /Limited testing history, so this is a cautious estimate/);
+assert.doesNotMatch(limitedIndex.status, /Limited testing history|Elevated risk|\bSafe\b/);
 assert.match(limitedIndex.status, /Not safe/);
+const pending = dailySummary(
+  {
+    ...base,
+    status: "Not recommended",
+    tier: "limited_data",
+    forecastPending: true,
+    neptuneDisplay: null,
+    neptuneIndex: null,
+  },
+  "en"
+);
+assert.equal(pending.status, "Forecast pending");
+assert.doesNotMatch(pending.status, /Elevated risk|\bSafe\b|\bUnsafe\b|1\.0|\d/);
+assert.equal(
+  dailySummary({ ...base, tier: "limited_data", forecastPending: true, neptuneDisplay: null }, "es").status,
+  "Pronóstico pendiente"
+);
 const poolLow = dailySummary(
   { ...base, status: "Not recommended", tier: "model_pool", confidence: "low" },
   "en"

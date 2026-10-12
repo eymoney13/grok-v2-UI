@@ -11,6 +11,10 @@ export interface OutlookDay {
   experimental?: boolean;
   /** This day published Unknown. The outlook must not call it under the limit. */
   callUnknown?: boolean;
+  /** Index band for this day. The outlook uses this instead of the old call. */
+  bandId?: string | null;
+  /** No trusted index for this day. The outlook does not invent a number. */
+  forecastPending?: boolean;
 }
 
 /**
@@ -34,6 +38,8 @@ export interface PublicBeach {
   neptuneIndex: number | null;
   neptuneBand: string | null;
   neptuneDisplay: NeptuneDisplay | null;
+  /** Limited-data row with no trusted index. No number is shown. */
+  forecastPending?: boolean;
   daysSinceSample: number | null;
   noRecentSample: boolean;
   staleAfterDays: number | null;
@@ -72,6 +78,7 @@ export type GlanceBeach = Pick<
   | "neptuneIndex"
   | "neptuneBand"
   | "neptuneDisplay"
+  | "forecastPending"
   | "daysSinceSample"
   | "noRecentSample"
   | "staleAfterDays"
@@ -101,6 +108,7 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
+    forecastPending: beach.forecastPending,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,

@@ -6,11 +6,13 @@ import {
 } from "./forecastDisplay.ts";
 import {
   indexReading,
+  swimWords,
   type NeptuneDisplay,
 } from "./neptuneIndex.ts";
 import {
   statusDetail,
   statusPhrase,
+  forecastPendingPhrase,
   notTestedPhrase,
   unknownCallPhrase,
   type Lang,
@@ -66,6 +68,8 @@ export interface SummaryFacts {
   rainAdvisory: boolean | null;
   callUnknown?: boolean;
   neverTested?: boolean;
+  /** Limited-data beach with no trusted index. No number and no old call. */
+  forecastPending?: boolean;
 }
 
 export interface DailySummary {
@@ -103,7 +107,7 @@ const TIER_ES =
  * A hidden horizon contributes no days, so the page cannot describe a direction.
  */
 export function publishedOutlook(
-  days: { date: string; status: Status; locked?: boolean; experimental?: boolean; callUnknown?: boolean }[],
+  days: { date: string; status: Status; locked?: boolean; experimental?: boolean; callUnknown?: boolean; bandId?: string | null; forecastPending?: boolean }[],
   predictionDate: string,
   horizon: ForecastHorizon
 ): OutlookDay[] {
@@ -117,6 +121,8 @@ export function publishedOutlook(
       status: day.status,
       experimental: day.experimental !== false,
       ...(day.callUnknown ? { callUnknown: true as const } : {}),
+      ...(day.bandId ? { bandId: day.bandId } : {}),
+      ...(day.forecastPending ? { forecastPending: true as const } : {}),
     }));
 }
 
@@ -173,8 +179,9 @@ function withCautiousNote(sentence: string, facts: SummaryFacts, lang: Lang): st
 
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
   if (facts.neverTested) return notTestedPhrase(lang);
+  if (facts.forecastPending) return forecastPendingPhrase(lang);
   const indexed = indexSentence(facts.neptuneDisplay, lang);
-  if (indexed) return withCautiousNote(indexed, facts, lang);
+  if (indexed) return indexed;
   if (showsUnknownCall(facts)) return unknownCallPhrase(lang);
   if (!facts.hasEstimate) {
     return lang === "es"
@@ -259,6 +266,9 @@ function outlookSentence(facts: SummaryFacts, lang: Lang): string {
   if (facts.outlook.length === 0) return lang === "es" ? NO_OUTLOOK_ES : NO_OUTLOOK_EN;
   const parts = facts.outlook.map((day) => {
     const name = weekday(day.date, lang);
+    if (day.forecastPending) return `${name}: ${forecastPendingPhrase(lang)}`;
+    const bandWords = swimWords(day.bandId, lang);
+    if (bandWords) return `${name}: ${bandWords}`;
     if (day.callUnknown) return `${name}: ${unknownCallPhrase(lang)}`;
     const phrase = statusPhrase(day.status, lang);
     return lang === "es" ? `${name} está ${phrase}` : `${name} is ${phrase}`;

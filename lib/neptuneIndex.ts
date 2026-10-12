@@ -7,9 +7,10 @@ import { hasLimitedLabData } from "./waterStatus.ts";
  * Neptune Index display.
  *
  * One scale for every beach. A lower number is cleaner. Band names and the
- * formula live in `config/neptune_index_bands.json`. Until `neptune_index`
- * in current.csv matches that formula, the score is computed from the
- * probability columns. A published index is used only when it already matches.
+ * formula live in `config/neptune_index_bands.json`. A published `neptune_index`
+ * is used when it already matches that formula. When it is missing, or the
+ * file is still the older scale, only a well-tested beach may be computed
+ * from probability. A limited-data beach stays “Forecast pending” with no number.
  */
 
 /** Product scale used when a bands file omits its ends, or when no file is loaded. */
@@ -384,27 +385,39 @@ export function indexScaleMode(
   return detectPublishedScale(pairs, scale.detection);
 }
 
+/** Roster tiers that may use a computed index when `neptune_index` is not trusted. */
+export function isWellTestedTier(tier: string | null | undefined): boolean {
+  const key = (tier ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return key === "model_pool" || key === "well_tested";
+}
+
 /**
  * Use the published index only when the file is already on this scale.
- * A blank cell still falls back to the formula. Formula mode ignores the old band word.
+ * A blank cell, or a file still on the old scale, is fallback mode.
+ * Fallback computes a score only for a well-tested beach. Limited-data
+ * probability is raw and can be 1.0, so those rows get no number.
  */
 export function chooseIndexValue(
   published: { index: number | null; band: string | null } | null | undefined,
   probabilities: { calibrated: number | null; probability: number | null },
   scale: IndexScale | null,
-  mode: PublishedIndexMode
-): { index: number | null; band: string | null } {
+  mode: PublishedIndexMode,
+  tier?: string | null
+): { index: number | null; band: string | null; forecastPending: boolean } {
+  const publishedIndex = published?.index ?? null;
+  if (mode === "published" && publishedIndex != null) {
+    return { index: publishedIndex, band: published?.band ?? null, forecastPending: false };
+  }
+  if (!isWellTestedTier(tier)) {
+    return { index: null, band: null, forecastPending: true };
+  }
   const computed = scale?.formula
     ? scoreFromProbability(
         { calibrated_probability: probabilities.calibrated, probability: probabilities.probability },
         scale.formula
       )
     : null;
-  const publishedIndex = published?.index ?? null;
-  if (mode === "published" && publishedIndex != null) {
-    return { index: publishedIndex, band: published?.band ?? null };
-  }
-  return { index: computed, band: null };
+  return { index: computed, band: null, forecastPending: false };
 }
 
 /** The one scale. A tier table is used only when the file has no shared list. */

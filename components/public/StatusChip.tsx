@@ -24,6 +24,7 @@ export function StatusChip({
     | "rainAdvisory"
     | "callUnknown"
     | "neverTested"
+    | "forecastPending"
   >;
   lang: Lang;
 }) {
