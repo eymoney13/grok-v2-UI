@@ -262,6 +262,11 @@ function outlookLabel(facts: SummaryFacts, lang: Lang): string {
 }
 
 function outlookSentence(facts: SummaryFacts, lang: Lang): string {
+  if (facts.forecastPending) {
+    return lang === "es"
+      ? "El pronóstico de los próximos días también está pendiente."
+      : "The forecast for the next days is pending too.";
+  }
   if (facts.horizon !== "label") return lang === "es" ? HIDDEN_ES : FORECAST_HIDDEN_STATION_NOTE;
   if (facts.outlook.length === 0) return lang === "es" ? NO_OUTLOOK_ES : NO_OUTLOOK_EN;
   const parts = facts.outlook.map((day) => {
