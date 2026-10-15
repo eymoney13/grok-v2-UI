@@ -34,7 +34,8 @@ import {
   unknownPostingWords,
   type PublishedReading,
 } from "@/lib/publishedReading";
-import { unknownCallPhrase } from "@/lib/publicCopy";
+import { forecastPendingPhrase, unknownCallPhrase } from "@/lib/publicCopy";
+import { swimWords } from "@/lib/neptuneIndex";
 import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 import type { RosterTier } from "@/lib/data";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
@@ -77,18 +78,29 @@ function dayIsExperimental(day: ForecastDay): boolean {
   return day.experimental !== false;
 }
 
+/** Index beaches use the band. dayN_call is not shown beside the index. */
+function lookAheadWords(forecast: ForecastDay, useIndexLabels: boolean): string {
+  if (forecast.forecastPending || (useIndexLabels && !swimWords(forecast.bandId, "en"))) {
+    return forecastPendingPhrase("en");
+  }
+  return swimWords(forecast.bandId, "en")
+    ?? (forecast.callUnknown ? unknownCallPhrase("en") : statusReading(forecast.status).pill);
+}
+
 function ForecastLookAhead({
   forecasts,
   picked,
   onPick,
   onLocked,
   tier,
+  useIndexLabels,
 }: {
   forecasts: ForecastDay[];
   picked: ForecastDay | null;
   onPick: (date: string) => void;
   onLocked: (feature: LockedFeature, date: string) => void;
   tier: RosterTier | null;
+  useIndexLabels: boolean;
 }) {
   const open = forecasts.filter((day) => !day.locked);
   const allGoLive = open.length > 0 && open.every((day) => day.experimental === false);
@@ -112,19 +124,19 @@ function ForecastLookAhead({
             <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
           </a>
         ) : (
-          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown ? s.unknownCall : bandClass(forecast.status, tier)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${forecast.callUnknown ? unknownCallPhrase("en") : bandLabel(forecast.status)}`}>
+          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown && !useIndexLabels ? s.unknownCall : bandClass(forecast.status, tier)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${lookAheadWords(forecast, useIndexLabels)}`}>
             <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
             <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
             {mixed && dayIsExperimental(forecast) && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
-            <strong>{forecast.callUnknown ? unknownCallPhrase("en") : statusReading(forecast.status).pill}</strong>
+            <strong>{lookAheadWords(forecast, useIndexLabels)}</strong>
           </button>
         ))}</div>
         {picked && (
           <div className={s.forecastPick}>
-            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).title}</p>
-            <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>
-            <CautiousLine tier={tier} status={picked.callUnknown ? null : picked.status} />
-            <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
+            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {lookAheadWords(picked, useIndexLabels)}</p>
+            {!useIndexLabels && <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>}
+            {!useIndexLabels && <CautiousLine tier={tier} status={picked.callUnknown ? null : picked.status} />}
+            {!picked.probabilityOmitted && <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>}
             {pickedMethod && <p>{pickedMethod}</p>}
             {pickedConfidence && <p>{pickedConfidence.text}</p>}
           </div>
@@ -338,6 +350,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         onPick={(date) => setPickedDate((current) => current === date ? null : date)}
         onLocked={lockedClicked}
         tier={beach.tier}
+        useIndexLabels={beach.neptuneDisplay != null}
       />
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />

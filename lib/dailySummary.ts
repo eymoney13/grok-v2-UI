@@ -274,6 +274,8 @@ function outlookSentence(facts: SummaryFacts, lang: Lang): string {
     if (day.forecastPending) return `${name}: ${forecastPendingPhrase(lang)}`;
     const bandWords = swimWords(day.bandId, lang);
     if (bandWords) return `${name}: ${bandWords}`;
+    // An index beach does not fall back to dayN_call / alert_flag ("elevated risk", "under the limit").
+    if (facts.neptuneDisplay) return `${name}: ${forecastPendingPhrase(lang)}`;
     if (day.callUnknown) return `${name}: ${unknownCallPhrase(lang)}`;
     const phrase = statusPhrase(day.status, lang);
     return lang === "es" ? `${name} está ${phrase}` : `${name} is ${phrase}`;

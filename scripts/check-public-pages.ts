@@ -207,6 +207,20 @@ const indexedUnknown = dailySummary(
 );
 assert.match(indexedUnknown.status, /92 \/ 100/);
 assert.doesNotMatch(indexedUnknown.status, /under the limit|Not enough recent data|\bSafe\b/);
+const indexedDays = dailySummary(
+  {
+    ...base,
+    neptuneDisplay: resolveNeptuneDisplay(2, "good", indexScale),
+    outlook: [
+      { date: "2026-10-10", status: "Not recommended", experimental: true, bandId: "good" },
+      { date: "2026-10-11", status: "Normal", experimental: true, callUnknown: true },
+    ],
+  },
+  "en"
+);
+assert.match(indexedDays.outlook, /Saturday: Safe to swim/);
+assert.match(indexedDays.outlook, /Sunday: Forecast pending/);
+assert.doesNotMatch(indexedDays.outlook, /elevated risk|under the limit|Not enough recent data/i);
 const postedUnknown = dailySummary(
   { ...base, postingStatus: "closure", postingSource: "Orange County", finalStatus: "Unknown" },
   "en"

@@ -685,6 +685,8 @@ export interface ForecastDay {
   bandId?: string | null;
   /** This day has no trusted index and must not be computed for a limited-data beach. */
   forecastPending?: boolean;
+  /** The day was published from an index cell with no probability. Do not show 0%. */
+  probabilityOmitted?: boolean;
   /** Method for this lead, when outputs/daily_status.csv published one. */
   method?: EstimateMethod | null;
   /** high, medium, or low for this lead. Not the go_live flag. */

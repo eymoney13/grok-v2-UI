@@ -409,6 +409,13 @@ const manifest = parseManifest({
 assert.equal(manifest.modelVersion, "v2-test");
 assert.equal(manifest.checksPassed, false);
 assert.deepEqual(manifest.staleCounties, ["Orange"]);
+assert.deepEqual(manifest.notForDisplay, []);
+const hiddenColumns = parseManifest({
+  not_for_display: ["alert_flag", "day1_call", "day2_call", "day3_call"],
+});
+assert.deepEqual(hiddenColumns.notForDisplay, ["alert_flag", "day1_call", "day2_call", "day3_call"]);
+const hiddenNested = parseManifest({ stats: { not_for_display: ["alert_flag"] } });
+assert.deepEqual(hiddenNested.notForDisplay, ["alert_flag"]);
 
 const manifestNested = parseManifest({
   stats: {
@@ -715,6 +722,16 @@ const publishedLimited = chooseIndexValue(
 assert.equal(publishedLimited.forecastPending, false);
 assert.equal(publishedLimited.index, 26);
 assert.equal(publishedLimited.band, "Moderate");
+const limitedMatchingRow = chooseIndexValue(
+  { index: 26, band: "Moderate" },
+  { calibrated: 0.26, probability: 1 },
+  sampleScale,
+  "formula",
+  "limited_data"
+);
+assert.equal(limitedMatchingRow.forecastPending, false);
+assert.equal(limitedMatchingRow.index, 26);
+assert.equal(limitedMatchingRow.band, "Moderate");
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(30, null, sampleScale)?.bandId, "moderate");
@@ -768,6 +785,7 @@ for (const key of ["SCCWPCEL|Cowell", "SCCWPCEL|Main", "SCCWPCEL|O440", "SCCWPCE
 }
 const manifestFile = parseManifest(JSON.parse(readFileSync("data/neptune-v2/outputs/run_manifest.json", "utf8")));
 assert.deepEqual(manifestFile.coordinateFlags, []);
+assert.deepEqual(manifestFile.notForDisplay, []);
 const four = parseIndexBands({
   by_tier: {
     model_pool: [

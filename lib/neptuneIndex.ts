@@ -7,10 +7,11 @@ import { hasLimitedLabData } from "./waterStatus.ts";
  * Neptune Index display.
  *
  * One scale for every beach. A lower number is cleaner. Band names and the
- * formula live in `config/neptune_index_bands.json`. A published `neptune_index`
- * is used when it already matches that formula. When it is missing, or the
- * file is still the older scale, only a well-tested beach may be computed
- * from probability. A limited-data beach stays “Forecast pending” with no number.
+ * formula live in `config/neptune_index_bands.json`. A filled `neptune_index`
+ * is the number for every tier when it is already on that scale. Forecast
+ * pending is a missing cell on a limited-data beach, or a cell that is still
+ * the older higher-is-cleaner scale. Only a well-tested beach is computed
+ * from probability in that case.
  */
 
 /** Product scale used when a bands file omits its ends, or when no file is loaded. */
@@ -391,11 +392,28 @@ export function isWellTestedTier(tier: string | null | undefined): boolean {
   return key === "model_pool" || key === "well_tested";
 }
 
+function publishedIndexIsNewScale(
+  publishedIndex: number,
+  probabilities: { calibrated: number | null; probability: number | null },
+  scale: IndexScale | null
+): boolean {
+  if (!scale?.formula) return false;
+  const computed = scoreFromProbability(
+    { calibrated_probability: probabilities.calibrated, probability: probabilities.probability },
+    scale.formula
+  );
+  if (computed == null) return false;
+  return Math.abs(publishedIndex - computed) <= scale.detection.tolerance;
+}
+
 /**
- * Use the published index only when the file is already on this scale.
- * A blank cell, or a file still on the old scale, is fallback mode.
- * Fallback computes a score only for a well-tested beach. Limited-data
- * probability is raw and can be 1.0, so those rows get no number.
+ * A filled `neptune_index` is the number for every tier, including limited-data.
+ * File mode `published` means the column is already the new scale. A single row
+ * that matches the formula is used even when other rows are still the old scale.
+ * Forecast pending is only a missing cell on a limited-data beach: the raw
+ * probability can be 1.0, so it is not turned into an index. A well-tested beach
+ * with a missing cell is computed. A filled cell that is still the old
+ * higher-is-cleaner scale is not shown as this index.
  */
 export function chooseIndexValue(
   published: { index: number | null; band: string | null } | null | undefined,
@@ -405,9 +423,14 @@ export function chooseIndexValue(
   tier?: string | null
 ): { index: number | null; band: string | null; forecastPending: boolean } {
   const publishedIndex = published?.index ?? null;
-  if (mode === "published" && publishedIndex != null) {
+  const onNewScale =
+    publishedIndex != null &&
+    (mode === "published" || publishedIndexIsNewScale(publishedIndex, probabilities, scale));
+  if (onNewScale && publishedIndex != null) {
     return { index: publishedIndex, band: published?.band ?? null, forecastPending: false };
   }
+  // Missing cell, or a filled cell that is still the old scale. Raw probability
+  // on a limited-data beach can be 1.0, so it is not turned into an index.
   if (!isWellTestedTier(tier)) {
     return { index: null, band: null, forecastPending: true };
   }

@@ -110,6 +110,11 @@ export interface RunManifest {
   checksPassed: boolean | null;
   /** Station keys the manifest flagged for a bad location. */
   coordinateFlags: string[];
+  /**
+   * Column names the manifest lists under `not_for_display`.
+   * `alert_flag` belongs here. Those names are never rendered.
+   */
+  notForDisplay: string[];
 }
 
 export interface OptionalModelFields {
@@ -503,6 +508,29 @@ function staleCountiesFromManifest(data: Record<string, unknown>): string[] {
   return [];
 }
 
+function columnNameList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const item of raw) {
+    const name = textOrNull(item);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/** Columns the publish says must not be shown. `alert_flag` is the old Safe/Unsafe call. */
+function notForDisplayFromManifest(data: Record<string, unknown>): string[] {
+  const direct = columnNameList(data.not_for_display ?? data.notForDisplay);
+  if (direct.length > 0) return direct;
+  for (const key of ["stats", "summary", "run"]) {
+    const nested = data[key];
+    if (!isObj(nested)) continue;
+    const names = columnNameList(nested.not_for_display ?? nested.notForDisplay);
+    if (names.length > 0) return names;
+  }
+  return [];
+}
+
 function coordinateFlagsFromManifest(data: Record<string, unknown>): string[] {
   const raw = data.coordinate_flags ?? data.coordinateFlags;
   if (!Array.isArray(raw)) return [];
@@ -517,7 +545,14 @@ function coordinateFlagsFromManifest(data: Record<string, unknown>): string[] {
 
 export function parseManifest(data: unknown): RunManifest {
   if (!isObj(data)) {
-    return { generatedAt: null, modelVersion: null, staleCounties: [], checksPassed: null, coordinateFlags: [] };
+    return {
+      generatedAt: null,
+      modelVersion: null,
+      staleCounties: [],
+      checksPassed: null,
+      coordinateFlags: [],
+      notForDisplay: [],
+    };
   }
   const nested = ["stats", "summary", "run"].map((key) => data[key]).find(isObj);
   return {
@@ -526,6 +561,7 @@ export function parseManifest(data: unknown): RunManifest {
     staleCounties: staleCountiesFromManifest(data),
     checksPassed: asBool(data.checks_passed ?? data.checksPassed ?? nested?.checks_passed ?? nested?.checksPassed),
     coordinateFlags: coordinateFlagsFromManifest(data),
+    notForDisplay: notForDisplayFromManifest(data),
   };
 }
 

@@ -172,8 +172,6 @@
   background: #fff;
   color: inherit;
   text-decoration: none;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 7rem;
 }
 
 .name {

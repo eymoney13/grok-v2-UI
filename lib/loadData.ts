@@ -781,6 +781,44 @@ export async function loadDashboardData(
       }
       forecast.sort((a, b) => a.date.localeCompare(b.date));
     }
+    // Day-ahead words come from dayN_neptune_index / dayN_neptune_band.
+    // A day that only has an index is still listed. dayN_call is not the label.
+    if (dailyRow && dailyDate) {
+      for (const lead of [1, 2, 3] as const) {
+        const horizon = dailyRow.horizons[lead];
+        if (!horizon) continue;
+        const date = addUtcDays(dailyDate, lead);
+        if (!date) continue;
+        const labeled = horizonIndex(horizon, entry.tier, bundle?.indexScale ?? null, indexMode);
+        const existing = forecast.find((day) => day.date === date);
+        if (existing) {
+          existing.bandId = labeled.bandId;
+          existing.forecastPending = labeled.forecastPending;
+          continue;
+        }
+        const hasProb = horizon.probability != null && Number.isFinite(horizon.probability);
+        if (!hasProb && labeled.bandId == null && !labeled.forecastPending) continue;
+        const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow.releases, leadHits, lead);
+        const p = hasProb ? horizon.probability! : 0;
+        const fromProbability = hasProb ? statusForPublishedCall(classify(p, threshold), null) : null;
+        if (!fromProbability && labeled.bandId == null && !labeled.forecastPending) continue;
+        forecast.push({
+          date,
+          probability: p,
+          status: fromProbability ?? "Normal",
+          threshold,
+          verdict: null,
+          callUnknown: false,
+          experimental: maturity !== "go_live",
+          method: horizon.method,
+          confidence: horizon.confidence,
+          bandId: labeled.bandId,
+          forecastPending: labeled.forecastPending,
+          ...(hasProb ? {} : { probabilityOmitted: true }),
+        });
+      }
+      forecast.sort((a, b) => a.date.localeCompare(b.date));
+    }
 
     // history_3day.csv shape mirrors forecast_3day.csv, where day1 = most recent past day.
     // We re-sort ascending so the array reads past → present left-to-right.
