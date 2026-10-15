@@ -252,6 +252,21 @@ assert.match(rulesIndex.status, /92 \/ 100, lower is cleaner/);
 assert.match(rulesIndex.status, /Very Likely Unsafe/);
 assert.match(rulesIndex.method ?? "", /last lab test \+ rain rule/);
 assert.doesNotMatch(rulesIndex.status, /\bGood\b|\bCaution\b|\bPoor\b/);
+const warnedIndex = dailySummary(
+  {
+    ...base,
+    postingStatus: "warning",
+    postingSource: "Orange County",
+    neptuneDisplay: resolveNeptuneDisplay(2, "good", indexScale, { overrideReason: "posted_warning" }),
+  },
+  "en"
+);
+assert.match(warnedIndex.status, /The county has posted a warning for this beach/);
+assert.match(warnedIndex.status, /Not safe/);
+assert.match(warnedIndex.status, /\b2\b/);
+assert.doesNotMatch(warnedIndex.status, /elevated risk|alert_flag/i);
+const pendingBlank = dailySummary({ ...base, forecastPending: true, neptuneDisplay: null, hasEstimate: false }, "en");
+assert.match(pendingBlank.status, /Forecast pending/);
 const tierCaution = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "model_pool" }) },
   "en"

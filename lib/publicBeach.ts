@@ -38,8 +38,10 @@ export interface PublicBeach {
   neptuneIndex: number | null;
   neptuneBand: string | null;
   neptuneDisplay: NeptuneDisplay | null;
-  /** Limited-data row with no trusted index. No number is shown. */
+  /** Limited-data row with no trusted index, or a blank probability. No number is shown. */
   forecastPending?: boolean;
+  /** Tier ceiling below the top of the scale. Null when this beach can use the full scale. */
+  indexCeiling?: number | null;
   daysSinceSample: number | null;
   noRecentSample: boolean;
   staleAfterDays: number | null;
@@ -79,6 +81,7 @@ export type GlanceBeach = Pick<
   | "neptuneBand"
   | "neptuneDisplay"
   | "forecastPending"
+  | "indexCeiling"
   | "daysSinceSample"
   | "noRecentSample"
   | "staleAfterDays"
@@ -109,6 +112,7 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
     forecastPending: beach.forecastPending,
+    indexCeiling: beach.indexCeiling,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,

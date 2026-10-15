@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   groupArchive,
+  ceilingForTier,
   parseArchiveRow,
+  parseCalibrationCeilings,
   parseManifest,
   parseRegions,
   parseRosterJson,
@@ -49,6 +51,7 @@ import {
 } from "../lib/publishedReading.ts";
 import {
   bandForValue,
+  ceilingPhrase,
   displayBandLabel,
   detectPublishedScale,
   indexConfidenceNote,
@@ -56,6 +59,8 @@ import {
   chooseIndexValue,
   indexScaleMode,
   indexScalePhrase,
+  overrideReasonPhrase,
+  parseBandOverrideReason,
   parseIndexBands,
   parseNeptuneBandId,
   readNeptuneFields,
@@ -732,6 +737,34 @@ const limitedMatchingRow = chooseIndexValue(
 assert.equal(limitedMatchingRow.forecastPending, false);
 assert.equal(limitedMatchingRow.index, 26);
 assert.equal(limitedMatchingRow.band, "Moderate");
+const blankProbability = chooseIndexValue(
+  { index: null, band: null },
+  { calibrated: null, probability: null },
+  sampleScale,
+  "formula",
+  "model_pool"
+);
+assert.equal(blankProbability.forecastPending, true);
+assert.equal(blankProbability.index, null);
+assert.equal(blankProbability.band, null);
+const blankBesideOld = chooseIndexValue(
+  { index: 98, band: "Good" },
+  { calibrated: null, probability: null },
+  sampleScale,
+  "formula",
+  "model_pool"
+);
+assert.equal(blankBesideOld.forecastPending, true);
+assert.equal(blankBesideOld.index, null);
+const blankLimited = chooseIndexValue(
+  { index: null, band: null },
+  { calibrated: null, probability: null },
+  sampleScale,
+  "published",
+  "limited_data"
+);
+assert.equal(blankLimited.forecastPending, true);
+assert.equal(blankLimited.index, null);
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(10, null, sampleScale, { tier: "limited_data" })?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(30, null, sampleScale)?.bandId, "moderate");
@@ -747,8 +780,81 @@ assert.equal(swimWords("very_likely_unsafe", "es"), "No es seguro");
 const rulesScore = resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool", method: "rules" });
 assert.equal(rulesScore?.bandId, "good");
 assert.equal(rulesScore?.index, 10);
-assert.equal(rulesScore?.rulesIndex, false);
 assert.equal(rulesScore?.bands.length, 4);
+const posted = resolveNeptuneDisplay(2, "good", sampleScale, { overrideReason: "posted_warning" });
+assert.equal(posted?.bandId, "very_likely_unsafe");
+assert.equal(posted?.index, 2);
+assert.equal(posted?.overrideReason, "posted_warning");
+assert.equal(overrideReasonPhrase(posted?.overrideReason, "en"), "The county has posted a warning for this beach");
+assert.equal(overrideReasonPhrase("closure", "en"), "This beach is closed");
+const closedByPosting = resolveNeptuneDisplay(2, "good", sampleScale, { postingStatus: "closure" });
+assert.equal(closedByPosting?.bandId, "very_likely_unsafe");
+assert.equal(closedByPosting?.index, 2);
+assert.equal(closedByPosting?.overrideReason, "closure");
+assert.equal(parseBandOverrideReason("posted_warning"), "posted_warning");
+assert.equal(parseBandOverrideReason("closure"), "closure");
+assert.equal(parseBandOverrideReason(""), null);
+assert.equal(parseBandOverrideReason("warning"), null);
+assert.equal(
+  readNeptuneFields({ neptune_index: 2, neptune_band: "Good", band_override_reason: "posted_warning" }).overrideReason,
+  "posted_warning"
+);
+const archiveOverride = parseArchiveRow({
+  station_code: "BDP12",
+  neptune_index: 2,
+  neptune_band: "Good",
+  probability: 0.02,
+  band_override_reason: "closure",
+});
+assert.equal(archiveOverride?.neptuneOverrideReason, "closure");
+assert.equal(archiveOverride?.neptuneIndex, 2);
+const ceilingsFile = parseCalibrationCeilings(
+  JSON.parse(readFileSync("data/neptune-v2/config/calibration_ceilings.json", "utf8"))
+);
+assert.deepEqual(ceilingsFile.groups, {});
+assert.equal(ceilingForTier(ceilingsFile, "limited_data"), ceilingsFile.byTier.limited_data);
+assert.equal(ceilingForTier(ceilingsFile, "model_pool"), ceilingsFile.byTier.model_pool);
+assert.ok(ceilingsFile.byTier.limited_data < ceilingsFile.byTier.model_pool);
+assert.equal(
+  ceilingPhrase(ceilingsFile.byTier.limited_data, "en"),
+  `This index can't go above ${ceilingsFile.byTier.limited_data} yet.`
+);
+const wrappedCeilings = parseCalibrationCeilings({
+  generated_at: "2026-10-15T00:00:00Z",
+  roster_row_count: 680,
+  calibration_ceilings: {
+    limited_data: ceilingsFile.byTier.limited_data,
+    model_pool: ceilingsFile.byTier.model_pool,
+    groups: {},
+  },
+});
+assert.deepEqual(wrappedCeilings, ceilingsFile);
+assert.equal(
+  ceilingForTier(
+    parseCalibrationCeilings({
+      generated_at: "2026-10-10T14:56:12Z",
+      tiers: { model_pool: 182, limited_data: 497 },
+      calibration_ceilings: {
+        limited_data: ceilingsFile.byTier.limited_data,
+        model_pool: ceilingsFile.byTier.model_pool,
+        groups: {},
+      },
+    }),
+    "limited_data"
+  ),
+  ceilingsFile.byTier.limited_data
+);
+assert.deepEqual(parseCalibrationCeilings({ roster_row_count: 679, runtime_seconds: 20, tiers: { limited_data: 497 } }).byTier, {});
+const capped = resolveNeptuneDisplay(10, "good", sampleScale, {
+  tier: "limited_data",
+  ceiling: ceilingsFile.byTier.limited_data,
+});
+assert.equal(capped?.index, 10);
+assert.equal(capped?.ceiling, ceilingsFile.byTier.limited_data);
+assert.equal(
+  resolveNeptuneDisplay(10, "good", sampleScale, { ceiling: ceilingsFile.byTier.model_pool })?.ceiling,
+  null
+);
 assert.equal(resolveNeptuneDisplay(92, "good", sampleScale, { tier: "model_pool", method: "rules" })?.bandId, "very_likely_unsafe");
 assert.equal(
   resolveNeptuneDisplay(10, null, sampleScale, { tier: "model_pool", method: "rules", postingStatus: "warning" })?.bandId,
@@ -786,6 +892,8 @@ for (const key of ["SCCWPCEL|Cowell", "SCCWPCEL|Main", "SCCWPCEL|O440", "SCCWPCE
 const manifestFile = parseManifest(JSON.parse(readFileSync("data/neptune-v2/outputs/run_manifest.json", "utf8")));
 assert.deepEqual(manifestFile.coordinateFlags, []);
 assert.deepEqual(manifestFile.notForDisplay, []);
+assert.deepEqual(manifestFile.calibrationCeilings.byTier, {});
+assert.deepEqual(manifestFile.calibrationCeilings.groups, {});
 const four = parseIndexBands({
   by_tier: {
     model_pool: [
@@ -847,7 +955,7 @@ assert.equal(resolveNeptuneDisplay(900, "good", alt)?.index, null);
 assert.equal(resolveNeptuneDisplay(900, "good", alt)?.bandId, "good");
 assert.equal(resolveNeptuneDisplay(900, "not-a-band", alt)?.bandId, "not_a_band");
 assert.equal(resolveNeptuneDisplay(null, null, alt), null);
-assert.deepEqual(readNeptuneFields({ probability: 0.4 }), { index: null, band: null });
+assert.deepEqual(readNeptuneFields({ probability: 0.4 }), { index: null, band: null, overrideReason: null });
 const lowered = resolveNeptuneDisplay(90, "good", alt, { daysSinceSample: 12 });
 assert.equal(lowered?.lowered, true);
 assert.match(indexConfidenceNote(lowered!, "en") ?? "", /last lab test 12 days ago/);

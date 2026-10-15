@@ -15,6 +15,7 @@ export const NEPTUNE_V2_REMOTE_FILES = [
   "outputs/run_manifest.json",
   "data/roster.json",
   "config/neptune_index_bands.json",
+  "config/calibration_ceilings.json",
   "config/staleness_thresholds.json",
 ] as const;
 

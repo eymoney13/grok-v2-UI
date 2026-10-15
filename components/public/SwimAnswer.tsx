@@ -1,4 +1,12 @@
-import { displayBandLabel, formatNeptuneIndex, indexReading, swimWords, type NeptuneDisplay } from "@/lib/neptuneIndex";
+import {
+  ceilingPhrase,
+  displayBandLabel,
+  formatNeptuneIndex,
+  indexReading,
+  overrideReasonPhrase,
+  swimWords,
+  type NeptuneDisplay,
+} from "@/lib/neptuneIndex";
 import { copy, forecastPendingPhrase, notTestedPhrase, unknownCallPhrase, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { copyReading, officialPosting, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
@@ -22,6 +30,7 @@ export function SwimAnswer({
     | "callUnknown"
     | "neverTested"
     | "forecastPending"
+    | "indexCeiling"
   >;
   lang: Lang;
   size?: "list" | "hero";
@@ -29,10 +38,12 @@ export function SwimAnswer({
   const reading = copyReading(beach);
   const posting = officialPosting(reading);
   const hero = size === "hero" ? styles.answerHero : "";
+  const display = beach.neptuneDisplay;
+  const reason = overrideReasonPhrase(display?.overrideReason, lang);
+  const ceiling = ceilingPhrase(display?.ceiling ?? beach.indexCeiling, lang);
 
   if (posting && (posting.kind === "warning" || posting.kind === "closure")) {
     const headline = postingHeadline(posting, lang);
-    const display = beach.neptuneDisplay;
     const number = display?.index != null ? formatNeptuneIndex(display.index) : null;
     const band = display?.bandId ? displayBandLabel(display, lang) : null;
     return (
@@ -41,6 +52,8 @@ export function SwimAnswer({
         <p className={styles.answerPlain}>{swimWords("very_likely_unsafe", lang)}</p>
         {number && <p className={styles.answerNumber}>{number}</p>}
         {band && band !== swimWords("very_likely_unsafe", lang) && <p className={styles.answerBand}>{band}</p>}
+        {reason && <p className={styles.answerMeta}>{reason}</p>}
+        {ceiling && <p className={styles.answerMeta}>{ceiling}</p>}
         {posting.source && (
           <p className={styles.answerMeta}>{lang === "es" ? `Fuente: ${posting.source}` : `Source: ${posting.source}`}</p>
         )}
@@ -48,7 +61,7 @@ export function SwimAnswer({
     );
   }
 
-  const index = beach.neptuneDisplay ? <IndexAnswer display={beach.neptuneDisplay} lang={lang} hero={hero} /> : null;
+  const index = display ? <IndexAnswer display={display} lang={lang} hero={hero} ceiling={ceiling} reason={reason} /> : null;
   if (posting?.kind === "advisory") {
     const headline = postingHeadline(posting, lang);
     return (
@@ -68,6 +81,7 @@ export function SwimAnswer({
     return (
       <div className={`${styles.answer} ${hero}`} role="status">
         <p className={styles.answerWords}>{notTestedPhrase(lang)}</p>
+        {ceiling && <p className={styles.answerMeta}>{ceiling}</p>}
       </div>
     );
   }
@@ -76,6 +90,7 @@ export function SwimAnswer({
     return (
       <div className={`${styles.answer} ${hero}`} role="status">
         <p className={styles.answerWords}>{forecastPendingPhrase(lang)}</p>
+        {ceiling && <p className={styles.answerMeta}>{ceiling}</p>}
       </div>
     );
   }
@@ -97,7 +112,19 @@ export function SwimAnswer({
   );
 }
 
-function IndexAnswer({ display, lang, hero }: { display: NeptuneDisplay; lang: Lang; hero: string }) {
+function IndexAnswer({
+  display,
+  lang,
+  hero,
+  ceiling,
+  reason,
+}: {
+  display: NeptuneDisplay;
+  lang: Lang;
+  hero: string;
+  ceiling: string | null;
+  reason: string | null;
+}) {
   const reading = indexReading(display, lang);
   const serious = display.labOverride || display.bandId === "likely_unsafe" || display.bandId === "very_likely_unsafe";
   return (
@@ -109,6 +136,8 @@ function IndexAnswer({ display, lang, hero }: { display: NeptuneDisplay; lang: L
       {reading.plain && <p className={styles.answerWords}>{reading.plain}</p>}
       {display.index != null && <p className={styles.answerNumber}>{formatNeptuneIndex(display.index)}</p>}
       {reading.label && reading.plain !== reading.label && <p className={styles.answerBand}>{reading.label}</p>}
+      {reason && <p className={styles.answerMeta}>{reason}</p>}
+      {ceiling && <p className={styles.answerMeta}>{ceiling}</p>}
       {reading.note && <p className={styles.answerMeta}>{reading.note}</p>}
     </div>
   );

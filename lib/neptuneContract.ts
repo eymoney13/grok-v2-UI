@@ -8,7 +8,13 @@
 import { coordinateWordUnknown, locationMarkedUnknown } from "./westCoastBox.mjs";
 
 export { coordinateWordUnknown };
-import { parseNeptuneBandId, parseNeptuneIndexValue, readNeptuneFields } from "./neptuneIndex.ts";
+import {
+  parseBandOverrideReason,
+  parseNeptuneBandId,
+  parseNeptuneIndexValue,
+  readNeptuneFields,
+  type BandOverrideReason,
+} from "./neptuneIndex.ts";
 import {
   EMPTY_READING,
   parseConfidenceLevel,
@@ -69,6 +75,8 @@ export interface ArchiveRow {
   neptuneIndex: number | null;
   /** Published band id from the display config. Null when absent or unknown. */
   neptuneBand: string | null;
+  /** `band_override_reason` by header name. The archive file puts this column last. */
+  neptuneOverrideReason: BandOverrideReason | null;
   /** Set when the archive file has an `agency` column. */
   agency: string | null;
 }
@@ -115,6 +123,121 @@ export interface RunManifest {
    * `alert_flag` belongs here. Those names are never rendered.
    */
   notForDisplay: string[];
+  /** Tier and group caps from `calibration_ceilings` on this manifest. Empty when the key is absent. */
+  calibrationCeilings: CalibrationCeilings;
+}
+
+/** Caps from `config/calibration_ceilings.json` or a manifest `calibration_ceilings` object. */
+export interface CalibrationCeilings {
+  byTier: Record<string, number>;
+  /** Named groups. An empty object is a real publish, not a missing file. */
+  groups: Record<string, number>;
+}
+
+export function emptyCalibrationCeilings(): CalibrationCeilings {
+  return { byTier: {}, groups: {} };
+}
+
+function ceilingKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function ceilingNumber(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A ceilings file is only the caps. A run manifest also has `tiers`, and those
+ * numbers are station counts, not caps. Do not read them as ceilings.
+ */
+function looksLikeCeilings(data: Record<string, unknown>): boolean {
+  if (
+    "generated_at" in data ||
+    "generatedAt" in data ||
+    "model_version" in data ||
+    "modelVersion" in data ||
+    "stale_counties" in data ||
+    "roster_row_count" in data ||
+    "unsafe_share" in data
+  ) {
+    return false;
+  }
+  return (
+    "groups" in data ||
+    "tiers" in data ||
+    "limited_data" in data ||
+    "model_pool" in data ||
+    "limitedData" in data ||
+    "modelPool" in data
+  );
+}
+
+/** The ceilings object itself, or the same object under `calibration_ceilings` on a manifest. */
+function ceilingsSource(data: Record<string, unknown>): Record<string, unknown> | null {
+  const wrapped = data.calibration_ceilings ?? data.calibrationCeilings;
+  if (isObj(wrapped)) return wrapped;
+  for (const key of ["stats", "summary", "run"]) {
+    const nested = data[key];
+    if (!isObj(nested)) continue;
+    const inner = nested.calibration_ceilings ?? nested.calibrationCeilings;
+    if (isObj(inner)) return inner;
+  }
+  if (looksLikeCeilings(data)) return data;
+  return null;
+}
+
+/**
+ * Read a ceilings object. Tier numbers may sit on the object or under `tiers`.
+ * `groups` is kept even when it is empty. A wrapping `calibration_ceilings` key is accepted.
+ * A run manifest with no such key is empty. Its other numbers are not ceilings.
+ */
+export function parseCalibrationCeilings(data: unknown): CalibrationCeilings {
+  if (!isObj(data)) return emptyCalibrationCeilings();
+  const root = ceilingsSource(data);
+  if (!root) return emptyCalibrationCeilings();
+  const byTier: Record<string, number> = {};
+  const tierSource = isObj(root.tiers) ? root.tiers : root;
+  for (const [key, value] of Object.entries(tierSource)) {
+    if (key === "groups" || key === "tiers" || key === "calibration_ceilings" || key === "calibrationCeilings") continue;
+    const n = ceilingNumber(value);
+    const name = ceilingKey(key);
+    if (n != null && name) byTier[name] = n;
+  }
+  const groups: Record<string, number> = {};
+  if (isObj(root.groups)) {
+    for (const [key, value] of Object.entries(root.groups)) {
+      const n = ceilingNumber(value);
+      const name = ceilingKey(key);
+      if (n != null && name) groups[name] = n;
+    }
+  }
+  return { byTier, groups };
+}
+
+export function mergeCalibrationCeilings(
+  base: CalibrationCeilings | null | undefined,
+  extra: CalibrationCeilings | null | undefined
+): CalibrationCeilings {
+  return {
+    byTier: { ...(base?.byTier ?? {}), ...(extra?.byTier ?? {}) },
+    groups: { ...(base?.groups ?? {}), ...(extra?.groups ?? {}) },
+  };
+}
+
+/** The cap for this tier. Group names are used when the tier table has no row. Never a fixed number. */
+export function ceilingForTier(
+  ceilings: CalibrationCeilings | null | undefined,
+  tier: string | null | undefined
+): number | null {
+  if (!ceilings || !tier) return null;
+  const key = ceilingKey(tier);
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(ceilings.byTier, key)) return ceilings.byTier[key];
+  if (Object.prototype.hasOwnProperty.call(ceilings.groups, key)) return ceilings.groups[key];
+  return null;
 }
 
 export interface OptionalModelFields {
@@ -348,6 +471,7 @@ export function parseArchiveRow(row: Record<string, unknown>): ArchiveRow | null
     reading: extra.reading,
     neptuneIndex: indexFields.index,
     neptuneBand: indexFields.band,
+    neptuneOverrideReason: indexFields.overrideReason,
     agency: agencyFromRow(row),
   };
 }
@@ -552,6 +676,7 @@ export function parseManifest(data: unknown): RunManifest {
       checksPassed: null,
       coordinateFlags: [],
       notForDisplay: [],
+      calibrationCeilings: emptyCalibrationCeilings(),
     };
   }
   const nested = ["stats", "summary", "run"].map((key) => data[key]).find(isObj);
@@ -562,6 +687,7 @@ export function parseManifest(data: unknown): RunManifest {
     checksPassed: asBool(data.checks_passed ?? data.checksPassed ?? nested?.checks_passed ?? nested?.checksPassed),
     coordinateFlags: coordinateFlagsFromManifest(data),
     notForDisplay: notForDisplayFromManifest(data),
+    calibrationCeilings: parseCalibrationCeilings(data),
   };
 }
 
@@ -574,6 +700,7 @@ export function countyInStaleList(county: string | null, staleCounties: string[]
 export interface DailyIndexFields {
   index: number | null;
   band: string | null;
+  overrideReason: BandOverrideReason | null;
 }
 
 /** One lead on a current.csv row. Lead 0 is the same-day nowcast. */
@@ -585,6 +712,7 @@ export interface DailyHorizon {
   confidence: ConfidenceLevel | null;
   index: number | null;
   band: string | null;
+  overrideReason: BandOverrideReason | null;
 }
 
 /** One kept daily row. Repeated codes stay separate when agency or name and county differ. */
@@ -647,15 +775,19 @@ function horizonFromRow(row: Record<string, unknown>, lead: number): DailyHorizo
   const specificConfidence = parseConfidenceLevel(first(row, [`day${lead}_confidence`, `day${lead}Confidence`]));
   const confidence =
     specificConfidence ?? (lead === 0 ? parseConfidenceLevel(first(row, ["confidence", "confidence_level"])) : null);
+  const todayFields = lead === 0 ? readNeptuneFields(row) : null;
   const index =
-    lead === 0
-      ? readNeptuneFields(row).index
-      : parseNeptuneIndexValue(first(row, [`day${lead}_neptune_index`, `day${lead}NeptuneIndex`]));
+    todayFields?.index ??
+    parseNeptuneIndexValue(first(row, [`day${lead}_neptune_index`, `day${lead}NeptuneIndex`]));
   const band =
-    lead === 0
-      ? readNeptuneFields(row).band
-      : parseNeptuneBandId(first(row, [`day${lead}_neptune_band`, `day${lead}NeptuneBand`]));
-  return { probability, call, calibratedProbability, method, confidence, index, band };
+    todayFields?.band ??
+    parseNeptuneBandId(first(row, [`day${lead}_neptune_band`, `day${lead}NeptuneBand`]));
+  const overrideReason =
+    todayFields?.overrideReason ??
+    parseBandOverrideReason(
+      first(row, [`day${lead}_band_override_reason`, `day${lead}BandOverrideReason`, "band_override_reason", "bandOverrideReason"])
+    );
+  return { probability, call, calibratedProbability, method, confidence, index, band, overrideReason };
 }
 
 function dailyMeasureFields(row: Record<string, unknown>) {

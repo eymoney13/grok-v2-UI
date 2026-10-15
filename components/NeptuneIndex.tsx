@@ -22,7 +22,6 @@ export function NeptuneIndexBadge({
     return (
       <span className={`nb-index-plain nb-index-plain--${size}`}>
         {reading.phrase && <strong>{reading.phrase}</strong>}
-        {reading.rules && <span className="nb-index-note">{reading.rules}</span>}
         {reading.note && <span className="nb-index-note">{reading.note}</span>}
       </span>
     );

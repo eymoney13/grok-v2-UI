@@ -23,11 +23,15 @@ import {
   type DailySourceMode,
   type DailyStatusFile,
   type LeadStatusFile,
+  emptyCalibrationCeilings,
+  mergeCalibrationCeilings,
+  parseCalibrationCeilings,
   parseManifest,
   parseRegions,
   parseRosterJson,
   parseRosterRows,
   parseStaleness,
+  type CalibrationCeilings,
   type DailyIndexFields,
   type RegionConfig,
   type RosterStation,
@@ -64,6 +68,8 @@ export interface V2Bundle {
   staleness: StalenessTable | null;
   /** Band table from this root's `config/neptune_index_bands.json`. Null when that file is absent. */
   indexScale: IndexScale | null;
+  /** Caps from `config/calibration_ceilings.json`, then any manifest `calibration_ceilings`. */
+  calibrationCeilings: CalibrationCeilings;
   regions: RegionConfig | null;
   manifest: RunManifest | null;
   /** Null means the v2 tree has no file and the caller should use the published CSV. */
@@ -104,6 +110,7 @@ const EMPTY_BUNDLE: V2Bundle = {
   archiveAgencyColumn: false,
   staleness: null,
   indexScale: null,
+  calibrationCeilings: emptyCalibrationCeilings(),
   regions: null,
   manifest: null,
   nowcast: null,
@@ -314,9 +321,23 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
   const bandsText = await readText(bandsPath);
   const indexScale = bandsText ? parseIndexBands(JSON.parse(bandsText) as unknown) : null;
 
+  const ceilingsPath = path.join(root, "config", "calibration_ceilings.json");
+  const ceilingsText = await readText(ceilingsPath);
+  const fileCeilings = ceilingsText ? parseCalibrationCeilings(JSON.parse(ceilingsText) as unknown) : emptyCalibrationCeilings();
+
   const manifestPath = await firstExisting([path.join(root, "outputs", "run_manifest.json")]);
   const manifestText = manifestPath ? await readText(manifestPath) : null;
   const manifest = manifestText ? parseManifest(JSON.parse(manifestText) as unknown) : null;
+  const otherManifestPath = await firstExisting([
+    path.join(root, "outputs", "manifest.json"),
+    path.join(root, "outputs", "model_manifest.json"),
+  ]);
+  const otherManifestText = otherManifestPath ? await readText(otherManifestPath) : null;
+  const otherManifest = otherManifestText ? parseManifest(JSON.parse(otherManifestText) as unknown) : null;
+  const calibrationCeilings = mergeCalibrationCeilings(
+    mergeCalibrationCeilings(fileCeilings, manifest?.calibrationCeilings),
+    otherManifest?.calibrationCeilings
+  );
 
   const daily = await loadDailyStatus(root);
   const nowcast = await readCsvIfPresent(await firstExisting(wideCandidates(root, "nowcast_latest.csv")));
@@ -334,6 +355,7 @@ export async function loadV2Bundle(): Promise<V2Bundle> {
     archiveAgencyColumn,
     staleness,
     indexScale,
+    calibrationCeilings,
     regions,
     manifest,
     nowcast,

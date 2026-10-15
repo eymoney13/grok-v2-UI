@@ -5,7 +5,9 @@ import {
   type ForecastHorizon,
 } from "./forecastDisplay.ts";
 import {
+  ceilingPhrase,
   indexReading,
+  overrideReasonPhrase,
   swimWords,
   type NeptuneDisplay,
 } from "./neptuneIndex.ts";
@@ -140,7 +142,7 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
     rain: rainSentence(facts, lang),
     rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
     postingNote: openPostingWords(copyReading(facts), lang) ?? unknownPostingWords(copyReading(facts), lang),
-    method: facts.neptuneDisplay?.rulesIndex ? null : methodWords(facts.method, lang),
+    method: methodWords(facts.method, lang),
     confidence: confidenceWords(facts.confidence, lang),
     recentResult: recentSentence(facts.lastResultMpn, lang),
     fallback:
@@ -207,10 +209,6 @@ function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | nul
     sentence = lang === "es"
       ? `El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
       : `Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
-  } else if (reading.phrase && reading.rules) {
-    sentence = lang === "es"
-      ? `El índice Neptune de hoy es ${reading.phrase}. ${reading.rules}`
-      : `Today’s Neptune Index is ${reading.phrase}. ${reading.rules}`;
   } else if (reading.phrase) {
     sentence = lang === "es"
       ? `El índice Neptune de hoy es ${reading.phrase}.`
@@ -224,6 +222,10 @@ function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | nul
   }
   if (guidance) sentence = `${sentence} ${guidance}`;
   if (reading.note) sentence = `${sentence} ${reading.note}`;
+  const reason = overrideReasonPhrase(display.overrideReason, lang);
+  if (reason) sentence = `${sentence} ${reason}`;
+  const cap = ceilingPhrase(display.ceiling, lang);
+  if (cap) sentence = `${sentence} ${cap}`;
   return sentence;
 }
 

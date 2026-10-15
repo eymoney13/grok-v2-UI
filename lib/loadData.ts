@@ -32,8 +32,10 @@ import {
   hasAgencyColumn,
   locationUnknownFromRow,
   optionalModelFields,
+  ceilingForTier,
   regionForCounty,
   staleLimitDays,
+  type CalibrationCeilings,
   type StationArchive,
 } from "./neptuneContract";
 import { matchDailyRow, matchLeadRows } from "./stationIdentity.ts";
@@ -43,8 +45,11 @@ import {
   chooseIndexValue,
   indexScaleMode,
   mergeNeptuneFields,
+  parseBandOverrideReason,
+  PRODUCT_SCALE_MAX,
   readNeptuneFields,
   resolveNeptuneDisplay,
+  type BandOverrideReason,
   type IndexContext,
   type IndexScale,
   type NeptuneDisplay,
@@ -636,14 +641,13 @@ export async function loadDashboardData(
         ? statusFromThreshold(p, cutoff)
         : statusFromProb(p, code, thresholdMap);
 
-    const prob =
-      dailyRow?.probability != null
-        ? dailyRow.probability
-        : (archivedNow?.probability ?? Number(now.exc_probability));
+    const prob = dailyRow
+      ? (dailyRow.probability ?? Number.NaN)
+      : (archivedNow?.probability ?? Number(now.exc_probability));
     const publishedToday = dailyRow?.call ?? archivedNow?.call ?? now.prediction;
     const status = statusForPublishedCall(classify(prob), publishedToday);
     if (!status) {
-      if (usingV2 && rowUnknown) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing, indexMode));
+      if (usingV2) unmodeled.push(unmodeledItem(entry, archive, bundle, sharing, indexMode));
       continue;
     }
 
@@ -658,7 +662,13 @@ export async function loadDashboardData(
     const mergedIndex = mergeNeptuneFields(
       lead0?.index,
       dailyRow?.index,
-      archivedNow ? { index: archivedNow.neptuneIndex, band: archivedNow.neptuneBand } : null,
+      archivedNow
+        ? {
+            index: archivedNow.neptuneIndex,
+            band: archivedNow.neptuneBand,
+            overrideReason: archivedNow.neptuneOverrideReason,
+          }
+        : null,
       readNeptuneFields(nowRecord)
     );
     const reading = copyReading(
@@ -701,6 +711,9 @@ export async function loadDashboardData(
         const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow?.releases, leadHits, i);
         const called = resolveVerdict(dayPublishedCall(fcRow as unknown as Record<string, unknown>, i), p, cutoff);
         const callUnknown = called.callUnknown || isUnknownCall(leadRow?.reading.finalStatus);
+        const dayReason = parseBandOverrideReason(
+          fcRow[`day${i}_band_override_reason`] ?? fcRow.band_override_reason
+        );
         // Forecast days carry top contributing factors (why the model predicts
         // this), but no lab sample — there is no future water-quality test.
         // The Experimental label stays unless dayN_release says go_live.
@@ -718,6 +731,7 @@ export async function loadDashboardData(
           experimental: maturity !== "go_live",
           method: leadRow?.reading.method ?? null,
           confidence: leadRow?.reading.confidence ?? null,
+          overrideReason: dayReason,
         });
       }
     }
@@ -733,7 +747,13 @@ export async function loadDashboardData(
         if (!dayStatus) continue;
         const maturity = forecastRelease(bundle?.dailySource === "leads" ? null : dailyRow.releases, leadHits, lead);
         const called = resolveVerdict(horizon.call, p, threshold);
-        const dayIndex = horizonIndex(horizon, entry.tier, bundle?.indexScale ?? null, indexMode);
+        const dayIndex = horizonIndex(
+          horizon,
+          entry.tier,
+          bundle?.indexScale ?? null,
+          indexMode,
+          ceilingForTier(bundle?.calibrationCeilings, entry.tier)
+        );
         forecast.push({
           date,
           probability: p,
@@ -789,8 +809,14 @@ export async function loadDashboardData(
         if (!horizon) continue;
         const date = addUtcDays(dailyDate, lead);
         if (!date) continue;
-        const labeled = horizonIndex(horizon, entry.tier, bundle?.indexScale ?? null, indexMode);
         const existing = forecast.find((day) => day.date === date);
+        const labeled = horizonIndex(
+          { ...horizon, overrideReason: horizon.overrideReason ?? existing?.overrideReason ?? null },
+          entry.tier,
+          bundle?.indexScale ?? null,
+          indexMode,
+          ceilingForTier(bundle?.calibrationCeilings, entry.tier)
+        );
         if (existing) {
           existing.bandId = labeled.bandId;
           existing.forecastPending = labeled.forecastPending;
@@ -892,8 +918,10 @@ export async function loadDashboardData(
       ...presentIndex(
         mergedIndex,
         {
-          calibratedProbability: dailyRow?.calibratedProbability ?? archive?.calibratedProbability ?? wideOptional.calibratedProbability,
-          probability: dailyRow?.probability ?? prob,
+          calibratedProbability: dailyRow
+            ? dailyRow.calibratedProbability
+            : (archive?.calibratedProbability ?? wideOptional.calibratedProbability),
+          probability: dailyRow ? dailyRow.probability : (archivedNow?.probability ?? finiteOrNull(now.exc_probability)),
         },
         {
           tier: entry.tier,
@@ -904,10 +932,13 @@ export async function loadDashboardData(
           staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
           fallbackUsed: archive?.fallbackUsed ?? null,
           labOverLimit: labIsOver(now.last_result ?? dailyRow?.lastResultMpn),
+          overrideReason: mergedIndex.overrideReason,
+          ceiling: ceilingForTier(bundle?.calibrationCeilings, entry.tier),
         },
         bundle?.indexScale ?? null,
         indexMode
       ),
+      indexCeiling: shownCeiling(bundle?.calibrationCeilings, entry.tier, bundle?.indexScale?.scaleMax),
       excRatePct: entry.excRatePct ?? null,
       nSamples: entry.nSamples ?? null,
       pastDays,
@@ -961,10 +992,17 @@ export async function loadDashboardData(
 }
 
 function horizonIndex(
-  horizon: { index: number | null; band: string | null; calibratedProbability: number | null; probability: number | null },
+  horizon: {
+    index: number | null;
+    band: string | null;
+    calibratedProbability: number | null;
+    probability: number | null;
+    overrideReason?: BandOverrideReason | null;
+  },
   tier: string | null,
   scale: IndexScale | null,
-  mode: PublishedIndexMode
+  mode: PublishedIndexMode,
+  ceiling: number | null
 ): { bandId: string | null; forecastPending: boolean } {
   const chosen = chooseIndexValue(
     { index: horizon.index, band: horizon.band },
@@ -974,8 +1012,28 @@ function horizonIndex(
     tier
   );
   if (chosen.forecastPending) return { bandId: null, forecastPending: true };
-  const display = resolveNeptuneDisplay(chosen.index, chosen.band, scale, { tier });
+  const display = resolveNeptuneDisplay(chosen.index, chosen.band, scale, {
+    tier,
+    overrideReason: horizon.overrideReason,
+    ceiling,
+  });
   return { bandId: display?.bandId ?? null, forecastPending: false };
+}
+
+function finiteOrNull(raw: unknown): number | null {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function shownCeiling(
+  ceilings: CalibrationCeilings | null | undefined,
+  tier: string | null | undefined,
+  scaleMax: number | null | undefined
+): number | null {
+  const ceiling = ceilingForTier(ceilings, tier);
+  if (ceiling == null) return null;
+  if (ceiling >= (scaleMax ?? PRODUCT_SCALE_MAX)) return null;
+  return ceiling;
 }
 
 function labIsOver(value: unknown): boolean {
@@ -1063,6 +1121,17 @@ function unmodeledItem(
       archive?.nowcast?.reading
     )
   );
+  const fields = mergeNeptuneFields(
+    lead0?.index,
+    dailyRow?.index,
+    archive?.nowcast
+      ? {
+          index: archive.nowcast.neptuneIndex,
+          band: archive.nowcast.neptuneBand,
+          overrideReason: archive.nowcast.neptuneOverrideReason,
+        }
+      : null
+  );
   return {
     id: entry.id,
     stationKey: entry.stationKey,
@@ -1092,14 +1161,14 @@ function unmodeledItem(
     predictionDate: null,
     fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
     ...presentIndex(
-      mergeNeptuneFields(
-        lead0?.index,
-        dailyRow?.index,
-        archive?.nowcast ? { index: archive.nowcast.neptuneIndex, band: archive.nowcast.neptuneBand } : null
-      ),
+      fields,
       {
-        calibratedProbability: dailyRow?.calibratedProbability ?? lead0?.calibratedProbability ?? archive?.calibratedProbability ?? null,
-        probability: dailyRow?.probability ?? lead0?.probability ?? archive?.nowcast?.probability ?? null,
+        calibratedProbability: dailyRow
+          ? dailyRow.calibratedProbability
+          : (lead0?.calibratedProbability ?? archive?.calibratedProbability ?? null),
+        probability: dailyRow
+          ? dailyRow.probability
+          : (lead0?.probability ?? archive?.nowcast?.probability ?? null),
       },
       {
         tier: entry.tier,
@@ -1110,10 +1179,13 @@ function unmodeledItem(
         staleAfterDays: staleLimitDays(entry.county, bundle?.staleness ?? null),
         fallbackUsed: dailyRow?.fallbackUsed ?? archive?.fallbackUsed ?? null,
         labOverLimit: labIsOver(dailyRow?.lastResultMpn),
+        overrideReason: fields.overrideReason,
+        ceiling: ceilingForTier(bundle?.calibrationCeilings, entry.tier),
       },
       bundle?.indexScale ?? null,
       mode
     ),
+    indexCeiling: shownCeiling(bundle?.calibrationCeilings, entry.tier, bundle?.indexScale?.scaleMax),
     ...reading,
   };
 }

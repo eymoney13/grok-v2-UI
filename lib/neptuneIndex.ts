@@ -1,5 +1,4 @@
 import type { EstimateMethod } from "./publishedReading.ts";
-import { methodWords } from "./publishedReading.ts";
 import { LAB_LIMIT_LABEL } from "./readerLabels.ts";
 import { hasLimitedLabData } from "./waterStatus.ts";
 
@@ -8,10 +7,10 @@ import { hasLimitedLabData } from "./waterStatus.ts";
  *
  * One scale for every beach. A lower number is cleaner. Band names and the
  * formula live in `config/neptune_index_bands.json`. A filled `neptune_index`
- * is the number for every tier when it is already on that scale. Forecast
- * pending is a missing cell on a limited-data beach, or a cell that is still
- * the older higher-is-cleaner scale. Only a well-tested beach is computed
- * from probability in that case.
+ * is the number for every tier when it is already on that scale. A blank
+ * probability leaves the index blank, and that row says Forecast pending.
+ * Otherwise Forecast pending is a missing or old-scale cell on a limited-data
+ * beach. Only a well-tested beach with a probability is computed.
  */
 
 /** Product scale used when a bands file omits its ends, or when no file is loaded. */
@@ -61,9 +60,13 @@ export interface IndexScale {
   detection: PublishedScaleDetection;
 }
 
+/** `band_override_reason` on current.csv, and the same header on archive and forecast files. */
+export type BandOverrideReason = "posted_warning" | "closure";
+
 export interface NeptuneFields {
   index: number | null;
   band: string | null;
+  overrideReason: BandOverrideReason | null;
 }
 
 /** Everything a client needs to draw one beach's index without rereading cutoffs. */
@@ -94,11 +97,13 @@ export interface NeptuneDisplay {
   countsAsPoor: boolean;
   /** A lab result above the beach standard. The chip says Over the limit instead of the model band. */
   labOverride: boolean;
+  /** Why the band was forced. Null when the file did not set `band_override_reason` or a warning/closure posting. */
+  overrideReason: BandOverrideReason | null;
   /**
-   * A rules row published a score and no band. The number stays uncolored.
-   * The page uses the lab-test and rain note beside it.
+   * Tier ceiling from config or the manifest, when it is below the top of the scale.
+   * Null for a tier that can use the full scale. Not a cutoff.
    */
-  rulesIndex: boolean;
+  ceiling: number | null;
 }
 
 export interface IndexContext {
@@ -111,10 +116,24 @@ export interface IndexContext {
   fallbackUsed?: boolean | null;
   /** Last lab result was above the beach standard. */
   labOverLimit?: boolean;
+  /** `band_override_reason` for this row. A posting fills this in when the column is blank. */
+  overrideReason?: BandOverrideReason | null;
+  /** Calibration ceiling for this tier. Shown only when it sits below the scale. */
+  ceiling?: number | null;
 }
 
 const INDEX_KEYS = ["neptune_index", "neptuneIndex"] as const;
 const BAND_KEYS = ["neptune_band", "neptuneBand"] as const;
+const OVERRIDE_KEYS = ["band_override_reason", "bandOverrideReason"] as const;
+
+/** `posted_warning`, `closure`, or blank. Any other word stays blank. */
+export function parseBandOverrideReason(raw: unknown): BandOverrideReason | null {
+  if (raw == null || raw === "") return null;
+  const text = String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (text === "posted_warning") return "posted_warning";
+  if (text === "closure") return "closure";
+  return null;
+}
 
 /** Badge colors. These are not cutoffs. A bands file can replace them. */
 const CHROME: Record<string, { color: string; textColor: string; surface: string; surfaceText: string }> = {
@@ -410,10 +429,10 @@ function publishedIndexIsNewScale(
  * A filled `neptune_index` is the number for every tier, including limited-data.
  * File mode `published` means the column is already the new scale. A single row
  * that matches the formula is used even when other rows are still the old scale.
- * Forecast pending is only a missing cell on a limited-data beach: the raw
- * probability can be 1.0, so it is not turned into an index. A well-tested beach
- * with a missing cell is computed. A filled cell that is still the old
- * higher-is-cleaner scale is not shown as this index.
+ * Forecast pending is a blank probability, a missing cell on a limited-data
+ * beach, or a filled cell that is still the old higher-is-cleaner scale.
+ * The raw probability can be 1.0, so it is not turned into a limited-data index.
+ * A well-tested beach with a probability and a missing or old cell is computed.
  */
 export function chooseIndexValue(
   published: { index: number | null; band: string | null } | null | undefined,
@@ -423,15 +442,19 @@ export function chooseIndexValue(
   tier?: string | null
 ): { index: number | null; band: string | null; forecastPending: boolean } {
   const publishedIndex = published?.index ?? null;
+  const probabilityBlank = probabilities.calibrated == null && probabilities.probability == null;
+  // A blank probability leaves index, band, and reason blank. Do not invent a number.
+  if (probabilityBlank && publishedIndex == null) {
+    return { index: null, band: null, forecastPending: true };
+  }
   const onNewScale =
     publishedIndex != null &&
     (mode === "published" || publishedIndexIsNewScale(publishedIndex, probabilities, scale));
   if (onNewScale && publishedIndex != null) {
     return { index: publishedIndex, band: published?.band ?? null, forecastPending: false };
   }
-  // Missing cell, or a filled cell that is still the old scale. Raw probability
-  // on a limited-data beach can be 1.0, so it is not turned into an index.
-  if (!isWellTestedTier(tier)) {
+  // Missing cell, old scale, or a blank probability beside an old number.
+  if (!isWellTestedTier(tier) || probabilityBlank) {
     return { index: null, band: null, forecastPending: true };
   }
   const computed = scale?.formula
@@ -440,6 +463,7 @@ export function chooseIndexValue(
         scale.formula
       )
     : null;
+  if (computed == null) return { index: null, band: null, forecastPending: true };
   return { index: computed, band: null, forecastPending: false };
 }
 
@@ -508,12 +532,14 @@ export function parseNeptuneBandId(raw: unknown): string | null {
 }
 
 export function readNeptuneFields(row: Record<string, unknown> | null | undefined): NeptuneFields {
-  if (!row) return { index: null, band: null };
+  if (!row) return { index: null, band: null, overrideReason: null };
   const indexRaw = INDEX_KEYS.map((key) => row[key]).find((value) => value != null && value !== "");
   const bandRaw = BAND_KEYS.map((key) => row[key]).find((value) => value != null && value !== "");
+  const reasonRaw = OVERRIDE_KEYS.map((key) => row[key]).find((value) => value != null && value !== "");
   return {
     index: parseNeptuneIndexValue(indexRaw),
     band: parseNeptuneBandId(bandRaw),
+    overrideReason: parseBandOverrideReason(reasonRaw),
   };
 }
 
@@ -522,12 +548,14 @@ export function mergeNeptuneFields(
 ): NeptuneFields {
   let index: number | null = null;
   let band: string | null = null;
+  let overrideReason: BandOverrideReason | null = null;
   for (const part of parts) {
     if (!part) continue;
     if (index == null && part.index != null) index = part.index;
     if (band == null && part.band != null) band = part.band;
+    if (overrideReason == null && part.overrideReason) overrideReason = part.overrideReason;
   }
-  return { index, band };
+  return { index, band, overrideReason };
 }
 
 function inScale(value: number, scaleMin: number, scaleMax: number): boolean {
@@ -560,12 +588,21 @@ function literalPoor(): Pick<IndexBand, "id" | "label" | "color" | "textColor" |
   return { id: "poor", label: "Poor", ...paint, guidance: null, guidanceEs: null };
 }
 
+function shownOverrideReason(context: IndexContext): BandOverrideReason | null {
+  if (context.overrideReason === "posted_warning" || context.overrideReason === "closure") {
+    return context.overrideReason;
+  }
+  if (context.postingStatus === "closure") return "closure";
+  if (context.postingStatus === "warning") return "posted_warning";
+  return null;
+}
+
 /**
- * One scale for every beach that has a number, including a rules row.
+ * One scale for every beach that has a number. A rules row uses that same scale.
  * A published band word that the table also lists does not override the cutoff.
  * A word the table does not list is kept. No file means the number is shown
- * with no invented band. A warning or closure moves a shown band to the
- * unsafe end of the scale. It does not paint a band onto a number that has none.
+ * with no invented band. `band_override_reason`, or a warning or closure posting,
+ * moves a shown band to the unsafe end of the scale and keeps the number.
  * A lab result over the limit does not rename the band; the chip says Over the limit.
  */
 export function resolveNeptuneDisplay(
@@ -578,7 +615,6 @@ export function resolveNeptuneDisplay(
   const scaleMax = scale?.scaleMax ?? PRODUCT_SCALE_MAX;
   const higherIsBetter = scale?.higherIsBetter ?? true;
   const tierBands = bandsForTier(scale, context.tier);
-  const rulesRow = context.method === "rules";
   const published = normalizeBandToken(bandToken);
   const numeric = index != null && Number.isFinite(index) && inScale(index, scaleMin, scaleMax) ? index : null;
   const matched = findBand(tierBands, published);
@@ -616,8 +652,9 @@ export function resolveNeptuneDisplay(
     return null;
   }
 
+  const overrideReason = shownOverrideReason(context);
   let forcedByPosting = false;
-  if (bandId && (context.postingStatus === "warning" || context.postingStatus === "closure")) {
+  if (overrideReason && (bandId || numeric != null)) {
     const worst = worstShownBand(tierBands, scaleMin, higherIsBetter);
     forcedByPosting = bandId !== worst.id;
     bandId = worst.id;
@@ -626,8 +663,12 @@ export function resolveNeptuneDisplay(
     guidance = worst.guidance;
     guidanceEs = worst.guidanceEs;
   }
-  const rulesIndex = rulesRow && numeric != null && bandId == null;
+  if (bandId == null && numeric == null) return null;
   const bands = tierBands;
+  const ceiling =
+    context.ceiling != null && Number.isFinite(context.ceiling) && context.ceiling < scaleMax
+      ? context.ceiling
+      : null;
 
   const oldSample = hasLimitedLabData(
     context.daysSinceSample ?? null,
@@ -662,7 +703,8 @@ export function resolveNeptuneDisplay(
     forcedByPosting,
     countsAsPoor,
     labOverride: context.labOverLimit === true,
-    rulesIndex,
+    overrideReason: forcedByPosting || overrideReason ? overrideReason : null,
+    ceiling,
   };
 }
 
@@ -690,6 +732,28 @@ export function indexScalePhrase(display: Pick<NeptuneDisplay, "index" | "scaleM
     : `${number} / ${display.scaleMax}, higher is cleaner`;
 }
 
+/** Plain reason next to a forced Not safe reading. */
+export function overrideReasonPhrase(reason: BandOverrideReason | null | undefined, lang: Lang): string | null {
+  if (reason === "posted_warning") {
+    return lang === "es"
+      ? "El condado publicó un aviso para esta playa."
+      : "The county has posted a warning for this beach";
+  }
+  if (reason === "closure") {
+    return lang === "es" ? "Esta playa está cerrada." : "This beach is closed";
+  }
+  return null;
+}
+
+/** Short note when this tier's index cannot use the whole scale yet. */
+export function ceilingPhrase(ceiling: number | null | undefined, lang: Lang): string | null {
+  if (ceiling == null || !Number.isFinite(ceiling)) return null;
+  const shown = formatNeptuneIndex(ceiling);
+  return lang === "es"
+    ? `Este índice todavía no puede pasar de ${shown}.`
+    : `This index can't go above ${shown} yet.`;
+}
+
 /** Plain words next to the band. The same three phrases cover every beach. */
 export function swimWords(bandId: string | null | undefined, lang: Lang): string | null {
   if (bandId === "good") return lang === "es" ? "Seguro para nadar" : "Safe to swim";
@@ -706,14 +770,16 @@ export function indexWhy(display: NeptuneDisplay, lang: Lang): string {
       ? "Una prueba de laboratorio superó el límite. Eso va por delante del índice."
       : "A lab test was over the limit. That comes ahead of the index.";
   }
-  if (display.forcedByPosting) {
-    const lead = lang === "es"
-      ? "El condado publicó un aviso. Eso va por delante del índice."
-      : "The county posted a warning or closure. That comes ahead of the index.";
+  if (display.forcedByPosting || display.overrideReason) {
+    const lead = overrideReasonPhrase(display.overrideReason, lang)
+      ?? (lang === "es"
+        ? "El condado publicó un aviso. Eso va por delante del índice."
+        : "The county posted a warning or closure. That comes ahead of the index.");
     if (number == null) return lead;
+    const gap = /[.!?]$/.test(lead) ? " " : ". ";
     return lang === "es"
-      ? `${lead} El índice es ${number} de ${display.scaleMax}. Un número más bajo es agua más limpia.`
-      : `${lead} The index is ${number} out of ${display.scaleMax}. A lower number is cleaner water.`;
+      ? `${lead}${gap}El índice es ${number} de ${display.scaleMax}. Un número más bajo es agua más limpia.`
+      : `${lead}${gap}The index is ${number} out of ${display.scaleMax}. A lower number is cleaner water.`;
   }
   if (number == null) {
     return lang === "es"
@@ -762,8 +828,6 @@ export interface IndexReading {
   label: string | null;
   /** The score, secondary to the band. */
   phrase: string | null;
-  /** Lab-test and rain note for a rules score that has no band. */
-  rules: string | null;
   note: string | null;
 }
 
@@ -774,7 +838,6 @@ export function indexReading(display: NeptuneDisplay, lang: Lang): IndexReading 
     plain: overLimit ?? swimWords(display.bandId, lang),
     label: overLimit ?? (display.bandId ? displayBandLabel(display, lang) : null),
     phrase: indexScalePhrase(display, lang),
-    rules: display.rulesIndex ? methodWords("rules", lang) : null,
     note: indexConfidenceNote(display, lang),
   };
 }
@@ -782,7 +845,7 @@ export function indexReading(display: NeptuneDisplay, lang: Lang): IndexReading 
 export function indexLead(display: NeptuneDisplay, lang: Lang = "en"): string {
   const reading = indexReading(display, lang);
   const head = [reading.label, reading.phrase].filter((part) => !!part).join(", ");
-  return [head, reading.rules, reading.note].filter((part) => !!part).join(" ");
+  return [head, reading.note].filter((part) => !!part).join(" ");
 }
 
 export function neptuneIndexName(display: NeptuneDisplay, lang: Lang = "en"): string {
