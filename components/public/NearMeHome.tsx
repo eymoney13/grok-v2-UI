@@ -1,21 +1,15 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { glanceLine } from "@/lib/dailySummary";
 import { hasMapCoordinates, milesBetween, nearest } from "@/lib/geo";
-import { copy, staleCountyBanner, statusPill, type Lang } from "@/lib/publicCopy";
+import { copy, staleCountyBanner, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach } from "@/lib/publicBeach";
 import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { PublicChrome, usePublicLanguage } from "./Language";
 import { StatusChip } from "./StatusChip";
 import styles from "./public.module.css";
-
-const PublicMap = dynamic(() => import("./PublicMap"), {
-  ssr: false,
-  loading: () => <p className={styles.note}>…</p>,
-});
 
 const NEAR_COUNT = 8;
 const SEARCH_COUNT = 20;
@@ -74,7 +68,6 @@ function Home({
   const [draft, setDraft] = useState("");
   const [geo, setGeo] = useState<"idle" | "locating" | "denied" | "ready">("idle");
   const [here, setHere] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
     if (!navigator.permissions?.query) return;
@@ -145,9 +138,6 @@ function Home({
       {coastCount && <p className={styles.note}>{coastCount}</p>}
 
       <div className={styles.actions}>
-        <button className={styles.primary} type="button" onClick={locate}>
-          {geo === "locating" ? t.locating : t.useLocation}
-        </button>
         <form
           className={styles.search}
           onSubmit={(event) => {
@@ -169,6 +159,9 @@ function Home({
             <button type="submit">{t.search}</button>
           </div>
         </form>
+        <button className={styles.primary} type="button" onClick={locate}>
+          {geo === "locating" ? t.locating : t.useLocation}
+        </button>
       </div>
 
       {mode === "prompt" && <p className={styles.note}>{geo === "denied" ? t.locationDenied : t.empty}</p>}
@@ -176,7 +169,7 @@ function Home({
 
       {visible.length > 0 && (
         <section aria-live="polite">
-          <h2>{mode === "near" ? t.closest : t.matches}</h2>
+          <h2>{mode === "near" ? t.closest : t.results}</h2>
           {mode === "near" && closestMiles != null && closestMiles > FAR_MILES && (
             <p className={styles.note}>
               {t.far} {formatMiles(closestMiles)} {t.miles} {t.away}
@@ -188,7 +181,7 @@ function Home({
               const tested = glanceLine(beach, lang);
               return (
                 <li key={beach.slug}>
-                  <Link className={styles.card} href={`/beach/${beach.slug}`}>
+                  <Link className={styles.card} href={`/beach/${beach.slug}`} prefetch={false}>
                     <span className={styles.name}>{beach.name}</span>
                     <span className={styles.meta}>
                       {[beach.county, miles != null ? `${formatMiles(miles)} ${t.miles}` : null].filter(Boolean).join(" · ")}
@@ -201,29 +194,12 @@ function Home({
             })}
           </ul>
           {mode === "search" && results.length > SEARCH_COUNT && <p className={styles.note}>{t.showing}</p>}
-          <button className={styles.secondary} type="button" onClick={() => setShowMap((open) => !open)}>
-            {showMap ? t.hideMap : t.showMap}
-          </button>
-          {showMap && (
-            <>
-              <div className={styles.mapWrap}>
-                <PublicMap beaches={visible.filter(hasMapCoordinates)} user={here} youLabel={t.you} lang={lang} />
-              </div>
-              <p className={styles.legend}>
-                <span><i className={styles.swatch} style={{ background: "#3c6435" }} /> {statusPill("Normal", lang)}</span>
-                <span><i className={styles.swatch} style={{ background: "#786016" }} /> {statusPill("Slightly elevated", lang)}</span>
-                <span><i className={styles.swatch} style={{ background: "#a63d36" }} /> {statusPill("Not recommended", lang)}</span>
-                <span><i className={styles.swatch} style={{ background: "#66777b" }} /> {t.noEstimate}</span>
-              </p>
-              <p className={styles.note}>{t.mapLegend}</p>
-            </>
-          )}
         </section>
       )}
 
       <p className={styles.links}>
-        <Link className={styles.link} href="/california?view=list">
-          {t.browse}
+        <Link className={styles.link} href="/california" prefetch={false}>
+          {t.allBeaches}
         </Link>
       </p>
     </>

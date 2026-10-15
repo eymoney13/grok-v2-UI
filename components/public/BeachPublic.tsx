@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { dailySummary } from "@/lib/dailySummary";
-import { copy, staleCountyBanner, type Lang } from "@/lib/publicCopy";
-import type { ConfidenceLevel } from "@/lib/publishedReading";
+import { coastGroupId } from "@/lib/coastBoard";
+import { indexWhy } from "@/lib/neptuneIndex";
+import { copy, notTestedPhrase, staleCountyBanner, type Lang } from "@/lib/publicCopy";
 import type { GlanceBeach, PublicBeach } from "@/lib/publicBeach";
 import { PublicChrome, usePublicLanguage } from "./Language";
 import { StatusChip } from "./StatusChip";
+import { SwimAnswer } from "./SwimAnswer";
 import styles from "./public.module.css";
-
-function confidenceClass(level: ConfidenceLevel): string {
-  if (level === "low") return styles.confidenceLow;
-  if (level === "medium") return styles.confidenceMedium;
-  return styles.confidenceHigh;
-}
 
 function formatDay(iso: string, lang: Lang): string {
   const [year, month, day] = iso.split("-").map(Number);
@@ -88,10 +84,29 @@ function Beach({
     }
   }
 
+  const group = coastGroupId(beach);
+  const countyHref = group ? `/california?group=${encodeURIComponent(group)}` : "/california";
+  const why = beach.neptuneDisplay ? indexWhy(beach.neptuneDisplay, lang) : summary.status;
+
   return (
     <>
-      <p className={styles.meta}>{beach.county}</p>
+      <nav className={styles.crumb} aria-label="Breadcrumb">
+        <a href="/">{t.home}</a>
+        <span aria-hidden="true">/</span>
+        {beach.county && (
+          <>
+            <a href={countyHref}>{beach.county}</a>
+            <span aria-hidden="true">/</span>
+          </>
+        )}
+        <span>{beach.name}</span>
+      </nav>
+      <a className={styles.back} href={countyHref}>
+        {t.back}
+      </a>
       <h1>{beach.name}</h1>
+      {beach.county && <p className={styles.meta}>{beach.county}{beach.code ? ` · ${beach.code}` : ""}</p>}
+      {beach.tier === "limited_data" && <p className={styles.badge}>{t.limitedBadge}</p>}
       {staleCountiesNote && <p className={styles.stale} role="status">{staleCountiesNote}</p>}
       {date && !readingsCurrent && (
         <p className={styles.stale} role="status">
@@ -99,37 +114,26 @@ function Beach({
           {t.staleTail}
         </p>
       )}
-      {date ? (
-        <p className={styles.dateline}>
-          {t.forecastDate} <time dateTime={date}>{formatDay(date, lang)}</time>
-        </p>
-      ) : (
-        <p className={styles.dateline}>{t.awaiting}</p>
-      )}
-      <StatusChip beach={beach} lang={lang} />
-      <div className={styles.summary}>
-        <p>{summary.status}</p>
-        {summary.method && <p className={styles.methodLine}>{summary.method}</p>}
-        {summary.confidence && (
-          <p className={confidenceClass(summary.confidence.level)}>{summary.confidence.text}</p>
-        )}
+      <SwimAnswer beach={beach} lang={lang} size="hero" />
+      <section className={styles.section}>
+        <h2>{t.why}</h2>
+        <p>{why}</p>
         {summary.rainAdvisory && <p>{summary.rainAdvisory}</p>}
-        {summary.postingNote && beach.postingStatus === "unknown" && (
-          <p className={styles.postingQuiet}>{summary.postingNote}</p>
-        )}
-        {summary.lastTested && <p>{summary.lastTested}</p>}
         {summary.limitedLab && <p>{summary.limitedLab}</p>}
-        {summary.tierNote && <p>{summary.tierNote}</p>}
         {summary.fallback && <p>{summary.fallback}</p>}
-      </div>
+      </section>
+      <section className={styles.section}>
+        <h2>{t.lastTestedHeading}</h2>
+        <p>{beach.neverTested ? notTestedPhrase(lang) : summary.lastTested ?? t.awaiting}</p>
+        {summary.recentResult && <p>{summary.recentResult}</p>}
+      </section>
       <section className={styles.experimental} aria-label={summary.outlookLabel}>
         <span className={styles.tag}>{summary.outlookLabel}</span>
         <p>{summary.outlook}</p>
       </section>
-      {(summary.rain || summary.recentResult) && (
+      {summary.rain && (
         <section className={styles.section}>
-          {summary.rain && <p>{summary.rain}</p>}
-          {summary.recentResult && <p>{summary.recentResult}</p>}
+          <p>{summary.rain}</p>
         </section>
       )}
       <div className={styles.links}>
@@ -149,7 +153,7 @@ function Beach({
           <ul className={styles.list}>
             {nearby.map((item) => (
               <li key={item.slug}>
-                <Link className={styles.card} href={`/beach/${item.slug}`}>
+                <Link className={styles.card} href={`/beach/${item.slug}`} prefetch={false}>
                   <span className={styles.name}>{item.name}</span>
                   {item.county && <span className={styles.meta}>{item.county}</span>}
                   <StatusChip beach={item} lang={lang} />

@@ -1,0 +1,17 @@
+{
+  "source": "models/tier_calibrators.json",
+  "note": "Highest index each saved correction can emit. Computed from the calibrator, not applied as a clip. A later county or region map can raise a ceiling. Read this object instead of hardcoding one.",
+  "tiers": {
+    "limited_data": {
+      "method": "isotonic",
+      "max_calibrated_probability": 0.2558139534883721,
+      "max_index": 26
+    },
+    "model_pool": {
+      "method": "identity",
+      "max_calibrated_probability": 1.0,
+      "max_index": 100
+    }
+  },
+  "groups": {}
+}

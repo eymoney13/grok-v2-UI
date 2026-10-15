@@ -8,7 +8,8 @@ import type { BeachData, BeachListItem } from "@/lib/data";
 import { formatMonthDayYear } from "@/lib/data";
 import type { LastUpdatedDisplay } from "@/lib/waterStatus";
 import { copyReading, officialPosting, showsUnknownCall } from "@/lib/publishedReading";
-import { unknownCallPhrase } from "@/lib/publicCopy";
+import { ceilingPhrase } from "@/lib/neptuneIndex";
+import { forecastPendingPhrase, unknownCallPhrase } from "@/lib/publicCopy";
 import { OfficialBanner, PostingAside, ReadingNotes } from "./SandboxBeachDetail";
 import { TIER_LIMITED_NOTE, lastTestedLabel, limitedLabNote, hasLimitedLabData } from "@/lib/waterStatus";
 import ProjectNeptuneLogo from "../ProjectNeptuneLogo";
@@ -53,6 +54,8 @@ export default function CaliforniaBeachPage({
   const tested = lastTestedLabel(listItem.daysSinceSample);
   const posted = officialPosting(copyReading(listItem));
   const unknownCall = showsUnknownCall(listItem);
+  const pending = listItem.forecastPending === true;
+  const ceiling = ceilingPhrase(listItem.neptuneDisplay?.ceiling ?? listItem.indexCeiling, "en");
   const limited = hasLimitedLabData(listItem.daysSinceSample, listItem.noRecentSample, listItem.staleAfterDays);
   const shareSlug = listItem.id;
   return (
@@ -95,14 +98,17 @@ export default function CaliforniaBeachPage({
           <div className={s.detail}>
             <OfficialBanner reading={copyReading(listItem)} />
             <PostingAside reading={copyReading(listItem)} />
-            <section className={s.empty} aria-label={posted ? "Our estimate" : unknownCall ? unknownCallPhrase("en") : "No estimate today"}>
-              <h2>{unknownCall ? unknownCallPhrase("en") : posted ? "Our estimate" : "No estimate today"}</h2>
-              <p>
-                {unknownCall
-                  ? "This beach is on the roster. The files did not include enough recent data for a call."
-                  : "This beach is on the roster, and the files do not include a model estimate for it."}
-                {posted ? " The official posting above is the one to follow." : unknownCall ? "" : " Nothing here is filled in."}
-              </p>
+            <section className={s.empty} aria-label={pending ? "Forecast pending" : posted ? "Our estimate" : unknownCall ? unknownCallPhrase("en") : "No estimate today"}>
+              <h2>{pending ? forecastPendingPhrase("en") : unknownCall ? unknownCallPhrase("en") : posted ? "Our estimate" : "No estimate today"}</h2>
+              {pending && ceiling && <p>{ceiling}</p>}
+              {!pending && (
+                <p>
+                  {unknownCall
+                    ? "This beach is on the roster. The files did not include enough recent data for a call."
+                    : "This beach is on the roster, and the files do not include a model estimate for it."}
+                  {posted ? " The official posting above is the one to follow." : unknownCall ? "" : " Nothing here is filled in."}
+                </p>
+              )}
             </section>
             <div className={s.sampleFacts}>
               <ReadingNotes reading={copyReading(listItem)} />

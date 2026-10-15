@@ -7,12 +7,25 @@ export const copy = {
   en: {
     brand: "Neptune",
     language: "Language",
-    homeTitle: "Beaches near me",
-    homeLead: "Today’s water quality for the closest California beaches. No account.",
-    useLocation: "Use my location",
+    homeTitle: "Find your beach",
+    home: "Home",
+    homeLead: "Search by beach or city, or use Beaches near me.",
+    useLocation: "Beaches near me",
     locating: "Finding your location…",
-    searchLabel: "Beach, county, or station code",
+    searchLabel: "Find your beach",
     search: "Search",
+    results: "Results",
+    back: "Back",
+    why: "Why",
+    lastTestedHeading: "Last tested",
+    notTested: "Not tested yet",
+    forecastPending: "Forecast pending",
+    seeMap: "See map",
+    allBeaches: "See all beaches",
+    limitedBadge: "Limited data",
+    wellTested: "Well tested",
+    notSafeToday: "Not safe today",
+    officialPostings: "Official warning or closure",
     empty: "Use your location for the closest beaches, or search by name. This page does not guess a location.",
     locationDenied: "Location is unavailable in this browser. Search by beach name, county, or station code.",
     closest: "Closest beaches",
@@ -50,12 +63,25 @@ export const copy = {
   es: {
     brand: "Neptune",
     language: "Idioma",
-    homeTitle: "Playas cerca de mí",
-    homeLead: "La calidad del agua de hoy en las playas de California más cercanas. Sin cuenta.",
-    useLocation: "Usar mi ubicación",
+    homeTitle: "Encuentra tu playa",
+    home: "Inicio",
+    homeLead: "Busca por playa o ciudad, o usa Playas cerca de mí.",
+    useLocation: "Playas cerca de mí",
     locating: "Buscando tu ubicación…",
-    searchLabel: "Playa, condado o código",
+    searchLabel: "Encuentra tu playa",
     search: "Buscar",
+    results: "Resultados",
+    back: "Volver",
+    why: "Por qué",
+    lastTestedHeading: "Última prueba",
+    notTested: "Aún no se ha analizado",
+    forecastPending: "Pronóstico pendiente",
+    seeMap: "Ver mapa",
+    allBeaches: "Ver todas las playas",
+    limitedBadge: "Datos limitados",
+    wellTested: "Bien analizada",
+    notSafeToday: "No es seguro hoy",
+    officialPostings: "Aviso o cierre oficial",
     empty: "Usa tu ubicación para ver las playas más cercanas, o busca por nombre. Esta página no inventa una ubicación.",
     locationDenied: "La ubicación no está disponible en este navegador. Busca por nombre de playa, condado o código.",
     closest: "Playas más cercanas",
@@ -115,8 +141,8 @@ export function staleCountyBanner(counties: readonly string[], lang: Lang): stri
   if (names.length === 0) return null;
   const list = names.join(", ");
   return lang === "es"
-    ? `La última ejecución marcó estos condados como desactualizados: ${list}.`
-    : `The latest run marked these counties stale: ${list}.`;
+    ? `Datos más viejos de lo habitual en: ${list}.`
+    : `Older data than usual in: ${list}.`;
 }
 
 /** Rules path published Unknown. Neutral, and never a translation of "safe". */
@@ -124,4 +150,13 @@ export function unknownCallPhrase(lang: Lang): string {
   return lang === "es"
     ? "No hay datos recientes suficientes para decidir"
     : "Not enough recent data to call";
+}
+
+export function notTestedPhrase(lang: Lang): string {
+  return copy[lang].notTested;
+}
+
+/** Limited-data beach with no trusted index. Not a computed score. */
+export function forecastPendingPhrase(lang: Lang): string {
+  return copy[lang].forecastPending;
 }

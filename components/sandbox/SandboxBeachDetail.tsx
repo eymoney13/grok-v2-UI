@@ -34,7 +34,8 @@ import {
   unknownPostingWords,
   type PublishedReading,
 } from "@/lib/publishedReading";
-import { unknownCallPhrase } from "@/lib/publicCopy";
+import { forecastPendingPhrase, unknownCallPhrase } from "@/lib/publicCopy";
+import { ceilingPhrase, overrideReasonPhrase, swimWords } from "@/lib/neptuneIndex";
 import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 import type { RosterTier } from "@/lib/data";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
@@ -77,18 +78,29 @@ function dayIsExperimental(day: ForecastDay): boolean {
   return day.experimental !== false;
 }
 
+/** Index beaches use the band. dayN_call is not shown beside the index. */
+function lookAheadWords(forecast: ForecastDay, useIndexLabels: boolean): string {
+  if (forecast.forecastPending || (useIndexLabels && !swimWords(forecast.bandId, "en"))) {
+    return forecastPendingPhrase("en");
+  }
+  return swimWords(forecast.bandId, "en")
+    ?? (forecast.callUnknown ? unknownCallPhrase("en") : statusReading(forecast.status).pill);
+}
+
 function ForecastLookAhead({
   forecasts,
   picked,
   onPick,
   onLocked,
   tier,
+  useIndexLabels,
 }: {
   forecasts: ForecastDay[];
   picked: ForecastDay | null;
   onPick: (date: string) => void;
   onLocked: (feature: LockedFeature, date: string) => void;
   tier: RosterTier | null;
+  useIndexLabels: boolean;
 }) {
   const open = forecasts.filter((day) => !day.locked);
   const allGoLive = open.length > 0 && open.every((day) => day.experimental === false);
@@ -112,19 +124,19 @@ function ForecastLookAhead({
             <Lock size={18} aria-hidden="true" /><strong>Forecast</strong>
           </a>
         ) : (
-          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown ? s.unknownCall : bandClass(forecast.status, tier)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${forecast.callUnknown ? unknownCallPhrase("en") : bandLabel(forecast.status)}`}>
+          <button key={forecast.date} type="button" className={`${s.futureDay} ${forecast.callUnknown && !useIndexLabels ? s.unknownCall : bandClass(forecast.status, tier)}`} onClick={() => onPick(forecast.date)} aria-pressed={picked?.date === forecast.date} aria-label={`${formatMonthDayYear(forecast.date)}: ${dayIsExperimental(forecast) ? "experimental, " : ""}${lookAheadWords(forecast, useIndexLabels)}`}>
             <span className={s.futureDayName}>{dateLabel(forecast.date, true)}</span>
             <span className={s.futureDate}>{dateLabel(forecast.date)}</span>
             {mixed && dayIsExperimental(forecast) && <span className={s.experimentalBadge}>{FORECAST_EXPERIMENTAL_LABEL}</span>}
-            <strong>{forecast.callUnknown ? unknownCallPhrase("en") : statusReading(forecast.status).pill}</strong>
+            <strong>{lookAheadWords(forecast, useIndexLabels)}</strong>
           </button>
         ))}</div>
         {picked && (
           <div className={s.forecastPick}>
-            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).title}</p>
-            <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>
-            <CautiousLine tier={tier} status={picked.callUnknown ? null : picked.status} />
-            <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>
+            <p><strong>{dateLabel(picked.date, true)}, {dateLabel(picked.date)}</strong> · {lookAheadWords(picked, useIndexLabels)}</p>
+            {!useIndexLabels && <p>{picked.callUnknown ? unknownCallPhrase("en") : statusReading(picked.status).detail}</p>}
+            {!useIndexLabels && <CautiousLine tier={tier} status={picked.callUnknown ? null : picked.status} />}
+            {!picked.probabilityOmitted && <p>{Math.round(Math.max(0, Math.min(1, picked.probability)) * 100)}%. {PROBABILITY_CAPTION}</p>}
             {pickedMethod && <p>{pickedMethod}</p>}
             {pickedConfidence && <p>{pickedConfidence.text}</p>}
           </div>
@@ -197,7 +209,7 @@ function distanceScore(a: { latitude: number; longitude: number }, b: { latitude
 
 export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMoment, advisory, alertSignup, labHistory = [] }: {
   beach: BeachData;
-  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null; tier?: RosterTier | null }>;
+  beaches: Array<{ id: string; code: string; name: string; latitude: number; longitude: number; status: Status | null; hasEstimate?: boolean; neptuneDisplay?: BeachData["neptuneDisplay"]; callUnknown?: boolean; finalStatus?: string | null; tier?: RosterTier | null; forecastPending?: boolean }>;
   onSelect: (code: string) => void;
   labHistory?: LabPoint[];
   // A locked forecast cell was tapped: the reader wanted tomorrow.
@@ -209,6 +221,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
   const reading = statusReading(today.status);
   const todayUnknown = showsUnknownCall(beach) || today.callUnknown === true;
   const indexScore = beach.neptuneDisplay;
+  const ceilingNote = ceilingPhrase(indexScore?.ceiling ?? beach.indexCeiling, "en");
+  const reasonNote = overrideReasonPhrase(indexScore?.overrideReason, "en");
   const readingFields = copyReading(beach);
   const posting = officialPosting(readingFields);
   const forecasts = beach.forecast.filter((day) => day.date > beach.predictionDate).slice(0, 3);
@@ -248,14 +262,24 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
           <span>{dateLabel(today.date)}</span>
         </div>
         <NeptuneIndexBadge display={indexScore} size="hero" />
-        <CautiousLine tier={beach.tier} status={todayUnknown ? null : today.status} withTitle />
         {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
         <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
+        {reasonNote && <p className={s.predictionExplanation}>{reasonNote}</p>}
+        {ceilingNote && <p className={s.predictionExplanation}>{ceilingNote}</p>}
         <p className={s.predictionExplanation}>
-          The number comes from the model file. This page does not calculate it.{indexScore.higherIsBetter ? " A higher number is cleaner." : ""} <NeptuneIndexExplainerLink />.{" "}
+          A lower number is cleaner water. 50 means about a 50% chance the water is over the limit. <NeptuneIndexExplainerLink />.{" "}
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
         </p>
       </section>
+    ) : beach.forecastPending ? (
+    <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">
+      <div className={s.predictionHeader}>
+        <p className={s.eyebrow}>Today’s estimate</p>
+        <span>{dateLabel(today.date)}</span>
+      </div>
+      <h3>Forecast pending</h3>
+      {ceilingNote && <p className={s.predictionExplanation}>{ceilingNote}</p>}
+    </section>
     ) : todayUnknown ? (
     <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">
       <div className={s.predictionHeader}>
@@ -296,7 +320,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         {beach.tier === "limited_data" && <p className={s.limitedNote}>{TIER_LIMITED_NOTE}</p>}
         {limited && <p className={s.limitedNote}>{limitedLabNote(beach.staleAfterDays, beach.county)}</p>}
         {beach.fallbackUsed === true && <p className={s.limitedNote}>This estimate used a fallback method.</p>}
-        {beach.calibratedProbability != null && (
+        {beach.calibratedProbability != null && !beach.forecastPending && (
           <p className={s.limitedNote}>Calibrated estimate: {Math.round(beach.calibratedProbability * 100)}%. Another model figure, not a lab result.</p>
         )}
         {beach.confidenceFlag && <p className={s.limitedNote}>Pipeline note: {beach.confidenceFlag}. Not a guarantee about today.</p>}
@@ -305,7 +329,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
     )}
     <LabHistory samples={labHistory} />
 
-    {!todayUnknown && <Figures probability={today.probability} ours={!!posting} />}
+    {!todayUnknown && !beach.forecastPending && <Figures probability={today.probability} ours={!!posting} />}
     <WhyPrediction
       key={today.date}
       prominentToggle
@@ -331,15 +355,16 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         onPick={(date) => setPickedDate((current) => current === date ? null : date)}
         onLocked={lockedClicked}
         tier={beach.tier}
+        useIndexLabels={beach.neptuneDisplay != null}
       />
     )}
     <ForecastAccuracy accuracy={beach.accuracy} hidePercent={false} showOverallPercent cautious />
     {alertSignup}
     {nearby.length > 0 && <section className={s.nearbySection}><h3>Nearby beaches</h3><ul className={s.beaches}>{nearby.map((neighbor) => <li key={neighbor.id}><button type="button" onClick={() => onSelect(neighbor.id)}><span className={s.beachIdentity}><span className={s.beachName}>{neighbor.name}</span></span>{(() => {
               if (neighbor.neptuneDisplay) {
-                const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");
-                return <span className={s.listReading}><NeptuneIndexBadge display={neighbor.neptuneDisplay} />{note && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {note}</span>}</span>;
+                return <span className={s.listReading}><NeptuneIndexBadge display={neighbor.neptuneDisplay} /></span>;
               }
+              if (neighbor.forecastPending) return <span className={s.noEstimate}>Forecast pending</span>;
               if (showsUnknownCall(neighbor)) return <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>;
               if (neighbor.hasEstimate !== false && neighbor.status) {
                 const note = cautiousElevatedNote(neighbor.tier, neighbor.status, "en");
