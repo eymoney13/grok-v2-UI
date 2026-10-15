@@ -35,7 +35,7 @@ import {
   type PublishedReading,
 } from "@/lib/publishedReading";
 import { forecastPendingPhrase, unknownCallPhrase } from "@/lib/publicCopy";
-import { swimWords } from "@/lib/neptuneIndex";
+import { ceilingPhrase, overrideReasonPhrase, swimWords } from "@/lib/neptuneIndex";
 import { cautiousElevatedNote, elevatedCallStyle } from "@/lib/tierCallStyle";
 import type { RosterTier } from "@/lib/data";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexScale, scaleForDisplay } from "../NeptuneIndex";
@@ -221,6 +221,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
   const reading = statusReading(today.status);
   const todayUnknown = showsUnknownCall(beach) || today.callUnknown === true;
   const indexScore = beach.neptuneDisplay;
+  const ceilingNote = ceilingPhrase(indexScore?.ceiling ?? beach.indexCeiling, "en");
+  const reasonNote = overrideReasonPhrase(indexScore?.overrideReason, "en");
   const readingFields = copyReading(beach);
   const posting = officialPosting(readingFields);
   const forecasts = beach.forecast.filter((day) => day.date > beach.predictionDate).slice(0, 3);
@@ -262,6 +264,8 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         <NeptuneIndexBadge display={indexScore} size="hero" />
         {indexScore.guidance && <p className={s.predictionExplanation}>{indexScore.guidance}</p>}
         <NeptuneIndexScale scale={scaleForDisplay(indexScore)} value={indexScore.index} compact />
+        {reasonNote && <p className={s.predictionExplanation}>{reasonNote}</p>}
+        {ceilingNote && <p className={s.predictionExplanation}>{ceilingNote}</p>}
         <p className={s.predictionExplanation}>
           A lower number is cleaner water. 50 means about a 50% chance the water is over the limit. <NeptuneIndexExplainerLink />.{" "}
           <a href={advisory.href} target="_blank" rel="noopener noreferrer" title={advisory.label}>Always follow official beach advisories. <ArrowUpRight size={16} aria-hidden="true" /></a>
@@ -274,6 +278,7 @@ export default function SandboxBeachDetail({ beach, beaches, onSelect, onProMome
         <span>{dateLabel(today.date)}</span>
       </div>
       <h3>Forecast pending</h3>
+      {ceilingNote && <p className={s.predictionExplanation}>{ceilingNote}</p>}
     </section>
     ) : todayUnknown ? (
     <section className={`${s.predictionHero} ${s.unknownCall}`} aria-label="Today’s estimate">

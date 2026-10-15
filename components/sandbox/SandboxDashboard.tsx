@@ -13,7 +13,7 @@ import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { IndexScale } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, methodShort, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
-import { staleCountyBanner, unknownCallPhrase } from "@/lib/publicCopy";
+import { forecastPendingPhrase, staleCountyBanner, unknownCallPhrase } from "@/lib/publicCopy";
 import { cautiousElevatedNote } from "@/lib/tierCallStyle";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
@@ -310,6 +310,8 @@ export default function SandboxDashboard({
                                       <NeptuneIndexBadge display={score} />
                                       {cautiousNote && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {cautiousNote}</span>}
                                     </span>
+                                  ) : beach.forecastPending ? (
+                                    <span className={s.noEstimate}>{forecastPendingPhrase("en")}</span>
                                   ) : showsUnknownCall(beach) ? (
                                     <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>
                                   ) : beach.hasEstimate && beach.status ? (

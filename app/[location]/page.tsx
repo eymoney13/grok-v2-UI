@@ -128,7 +128,7 @@ export default async function LocationPage({
     const regionQuery = typeof query.region === "string" ? query.region : "";
     return (
       <SandboxDashboard
-        beaches={beaches.map(toBeachListItem)}
+        beaches={[...beaches.map(toBeachListItem), ...unmodeled]}
         predictionDate={predictionDate}
         updated={lastUpdatedDisplay(generatedAt, predictionDate, config.timeZone)}
         readingsCurrent={!predictionDate || predictionDate >= calendarDay(config.timeZone)}

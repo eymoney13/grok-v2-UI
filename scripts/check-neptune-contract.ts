@@ -660,7 +660,7 @@ assert.equal(sampleScale.scaleMax, 100);
 assert.equal(sampleScale.higherIsBetter, false);
 assert.equal(sampleScale.bands.length, 4);
 assert.equal(sampleScale.formula?.input, "calibrated_probability");
-assert.equal(sampleScale.formula?.fallbackInput, "probability");
+assert.equal(sampleScale.formula?.fallbackInput, null);
 assert.equal(sampleScale.formula?.multiply, 100);
 assert.equal(sampleScale.formula?.round, "nearest");
 assert.equal(sampleScale.detection.tolerance, 1);
@@ -673,7 +673,26 @@ assert.equal(sampleScale.bands.find((band) => band.id === "likely_unsafe")?.coun
 assert.equal(sampleScale.bands.find((band) => band.id === "very_likely_unsafe")?.min, 75);
 assert.equal(sampleScale.bands.find((band) => band.id === "good")?.countsAsUnsafe, false);
 assert.equal(scoreFromProbability({ calibrated_probability: 0.023, probability: 0.9 }, sampleScale.formula!), 2);
-assert.equal(scoreFromProbability({ calibrated_probability: null, probability: 0.504 }, sampleScale.formula!), 50);
+assert.equal(scoreFromProbability({ calibrated_probability: null, probability: 0.504 }, sampleScale.formula!), null);
+const objectFormula = parseIndexBands({
+  higher_is_better: false,
+  bands: [{ band: "Good", min: 0, max: 100 }],
+  formula: { input: "calibrated_probability", fallback_input: "probability", multiply: 100, round: "nearest" },
+});
+assert.equal(objectFormula?.higherIsBetter, false);
+assert.equal(objectFormula?.formula?.fallbackInput, "probability");
+assert.equal(scoreFromProbability({ calibrated_probability: null, probability: 0.504 }, objectFormula!.formula!), 50);
+const proseDirection = parseIndexBands({
+  scale_direction: "lower_is_cleaner",
+  formula: "neptune_index = round(100 * calibrated exceedance probability), clipped to 0-100.",
+  bands: [
+    { band: "Good", min_index: 0, max_index: 24 },
+    { band: "Very Likely Unsafe", min_index: 75, max_index: 100 },
+  ],
+});
+assert.equal(proseDirection?.higherIsBetter, false);
+assert.equal(proseDirection?.formula?.multiply, 100);
+assert.equal(proseDirection?.formula?.fallbackInput, null);
 assert.equal(
   detectPublishedScale(Array.from({ length: 20 }, () => ({ published: 2, computed: 2 })), sampleScale.detection),
   "published"
@@ -812,9 +831,21 @@ const ceilingsFile = parseCalibrationCeilings(
   JSON.parse(readFileSync("data/neptune-v2/config/calibration_ceilings.json", "utf8"))
 );
 assert.deepEqual(ceilingsFile.groups, {});
-assert.equal(ceilingForTier(ceilingsFile, "limited_data"), ceilingsFile.byTier.limited_data);
-assert.equal(ceilingForTier(ceilingsFile, "model_pool"), ceilingsFile.byTier.model_pool);
-assert.ok(ceilingsFile.byTier.limited_data < ceilingsFile.byTier.model_pool);
+assert.equal(ceilingsFile.byTier.limited_data, 26);
+assert.equal(ceilingsFile.byTier.model_pool, 100);
+assert.equal(ceilingForTier(ceilingsFile, "limited_data"), 26);
+assert.equal(ceilingForTier(ceilingsFile, "model_pool"), 100);
+const nestedCeiling = parseCalibrationCeilings({
+  source: "models/tier_calibrators.json",
+  tiers: {
+    limited_data: { method: "isotonic", max_calibrated_probability: 0.2558139534883721, max_index: 26 },
+    model_pool: { method: "identity", max_calibrated_probability: 1, max_index: 100 },
+  },
+  groups: {},
+});
+assert.equal(nestedCeiling.byTier.limited_data, 26);
+assert.equal(nestedCeiling.byTier.model_pool, 100);
+assert.deepEqual(nestedCeiling.groups, {});
 assert.equal(
   ceilingPhrase(ceilingsFile.byTier.limited_data, "en"),
   `This index can't go above ${ceilingsFile.byTier.limited_data} yet.`
@@ -890,9 +921,13 @@ for (const key of ["SCCWPCEL|Cowell", "SCCWPCEL|Main", "SCCWPCEL|O440", "SCCWPCE
   assert.equal(liveRoster.find((station) => station.stationKey === key)?.tier, "limited_data", key);
 }
 const manifestFile = parseManifest(JSON.parse(readFileSync("data/neptune-v2/outputs/run_manifest.json", "utf8")));
+assert.equal(manifestFile.generatedAt, "2026-10-15T17:48:12.000Z");
+assert.equal(manifestFile.modelVersion, "ensemble");
+assert.deepEqual(manifestFile.staleCounties, ["Humboldt", "Orange", "San Francisco"]);
 assert.deepEqual(manifestFile.coordinateFlags, []);
-assert.deepEqual(manifestFile.notForDisplay, []);
-assert.deepEqual(manifestFile.calibrationCeilings.byTier, {});
+assert.deepEqual(manifestFile.notForDisplay, ["alert_flag"]);
+assert.equal(manifestFile.calibrationCeilings.byTier.limited_data, 26);
+assert.equal(manifestFile.calibrationCeilings.byTier.model_pool, 100);
 assert.deepEqual(manifestFile.calibrationCeilings.groups, {});
 const four = parseIndexBands({
   by_tier: {

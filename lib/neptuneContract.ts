@@ -144,9 +144,15 @@ function ceilingKey(raw: string): string {
 
 function ceilingNumber(raw: unknown): number | null {
   if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw !== "string" || raw.trim() === "") return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  if (typeof raw === "string") {
+    if (raw.trim() === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  // A saved calibrator is `{ method, max_calibrated_probability, max_index }`.
+  // The cap is `max_index`. The probability and the method are not caps.
+  if (isObj(raw)) return ceilingNumber(raw.max_index ?? raw.maxIndex);
+  return null;
 }
 
 /**
@@ -201,7 +207,17 @@ export function parseCalibrationCeilings(data: unknown): CalibrationCeilings {
   const byTier: Record<string, number> = {};
   const tierSource = isObj(root.tiers) ? root.tiers : root;
   for (const [key, value] of Object.entries(tierSource)) {
-    if (key === "groups" || key === "tiers" || key === "calibration_ceilings" || key === "calibrationCeilings") continue;
+    if (
+      key === "groups" ||
+      key === "tiers" ||
+      key === "calibration_ceilings" ||
+      key === "calibrationCeilings" ||
+      key === "source" ||
+      key === "note" ||
+      key === "method"
+    ) {
+      continue;
+    }
     const n = ceilingNumber(value);
     const name = ceilingKey(key);
     if (n != null && name) byTier[name] = n;

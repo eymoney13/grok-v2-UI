@@ -300,8 +300,7 @@ export function parseIndexBands(raw: unknown): IndexScale | null {
   const scaleMin = numberOr(data.scale_min ?? data.scaleMin, PRODUCT_SCALE_MIN);
   const scaleMax = numberOr(data.scale_max ?? data.scaleMax, PRODUCT_SCALE_MAX);
   if (!(scaleMax > scaleMin)) return null;
-  const higherRaw = data.higher_is_better ?? data.higherIsBetter;
-  const higherIsBetter = higherRaw === false || higherRaw === "false" ? false : true;
+  const higherIsBetter = readHigherIsBetter(data);
   const shared = data.bands ?? (Array.isArray(data.default) ? data.default : null);
   const bands = parseBandList(shared, scaleMin, scaleMax, higherIsBetter);
   const tiers = parseTiers(data.tiers ?? data.by_tier ?? data.byTier, scaleMin, scaleMax, higherIsBetter);
@@ -323,7 +322,27 @@ export const DEFAULT_DETECTION: PublishedScaleDetection = {
   minimumFraction: 0.8,
 };
 
+/** `higher_is_better: false`, or `scale_direction: "lower_is_cleaner"` on the published bands file. */
+function readHigherIsBetter(data: Record<string, unknown>): boolean {
+  const directionRaw = data.scale_direction ?? data.scaleDirection;
+  if (typeof directionRaw === "string" && directionRaw.trim()) {
+    const direction = directionRaw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    if (direction === "lower_is_cleaner" || direction === "lower_is_better") return false;
+    if (direction === "higher_is_cleaner" || direction === "higher_is_better") return true;
+  }
+  const higherRaw = data.higher_is_better ?? data.higherIsBetter;
+  if (higherRaw === false || higherRaw === "false") return false;
+  if (higherRaw === true || higherRaw === "true") return true;
+  return true;
+}
+
+/**
+ * A formula object, or the published sentence
+ * `neptune_index = round(100 * calibrated exceedance probability)`.
+ * That sentence names the calibrated input only. It does not add a raw-probability fallback.
+ */
 function parseFormula(raw: unknown): IndexFormula | null {
+  if (typeof raw === "string") return parseFormulaText(raw);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const row = raw as Record<string, unknown>;
   const multiply = numberOr(row.multiply, Number.NaN);
@@ -334,6 +353,21 @@ function parseFormula(raw: unknown): IndexFormula | null {
   const round = row.round === "floor" || row.round === "none" ? row.round : "nearest";
   const id = typeof row.id === "string" && row.id.trim() ? row.id.trim() : "probability_times_scale";
   return { id, input, fallbackInput, multiply, round };
+}
+
+function parseFormulaText(raw: string): IndexFormula | null {
+  const text = raw.trim();
+  const matched = text.match(/round\s*\(\s*(\d+(?:\.\d+)?)\s*[*×]\s*calibrated\b/i);
+  if (!matched) return null;
+  const multiply = Number(matched[1]);
+  if (!Number.isFinite(multiply)) return null;
+  return {
+    id: "calibrated_probability_times_100",
+    input: "calibrated_probability",
+    fallbackInput: null,
+    multiply,
+    round: "nearest",
+  };
 }
 
 function parseDetection(raw: unknown): PublishedScaleDetection {
