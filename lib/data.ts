@@ -1,4 +1,4 @@
-import type { NeptuneDisplay, IndexScale } from "./neptuneIndex.ts";
+import type { BandOverrideReason, NeptuneDisplay, IndexScale } from "./neptuneIndex.ts";
 import { isUnknownCall, type ConfidenceLevel, type EstimateMethod, type PostingStatus } from "./publishedReading.ts";
 
 export interface LocationConfig {
@@ -681,6 +681,14 @@ export interface ForecastDay {
    * fill in Good, Safe, or under the limit.
    */
   callUnknown?: boolean;
+  /** Band from neptune_index, or from the well-tested fallback. Not the old call. */
+  bandId?: string | null;
+  /** This day has no trusted index and must not be computed for a limited-data beach. */
+  forecastPending?: boolean;
+  /** `band_override_reason` for this day, read by header name. */
+  overrideReason?: BandOverrideReason | null;
+  /** The day was published from an index cell with no probability. Do not show 0%. */
+  probabilityOmitted?: boolean;
   /** Method for this lead, when outputs/daily_status.csv published one. */
   method?: EstimateMethod | null;
   /** high, medium, or low for this lead. Not the go_live flag. */
@@ -773,8 +781,15 @@ export interface BeachData {
   neptuneIndex: number | null;
   /** Band word from the file. Not replaced by a cutoff. Null when the cell was empty. */
   neptuneBand: string | null;
-  /** Server-resolved badge. Null when both index fields were empty. */
+  /** Server-resolved badge. Null when both index fields were empty or the row is forecast-pending. */
   neptuneDisplay: NeptuneDisplay | null;
+  /**
+   * Limited-data row with no trusted `neptune_index`, or a blank probability.
+   * The page says Forecast pending and does not compute a number from a raw probability.
+   */
+  forecastPending?: boolean;
+  /** Tier ceiling when it is below the top of the scale. The number comes from the ceilings file. */
+  indexCeiling?: number | null;
   /** County staleness limit, in days, when the config file names one. */
   staleAfterDays: number | null;
   // Long-run descriptive stats from the backend's roster file: what share of
@@ -853,6 +868,8 @@ export interface BeachListItem {
   neptuneIndex: number | null;
   neptuneBand: string | null;
   neptuneDisplay: NeptuneDisplay | null;
+  forecastPending?: boolean;
+  indexCeiling?: number | null;
   method: EstimateMethod | null;
   confidence: ConfidenceLevel | null;
   postingStatus: PostingStatus | null;
@@ -890,6 +907,8 @@ export function toBeachListItem(beach: BeachData): BeachListItem {
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
+    forecastPending: beach.forecastPending,
+    indexCeiling: beach.indexCeiling,
     method: beach.method,
     confidence: beach.confidence,
     postingStatus: beach.postingStatus,

@@ -13,7 +13,7 @@ import { statewideStatusHeadline } from "@/lib/statewideCounts";
 import { labFreshnessLine, statusReading, type LastUpdatedDisplay } from "@/lib/waterStatus";
 import type { IndexScale } from "@/lib/neptuneIndex";
 import { confidenceWords, copyReading, methodShort, officialPosting, openPostingWords, postingHeadline, showsUnknownCall } from "@/lib/publishedReading";
-import { staleCountyBanner, unknownCallPhrase } from "@/lib/publicCopy";
+import { forecastPendingPhrase, staleCountyBanner, unknownCallPhrase } from "@/lib/publicCopy";
 import { cautiousElevatedNote } from "@/lib/tierCallStyle";
 import { NeptuneIndexBadge, NeptuneIndexExplainerLink, NeptuneIndexLegend } from "../NeptuneIndex";
 import type { NewsItem } from "@/lib/news";
@@ -310,6 +310,8 @@ export default function SandboxDashboard({
                                       <NeptuneIndexBadge display={score} />
                                       {cautiousNote && <span className={s.cautiousListNote}>{statusReading("Not recommended").pill}. {cautiousNote}</span>}
                                     </span>
+                                  ) : beach.forecastPending ? (
+                                    <span className={s.noEstimate}>{forecastPendingPhrase("en")}</span>
                                   ) : showsUnknownCall(beach) ? (
                                     <span className={s.noEstimate}>{unknownCallPhrase("en")}</span>
                                   ) : beach.hasEstimate && beach.status ? (
@@ -369,7 +371,7 @@ export default function SandboxDashboard({
               <div className={s.indexLegend}>
                 <h3>Neptune Index</h3>
                 <NeptuneIndexLegend scale={indexScale} compact />
-                <p className={s.legendNote}>The band is the label on the pin. The number is the score.{indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} Each tier uses the bands in its own table, so the same number can be a different band. A rules score with no band stays uncolored. A grey band includes a written note when the lab test is old or the estimate used a fallback. Beaches without a published index stay on {statusReading("Normal").title}, {statusReading("Slightly elevated").title}, and {statusReading("Not recommended").title}.</p>
+                <p className={s.legendNote}>The band is the label on the pin. The number is the score. A lower number is cleaner water. Every beach uses the same scale. Safe to swim, Use caution, and Not safe sit next to the band. A grey band includes a written note when the lab test is old or the estimate used a fallback.</p>
               </div>
             )}
             {beaches.some((beach) => beach.hasEstimate && !beach.neptuneDisplay) && (
@@ -377,7 +379,7 @@ export default function SandboxDashboard({
             )}
             <p className={s.legendNote}>
               {beaches.some((beach) => beach.neptuneDisplay)
-                ? `A Neptune Index is a 0–${indexScale?.scaleMax ?? 100} score from the model file.${indexScale?.higherIsBetter === false ? "" : " A higher number is cleaner."} `
+                ? `A Neptune Index is a 0–${indexScale?.scaleMax ?? 100} score. A lower number is cleaner water. `
                 : `${statusReading("Normal").pill}, ${statusReading("Slightly elevated").pill}, and ${statusReading("Not recommended").pill} compare today’s estimate with the 104 MPN/100 mL enterococcus standard. ${statusReading("Not recommended").title} is a precaution, not a measured lab result. On the map, the same three readings are labeled Low, Moderate, and High. `}
               <NeptuneIndexExplainerLink />. Pins group together until you zoom in.
             </p>

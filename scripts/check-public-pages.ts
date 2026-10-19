@@ -197,8 +197,9 @@ const indexed = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
   "en"
 );
-assert.match(indexed.status, /92 \/ 100, higher is cleaner/);
-assert.match(indexed.status, /Good/);
+assert.match(indexed.status, /92 \/ 100, lower is cleaner/);
+assert.match(indexed.status, /Very Likely Unsafe/);
+assert.match(indexed.status, /Not safe/);
 assert.doesNotMatch(indexed.status, /Hazardous/);
 const indexedUnknown = dailySummary(
   { ...base, callUnknown: true, finalStatus: "Unknown", neptuneDisplay: resolveNeptuneDisplay(92, "good", indexScale) },
@@ -206,6 +207,20 @@ const indexedUnknown = dailySummary(
 );
 assert.match(indexedUnknown.status, /92 \/ 100/);
 assert.doesNotMatch(indexedUnknown.status, /under the limit|Not enough recent data|\bSafe\b/);
+const indexedDays = dailySummary(
+  {
+    ...base,
+    neptuneDisplay: resolveNeptuneDisplay(2, "good", indexScale),
+    outlook: [
+      { date: "2026-10-10", status: "Not recommended", experimental: true, bandId: "good" },
+      { date: "2026-10-11", status: "Normal", experimental: true, callUnknown: true },
+    ],
+  },
+  "en"
+);
+assert.match(indexedDays.outlook, /Saturday: Safe to swim/);
+assert.match(indexedDays.outlook, /Sunday: Forecast pending/);
+assert.doesNotMatch(indexedDays.outlook, /elevated risk|under the limit|Not enough recent data/i);
 const postedUnknown = dailySummary(
   { ...base, postingStatus: "closure", postingSource: "Orange County", finalStatus: "Unknown" },
   "en"
@@ -233,22 +248,37 @@ const rulesIndex = dailySummary(
   },
   "en"
 );
-assert.match(rulesIndex.status, /92 \/ 100/);
-assert.match(rulesIndex.status, /last lab test \+ rain rule/);
-assert.equal(rulesIndex.method, null);
+assert.match(rulesIndex.status, /92 \/ 100, lower is cleaner/);
+assert.match(rulesIndex.status, /Very Likely Unsafe/);
+assert.match(rulesIndex.method ?? "", /last lab test \+ rain rule/);
 assert.doesNotMatch(rulesIndex.status, /\bGood\b|\bCaution\b|\bPoor\b/);
+const warnedIndex = dailySummary(
+  {
+    ...base,
+    postingStatus: "warning",
+    postingSource: "Orange County",
+    neptuneDisplay: resolveNeptuneDisplay(2, "good", indexScale, { overrideReason: "posted_warning" }),
+  },
+  "en"
+);
+assert.match(warnedIndex.status, /The county has posted a warning for this beach/);
+assert.match(warnedIndex.status, /Not safe/);
+assert.match(warnedIndex.status, /\b2\b/);
+assert.doesNotMatch(warnedIndex.status, /elevated risk|alert_flag/i);
+const pendingBlank = dailySummary({ ...base, forecastPending: true, neptuneDisplay: null, hasEstimate: false }, "en");
+assert.match(pendingBlank.status, /Forecast pending/);
 const tierCaution = dailySummary(
   { ...base, neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "model_pool" }) },
   "en"
 );
-assert.match(tierCaution.status, /Caution/);
-assert.doesNotMatch(tierCaution.status, /is Good/);
+assert.match(tierCaution.status, /Very Likely Unsafe/);
+assert.match(tierCaution.status, /Not safe/);
 const tierPoor = dailySummary(
   { ...base, tier: "limited_data", neptuneDisplay: resolveNeptuneDisplay(92, null, indexScale, { tier: "limited_data" }) },
   "en"
 );
-assert.match(tierPoor.status, /Poor/);
-assert.doesNotMatch(tierPoor.status, /Caution/);
+assert.match(tierPoor.status, /Very Likely Unsafe/);
+assert.match(tierPoor.status, /Not safe/);
 
 assert.equal(dailySummary({ ...base, fallbackUsed: null }, "en").fallback, null);
 assert.match(dailySummary({ ...base, fallbackUsed: true }, "en").fallback ?? "", /fallback/);
@@ -285,9 +315,9 @@ assert.equal(cautiousElevatedNote(null, "Not recommended", "en"), null);
 assert.equal(staleCountyBanner([], "en"), null);
 assert.equal(
   staleCountyBanner(["Orange", "Ventura"], "en"),
-  "The latest run marked these counties stale: Orange, Ventura."
+  "Older data than usual in: Orange, Ventura."
 );
-assert.match(staleCountyBanner(["Orange"], "es") ?? "", /desactualizados: Orange/);
+assert.match(staleCountyBanner(["Orange"], "es") ?? "", /Datos más viejos de lo habitual en: Orange/);
 const limitedHigh = dailySummary(
   { ...base, status: "Not recommended", tier: "limited_data", confidence: "high" },
   "en"
@@ -306,9 +336,26 @@ const limitedIndex = dailySummary(
   },
   "en"
 );
-assert.match(limitedIndex.status, /Poor/);
-assert.match(limitedIndex.status, /Limited testing history, so this is a cautious estimate/);
-assert.doesNotMatch(limitedIndex.status, /Caution/);
+assert.match(limitedIndex.status, /Very Likely Unsafe/);
+assert.doesNotMatch(limitedIndex.status, /Limited testing history|Elevated risk|\bSafe\b/);
+assert.match(limitedIndex.status, /Not safe/);
+const pending = dailySummary(
+  {
+    ...base,
+    status: "Not recommended",
+    tier: "limited_data",
+    forecastPending: true,
+    neptuneDisplay: null,
+    neptuneIndex: null,
+  },
+  "en"
+);
+assert.equal(pending.status, "Forecast pending");
+assert.doesNotMatch(pending.status, /Elevated risk|\bSafe\b|\bUnsafe\b|1\.0|\d/);
+assert.equal(
+  dailySummary({ ...base, tier: "limited_data", forecastPending: true, neptuneDisplay: null }, "es").status,
+  "Pronóstico pendiente"
+);
 const poolLow = dailySummary(
   { ...base, status: "Not recommended", tier: "model_pool", confidence: "low" },
   "en"
@@ -323,8 +370,8 @@ assert.doesNotMatch(
 
 const spanishGood = resolveNeptuneDisplay(92, "good", indexScale);
 assert.ok(spanishGood);
-assert.equal(displayBandLabel(spanishGood, "es"), "Bueno");
-assert.match(indexScalePhrase(spanishGood, "es") ?? "", /más alto es más limpio/);
+assert.match(indexScalePhrase(spanishGood, "es") ?? "", /más bajo es más limpio/);
+assert.equal(displayBandLabel(spanishGood, "es"), "Muy probablemente inseguro");
 assert.equal(displayBandLabel(resolveNeptuneDisplay(70, "caution", indexScale)!, "es"), "Precaución");
 assert.equal(displayBandLabel(resolveNeptuneDisplay(40, "poor", indexScale)!, "es"), "Mala");
 

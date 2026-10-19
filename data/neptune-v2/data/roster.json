@@ -4,9 +4,9 @@
   "enterococcus_limit_mpn": 104,
   "tier_rule": "model_pool = sampled in the last year, 3+ years history, and 10+ exceedances since 2024; otherwise limited_data",
   "counts": {
-    "stations": 679,
-    "model_pool": 182,
-    "limited_data": 497,
+    "stations": 680,
+    "model_pool": 177,
+    "limited_data": 503,
     "by_county": {
       "Alameda": {
         "model_pool": 2,
@@ -22,7 +22,7 @@
       },
       "Long Beach City": {
         "model_pool": 15,
-        "limited_data": 0
+        "limited_data": 1
       },
       "Los Angeles": {
         "model_pool": 28,
@@ -65,8 +65,8 @@
         "limited_data": 16
       },
       "Santa Cruz": {
-        "model_pool": 8,
-        "limited_data": 33
+        "model_pool": 3,
+        "limited_data": 38
       },
       "Sonoma": {
         "model_pool": 0,
@@ -7181,7 +7181,7 @@
       "county": "Santa Cruz",
       "last_sample_date": "2026-05-26",
       "sampling_frequency": "biweekly",
-      "tier": "model_pool"
+      "tier": "limited_data"
     },
     {
       "station_code": "Cowell-BC",
@@ -7229,7 +7229,7 @@
       "county": "Santa Cruz",
       "last_sample_date": "2026-05-26",
       "sampling_frequency": "biweekly",
-      "tier": "model_pool"
+      "tier": "limited_data"
     },
     {
       "station_code": "Main-A",
@@ -7481,7 +7481,7 @@
       "county": "Santa Cruz",
       "last_sample_date": "2026-09-28",
       "sampling_frequency": "weekly",
-      "tier": "model_pool"
+      "tier": "limited_data"
     },
     {
       "station_code": "O450",
@@ -7577,7 +7577,7 @@
       "county": "Santa Cruz",
       "last_sample_date": "2026-10-06",
       "sampling_frequency": "biweekly",
-      "tier": "model_pool"
+      "tier": "limited_data"
     },
     {
       "station_code": "O530",
@@ -7589,7 +7589,7 @@
       "county": "Santa Cruz",
       "last_sample_date": "2026-10-06",
       "sampling_frequency": "weekly",
-      "tier": "model_pool"
+      "tier": "limited_data"
     },
     {
       "station_code": "O550",
@@ -7775,9 +7775,9 @@
       "station_code": "1100",
       "agency": "VCEHD",
       "station_key": "VCEHD|1100",
-      "name": "Crescent City/ Outside-1100",
-      "lat": 34.37538,
-      "lon": -119.473045,
+      "name": "Rincon Beach",
+      "lat": 34.375,
+      "lon": -119.473,
       "county": "Ventura",
       "last_sample_date": "2026-10-05",
       "sampling_frequency": "seasonal",
@@ -8225,6 +8225,18 @@
       "county": "Ventura",
       "last_sample_date": "2026-10-05",
       "sampling_frequency": "seasonal",
+      "tier": "limited_data"
+    },
+    {
+      "station_code": "B-69",
+      "agency": "CLBHHS",
+      "station_key": "CLBHHS|B-69",
+      "name": "Bayshore at Division St",
+      "lat": 33.756,
+      "lon": -118.131,
+      "county": "Long Beach City",
+      "last_sample_date": null,
+      "sampling_frequency": null,
       "tier": "limited_data"
     }
   ]

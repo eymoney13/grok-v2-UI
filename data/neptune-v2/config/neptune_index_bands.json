@@ -1,21 +1,26 @@
-
 {
-  "default": [
-    {"band": "Poor", "min_index": 0},
-    {"band": "Caution", "min_index": 85},
-    {"band": "Good", "min_index": 98}
-  ],
-  "by_tier": {
-    "model_pool": [
-      {"band": "Poor", "min_index": 0},
-      {"band": "Caution", "min_index": 85},
-      {"band": "Good", "min_index": 98}
-    ],
-    "limited_data": [
-      {"band": "Poor", "min_index": 0},
-      {"band": "Good", "min_index": 95}
-    ]
-  }
+  "formula": "neptune_index = round(100 * calibrated exceedance probability), clipped to 0-100. The calibrated probability is the chance enterococcus exceeds 104 MPN/100 mL. An index of 50 is that 50% chance.",
+  "scale_direction": "lower_is_cleaner",
+  "bands": [
+    {
+      "band": "Good",
+      "min_index": 0,
+      "max_index": 24
+    },
+    {
+      "band": "Moderate",
+      "min_index": 25,
+      "max_index": 49
+    },
+    {
+      "band": "Likely Unsafe",
+      "min_index": 50,
+      "max_index": 74
+    },
+    {
+      "band": "Very Likely Unsafe",
+      "min_index": 75,
+      "max_index": 100
+    }
+  ]
 }
-
-

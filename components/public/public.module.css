@@ -2,8 +2,11 @@
   min-height: 100dvh;
   max-width: 40rem;
   margin: 0 auto;
-  padding: 16px 16px calc(28px + env(safe-area-inset-bottom));
-  color: #142226;
+  padding: 1.25rem 1rem calc(2rem + env(safe-area-inset-bottom));
+  background: #fbf6ef;
+  color: #1b140f;
+  font-size: 1.125rem;
+  line-height: 1.45;
 }
 
 .top {
@@ -29,13 +32,13 @@
 }
 
 .langs button {
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 3rem;
+  padding: 0 0.9rem;
   border: 0;
   background: #fff;
-  color: #142226;
+  color: #1b140f;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 1.125rem;
 }
 
 .langs button[aria-pressed="true"] {
@@ -44,15 +47,16 @@
 }
 
 .page h1 {
-  margin: 0 0 8px;
-  font-size: 1.85rem;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .page h2 {
-  margin: 0 0 8px;
-  font-size: 1.05rem;
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  line-height: 1.25;
 }
 
 .lead,
@@ -60,12 +64,12 @@
 .meta,
 .honesty,
 .footer {
-  color: #3d4c50;
+  color: #1b140f;
 }
 
 .lead {
-  margin: 0 0 16px;
-  font-size: 1.05rem;
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
   line-height: 1.45;
 }
 
@@ -83,13 +87,13 @@
   border-radius: 12px;
   font: inherit;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 .primary {
   width: 100%;
   border: 0;
-  background: #0e6f78;
+  background: #0a4f55;
   color: #fff;
 }
 
@@ -108,8 +112,8 @@
 }
 
 .search label {
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: 1.125rem;
+  font-weight: 700;
 }
 
 .searchRow {
@@ -122,10 +126,12 @@
   min-width: 0;
   min-height: 48px;
   padding: 0 12px;
-  border: 1px solid #b7c6c8;
+  border: 2px solid #1b140f;
   border-radius: 12px;
+  background: #fff;
+  color: #1b140f;
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 .search button {
@@ -136,16 +142,17 @@
 }
 
 .stale {
-  margin: 0 0 14px;
-  padding: 10px 12px;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
   border-radius: 10px;
   background: #fff6e8;
-  color: #5c3b00;
+  color: #1b140f;
+  font-size: 1.125rem;
 }
 
 .dateline {
   margin: 0 0 14px;
-  font-size: 0.95rem;
+  font-size: 1.125rem;
 }
 
 .list {
@@ -182,13 +189,14 @@
 
 .name {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
 }
 
 .meta,
 .tested {
-  font-size: 0.92rem;
-  color: #3d4c50;
+  font-size: 1.125rem;
+  color: #1b140f;
 }
 
 .pill,
@@ -453,19 +461,117 @@
 .footer {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-top: 28px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8e9;
-  font-size: 0.92rem;
+  gap: 0.75rem 1rem;
+  margin-top: 1.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2d8c8;
+  font-size: 1.125rem;
 }
 
-.footer a {
-  color: #0e6f78;
+.footer a,
+.link {
+  color: #083f44;
+  font-size: 1.125rem;
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
 }
 
 .honesty {
-  margin: 18px 0 0;
-  font-size: 0.88rem;
-  line-height: 1.4;
+  margin: 1.25rem 0 0;
+  font-size: 1.125rem;
+  line-height: 1.45;
+}
+
+.crumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+}
+
+.crumb a {
+  color: #083f44;
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  margin-bottom: 0.5rem;
+  color: #083f44;
+  font-size: 1.125rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  margin: 0.75rem 0;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: #efe6d6;
+  color: #1b140f;
+}
+
+.answerHero {
+  padding: 1.25rem 1.2rem;
+}
+
+.answerWords,
+.answerPlain {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.answerHero .answerWords {
+  font-size: 2.25rem;
+}
+
+.answerNumber {
+  margin: 0.15rem 0 0;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.answerBand,
+.answerMeta {
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.answerSerious {
+  border: 3px solid #1b140f;
+}
+
+.section h2 {
+  font-size: 1.5rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.75rem;
+  border: 2px solid #1b140f;
+  border-radius: 999px;
+  background: #fff;
+  color: #1b140f;
+  font-size: 1.125rem;
+  font-weight: 700;
 }

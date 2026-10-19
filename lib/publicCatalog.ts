@@ -68,6 +68,8 @@ function fromModeled(beach: BeachData, slug: string): PublicBeach {
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
+    forecastPending: beach.forecastPending,
+    indexCeiling: beach.indexCeiling,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,
@@ -80,6 +82,7 @@ function fromModeled(beach: BeachData, slug: string): PublicBeach {
     outlook: publishedOutlook(beach.forecast, beach.predictionDate, horizon),
     fallbackUsed: beach.fallbackUsed,
     callUnknown: beach.callUnknown,
+    neverTested: false,
     ...copyReading(beach),
   };
 }
@@ -99,6 +102,8 @@ function fromUnmodeled(beach: BeachListItem, slug: string): PublicBeach {
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
+    forecastPending: beach.forecastPending,
+    indexCeiling: beach.indexCeiling,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,
@@ -110,6 +115,7 @@ function fromUnmodeled(beach: BeachListItem, slug: string): PublicBeach {
     outlook: [],
     fallbackUsed: beach.fallbackUsed,
     callUnknown: beach.callUnknown,
+    neverTested: beach.lastSampleDate == null && beach.callUnknown !== true && beach.neptuneDisplay == null,
     ...copyReading(beach),
   };
 }

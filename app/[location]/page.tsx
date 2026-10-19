@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import DashboardTabs from "@/components/DashboardTabs";
+import CoastBoard from "@/components/coast/CoastBoard";
 import SandboxDashboard from "@/components/sandbox/SandboxDashboard";
 import ProjectNeptuneLogo from "@/components/ProjectNeptuneLogo";
 import AccountControl from "@/components/AccountControl";
@@ -61,7 +62,7 @@ export default async function LocationPage({
   searchParams,
 }: {
   params: Promise<{ location: string }>;
-  searchParams: Promise<{ pro?: string; view?: string; region?: string }>;
+  searchParams: Promise<{ pro?: string; view?: string; region?: string; group?: string }>;
 }) {
   const { location } = await params;
   const config = getLocation(location);
@@ -103,16 +104,31 @@ export default async function LocationPage({
     publicTodayInsights: location === "sandbox" || location === "california",
   });
 
-  // Presentation only. The live boards retain the original render path below;
-  // sandbox receives exactly the same server-redacted data as before.
-  if (location === "sandbox" || location === "california") {
+  if (location === "california") {
+    const query = await searchParams;
+    return (
+      <CoastBoard
+        beaches={[...beaches.map(toBeachListItem), ...unmodeled]}
+        predictionDate={predictionDate}
+        readingsCurrent={!predictionDate || predictionDate >= calendarDay(config.timeZone)}
+        fallbackCenter={config.mapFallbackCenter}
+        staleCounties={staleCounties}
+        checksPassed={checksPassed}
+        indexScale={indexScale}
+        initialGroup={typeof query.group === "string" ? query.group : ""}
+      />
+    );
+  }
+
+  // Presentation only. The live boards retain the original render path below.
+  if (location === "sandbox") {
     const { isPaymentFirstEnabled } = await import("@/lib/purchase");
     const query = await searchParams;
     const openForecast = entitled && query.pro === "activated";
     const regionQuery = typeof query.region === "string" ? query.region : "";
     return (
       <SandboxDashboard
-        beaches={[...beaches.map(toBeachListItem), ...(location === "california" ? unmodeled : [])]}
+        beaches={[...beaches.map(toBeachListItem), ...unmodeled]}
         predictionDate={predictionDate}
         updated={lastUpdatedDisplay(generatedAt, predictionDate, config.timeZone)}
         readingsCurrent={!predictionDate || predictionDate >= calendarDay(config.timeZone)}

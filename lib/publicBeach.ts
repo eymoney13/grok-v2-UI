@@ -11,6 +11,10 @@ export interface OutlookDay {
   experimental?: boolean;
   /** This day published Unknown. The outlook must not call it under the limit. */
   callUnknown?: boolean;
+  /** Index band for this day. The outlook uses this instead of the old call. */
+  bandId?: string | null;
+  /** No trusted index for this day. The outlook does not invent a number. */
+  forecastPending?: boolean;
 }
 
 /**
@@ -34,6 +38,10 @@ export interface PublicBeach {
   neptuneIndex: number | null;
   neptuneBand: string | null;
   neptuneDisplay: NeptuneDisplay | null;
+  /** Limited-data row with no trusted index, or a blank probability. No number is shown. */
+  forecastPending?: boolean;
+  /** Tier ceiling below the top of the scale. Null when this beach can use the full scale. */
+  indexCeiling?: number | null;
   daysSinceSample: number | null;
   noRecentSample: boolean;
   staleAfterDays: number | null;
@@ -53,6 +61,8 @@ export interface PublicBeach {
   rainAdvisory: boolean | null;
   /** Rules-path Unknown. The page must not read this beach as safe. */
   callUnknown?: boolean;
+  /** No lab sample in the file. Not the same as an Unknown call. */
+  neverTested?: boolean;
 }
 
 /** The home screen list. Rain, lab results, and the outlook stay on the beach page. */
@@ -70,6 +80,8 @@ export type GlanceBeach = Pick<
   | "neptuneIndex"
   | "neptuneBand"
   | "neptuneDisplay"
+  | "forecastPending"
+  | "indexCeiling"
   | "daysSinceSample"
   | "noRecentSample"
   | "staleAfterDays"
@@ -82,6 +94,7 @@ export type GlanceBeach = Pick<
   | "postingDate"
   | "rainAdvisory"
   | "callUnknown"
+  | "neverTested"
 >;
 
 export function toGlance(beach: PublicBeach): GlanceBeach {
@@ -98,6 +111,8 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     neptuneIndex: beach.neptuneIndex,
     neptuneBand: beach.neptuneBand,
     neptuneDisplay: beach.neptuneDisplay,
+    forecastPending: beach.forecastPending,
+    indexCeiling: beach.indexCeiling,
     daysSinceSample: beach.daysSinceSample,
     noRecentSample: beach.noRecentSample,
     staleAfterDays: beach.staleAfterDays,
@@ -110,5 +125,6 @@ export function toGlance(beach: PublicBeach): GlanceBeach {
     postingDate: beach.postingDate,
     rainAdvisory: beach.rainAdvisory,
     callUnknown: beach.callUnknown,
+    neverTested: beach.neverTested,
   };
 }

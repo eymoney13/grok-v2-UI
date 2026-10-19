@@ -5,12 +5,17 @@ import {
   type ForecastHorizon,
 } from "./forecastDisplay.ts";
 import {
+  ceilingPhrase,
   indexReading,
+  overrideReasonPhrase,
+  swimWords,
   type NeptuneDisplay,
 } from "./neptuneIndex.ts";
 import {
   statusDetail,
   statusPhrase,
+  forecastPendingPhrase,
+  notTestedPhrase,
   unknownCallPhrase,
   type Lang,
 } from "./publicCopy.ts";
@@ -64,6 +69,9 @@ export interface SummaryFacts {
   postingDate: string | null;
   rainAdvisory: boolean | null;
   callUnknown?: boolean;
+  neverTested?: boolean;
+  /** Limited-data beach with no trusted index. No number and no old call. */
+  forecastPending?: boolean;
 }
 
 export interface DailySummary {
@@ -101,7 +109,7 @@ const TIER_ES =
  * A hidden horizon contributes no days, so the page cannot describe a direction.
  */
 export function publishedOutlook(
-  days: { date: string; status: Status; locked?: boolean; experimental?: boolean; callUnknown?: boolean }[],
+  days: { date: string; status: Status; locked?: boolean; experimental?: boolean; callUnknown?: boolean; bandId?: string | null; forecastPending?: boolean }[],
   predictionDate: string,
   horizon: ForecastHorizon
 ): OutlookDay[] {
@@ -115,6 +123,8 @@ export function publishedOutlook(
       status: day.status,
       experimental: day.experimental !== false,
       ...(day.callUnknown ? { callUnknown: true as const } : {}),
+      ...(day.bandId ? { bandId: day.bandId } : {}),
+      ...(day.forecastPending ? { forecastPending: true as const } : {}),
     }));
 }
 
@@ -132,7 +142,7 @@ export function dailySummary(facts: SummaryFacts, lang: Lang): DailySummary {
     rain: rainSentence(facts, lang),
     rainAdvisory: rainAdvisoryWords(copyReading(facts), lang),
     postingNote: openPostingWords(copyReading(facts), lang) ?? unknownPostingWords(copyReading(facts), lang),
-    method: facts.neptuneDisplay?.rulesIndex ? null : methodWords(facts.method, lang),
+    method: methodWords(facts.method, lang),
     confidence: confidenceWords(facts.confidence, lang),
     recentResult: recentSentence(facts.lastResultMpn, lang),
     fallback:
@@ -170,8 +180,10 @@ function withCautiousNote(sentence: string, facts: SummaryFacts, lang: Lang): st
 }
 
 function modelSentence(facts: SummaryFacts, lang: Lang): string {
+  if (facts.neverTested) return notTestedPhrase(lang);
+  if (facts.forecastPending) return forecastPendingPhrase(lang);
   const indexed = indexSentence(facts.neptuneDisplay, lang);
-  if (indexed) return withCautiousNote(indexed, facts, lang);
+  if (indexed) return indexed;
   if (showsUnknownCall(facts)) return unknownCallPhrase(lang);
   if (!facts.hasEstimate) {
     return lang === "es"
@@ -189,14 +201,14 @@ function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | nul
   const reading = indexReading(display, lang);
   const guidance = (lang === "es" ? display.guidanceEs : display.guidance) ?? "";
   let sentence: string;
-  if (reading.label && reading.phrase) {
+  if (reading.plain && reading.label && reading.plain !== reading.label && reading.phrase) {
+    sentence = lang === "es"
+      ? `${reading.plain}. El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
+      : `${reading.plain}. Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
+  } else if (reading.label && reading.phrase) {
     sentence = lang === "es"
       ? `El índice Neptune de hoy es ${reading.label}. ${reading.phrase}.`
       : `Today’s Neptune Index is ${reading.label}. ${reading.phrase}.`;
-  } else if (reading.phrase && reading.rules) {
-    sentence = lang === "es"
-      ? `El índice Neptune de hoy es ${reading.phrase}. ${reading.rules}`
-      : `Today’s Neptune Index is ${reading.phrase}. ${reading.rules}`;
   } else if (reading.phrase) {
     sentence = lang === "es"
       ? `El índice Neptune de hoy es ${reading.phrase}.`
@@ -210,6 +222,10 @@ function indexSentence(display: NeptuneDisplay | null, lang: Lang): string | nul
   }
   if (guidance) sentence = `${sentence} ${guidance}`;
   if (reading.note) sentence = `${sentence} ${reading.note}`;
+  const reason = overrideReasonPhrase(display.overrideReason, lang);
+  if (reason) sentence = `${sentence} ${reason}`;
+  const cap = ceilingPhrase(display.ceiling, lang);
+  if (cap) sentence = `${sentence} ${cap}`;
   return sentence;
 }
 
@@ -248,10 +264,20 @@ function outlookLabel(facts: SummaryFacts, lang: Lang): string {
 }
 
 function outlookSentence(facts: SummaryFacts, lang: Lang): string {
+  if (facts.forecastPending) {
+    return lang === "es"
+      ? "El pronóstico de los próximos días también está pendiente."
+      : "The forecast for the next days is pending too.";
+  }
   if (facts.horizon !== "label") return lang === "es" ? HIDDEN_ES : FORECAST_HIDDEN_STATION_NOTE;
   if (facts.outlook.length === 0) return lang === "es" ? NO_OUTLOOK_ES : NO_OUTLOOK_EN;
   const parts = facts.outlook.map((day) => {
     const name = weekday(day.date, lang);
+    if (day.forecastPending) return `${name}: ${forecastPendingPhrase(lang)}`;
+    const bandWords = swimWords(day.bandId, lang);
+    if (bandWords) return `${name}: ${bandWords}`;
+    // An index beach does not fall back to dayN_call / alert_flag ("elevated risk", "under the limit").
+    if (facts.neptuneDisplay) return `${name}: ${forecastPendingPhrase(lang)}`;
     if (day.callUnknown) return `${name}: ${unknownCallPhrase(lang)}`;
     const phrase = statusPhrase(day.status, lang);
     return lang === "es" ? `${name} está ${phrase}` : `${name} is ${phrase}`;
